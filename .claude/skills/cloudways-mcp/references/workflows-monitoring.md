@@ -1,144 +1,144 @@
 # Workflows — Monitoring (read-only)
 
-תרחישי ניטור בלבד. אף לא אחת מהפעולות פה דורשת אישור — כולן read.
+Monitoring scenarios only. None of the actions here require confirmation — they are all read.
 
-> **כלל בסיסי:** לפני שמדווח למשתמש שמשהו לא בסדר, אסוף מספיק נתונים כדי להיות בטוח. דיווח עם נתון בודד הוא רעש — דיווח עם 3-4 נתונים שמצביעים על אותו דבר הוא אות.
-
----
-
-## 1. תמונת מצב יומית של חשבון
-
-**מתי:** "תראה לי מה קורה / סקירה כללית / מה המצב היום"
-
-**רצף קריאות:**
-
-1. `customer_info` — לוודא שהחשבון פעיל, חבילה תקינה
-2. `list_servers` — רשימה + סטטוס לכל שרת
-3. `get_alerts` — מה פתוח עכשיו
-4. לכל שרת בסטטוס לא Running: `get_server_details` לבדוק למה
-
-**איך לסכם:**
-- כמה servers, כמה apps, כמה פעילים / לא פעילים
-- alerts פתוחים — לפי חומרה
-- אם הכל נקי: "כל המערכות פעילות, X servers, Y apps, אין alerts פתוחים"
-- אל תמלא בטקסט אם הכל בסדר — תהיה תמציתי
+> **Basic rule:** Before reporting to the user that something is wrong, gather enough data to be sure. A report with a single data point is noise — a report with 3-4 data points that all point to the same thing is a signal.
 
 ---
 
-## 2. Health check לפני שינוי משמעותי
+## 1. Daily account status snapshot
 
-**מתי:** לפני deployment / migration / שינוי DNS / אישור שינוי משמעותי ללקוח
+**When:** "Show me what's going on / general overview / what's the situation today"
 
-**מטרה:** baseline לפני, baseline אחרי. אם משהו השתבש, יהיה לך נקודת השוואה.
+**Call sequence:**
 
-**רצף קריאות:**
+1. `customer_info` — verify the account is active, plan is valid
+2. `list_servers` — list + status for each server
+3. `get_alerts` — what's open right now
+4. For each server with a status other than Running: `get_server_details` to check why
 
-1. `get_server_details` (השרת היעד) — מצב נוכחי
-2. `get_server_monitoring_detail` — CPU, RAM, disk I/O ב-5 דקות אחרונות
-3. `get_server_services_status` — לוודא שכל ה-services רצים
-4. `get_server_disk_usage` — שטח פנוי
-5. `get_app_monitoring_summary` (לכל אפליקציה רלוונטית) — bandwidth, response time
-6. `get_alerts` — אין surprises פעילים
-7. `get_app_analytics_traffic` (24h אחרון) — לדעת מה ה-traffic הרגיל
+**How to summarize:**
+- How many servers, how many apps, how many active / inactive
+- Open alerts — by severity
+- If everything is clean: "All systems operational, X servers, Y apps, no open alerts"
+- Don't pad with text if everything is fine — be concise
 
-**שמור את הפלט לפני התחלת השינוי.** אחרי השינוי, חזור על אותו רצף והשווה.
+---
+
+## 2. Health check before a significant change
+
+**When:** Before deployment / migration / DNS change / confirming a significant change for the client
+
+**Goal:** baseline before, baseline after. If something goes wrong, you'll have a point of comparison.
+
+**Call sequence:**
+
+1. `get_server_details` (the target server) — current state
+2. `get_server_monitoring_detail` — CPU, RAM, disk I/O over the last 5 minutes
+3. `get_server_services_status` — verify all the services are running
+4. `get_server_disk_usage` — free space
+5. `get_app_monitoring_summary` (for each relevant application) — bandwidth, response time
+6. `get_alerts` — no active surprises
+7. `get_app_analytics_traffic` (last 24h) — to know what the normal traffic is
+
+**Save the output before starting the change.** After the change, repeat the same sequence and compare.
 
 ---
 
 ## 3. Disk usage investigation
 
-**מתי:** alert של disk space, או "השרת איטי"
+**When:** disk space alert, or "the server is slow"
 
-**רצף:**
+**Sequence:**
 
-1. `get_server_disk_usage` — איפה השטח?
-2. אם application folders גדולים: לכל app חשוד `get_app_details` + `get_app_settings`
-3. בדוק logs באמצעות ssh ידני (Cloudways MCP לא חושף file system access ישיר): המנהל יצטרך להתחבר ב-SSH ל-`/var/log/`, `/home/master/applications/<app>/logs/`
-4. בדוק MySQL slow logs: `get_app_analytics_mysql` — אם יש המון slow queries, ה-bin logs יכולים לתפוח
+1. `get_server_disk_usage` — where is the space?
+2. If application folders are large: for each suspect app `get_app_details` + `get_app_settings`
+3. Check logs via manual SSH (Cloudways MCP does not expose direct file system access): the administrator will need to connect via SSH to `/var/log/`, `/home/master/applications/<app>/logs/`
+4. Check MySQL slow logs: `get_app_analytics_mysql` — if there are a lot of slow queries, the bin logs can balloon
 
-**דיווח טוב:**
+**Good report:**
 ```
-שרת prod-shop-il (1234567): disk 87% מלא
-פירוט:
+Server prod-shop-il (1234567): disk 87% full
+Breakdown:
   - /home/master/applications/woocommerce-prod/public_html: 18GB
-  - /var/log: 4.2GB (לוגים של 30 ימים — אפשר rotation)
+  - /var/log: 4.2GB (30 days of logs — rotation possible)
   - /tmp: 2.1GB
-  - אחר: 6GB
-המלצה: clear_app_cache לכל ה-apps + log rotation ידני ב-SSH
-פעולה הבאה דורשת אישור: clear_app_cache (W)
+  - other: 6GB
+Recommendation: clear_app_cache for all apps + manual log rotation via SSH
+Next action requires confirmation: clear_app_cache (W)
 ```
 
 ---
 
-## 4. Performance investigation — "האתר איטי"
+## 4. Performance investigation — "the site is slow"
 
-**מתי:** לקוח מתלונן על איטיות
+**When:** a client complains about slowness
 
-**שלב 1 — האם זה באמת איטי, או רק ההרגשה שלהם?**
+**Step 1 — Is it really slow, or just their perception?**
 
-1. `get_app_analytics_traffic` (שעה אחרונה) — בעיקרון traffic spike?
+1. `get_app_analytics_traffic` (last hour) — basically, traffic spike?
 2. `get_app_monitoring_summary` — response time avg + p95
-3. `get_server_monitoring_detail` — CPU/RAM של השרת בכלל
+3. `get_server_monitoring_detail` — CPU/RAM of the server overall
 
-**שלב 2 — איפה הבעיה?**
+**Step 2 — Where is the problem?**
 
 1. `get_app_analytics_php` — slow scripts? memory exhaustion?
 2. `get_app_analytics_mysql` — slow queries? locks?
-3. `get_server_services_status` — Varnish/Memcached/Redis פעילים?
-4. `get_app_varnish_settings` — cache mode מוגדר?
+3. `get_server_services_status` — Varnish/Memcached/Redis running?
+4. `get_app_varnish_settings` — cache mode configured?
 
-**מטריצת אבחנה:**
+**Diagnostic matrix:**
 
-| תופעה | סביר שזה | כלי אבחוני |
+| Symptom | Likely cause | Diagnostic tool |
 |--------|----------|-----------|
-| CPU 100% מתמשך | PHP heavy / DB heavy | `get_app_analytics_php` + `get_app_analytics_mysql` |
+| Sustained CPU 100% | PHP heavy / DB heavy | `get_app_analytics_php` + `get_app_analytics_mysql` |
 | RAM 95%+ | memory leak / cache bloat | `get_server_services_status` + restart services |
-| Disk I/O גבוה | swap / log writes / DB writes | `get_server_disk_usage` |
-| Response time גבוה אבל CPU/RAM סבירים | Varnish לא פעיל / external API איטי | `get_server_services_status` + `get_app_varnish_settings` |
-| Spike של traffic | DDoS / viral / bot | `get_app_analytics_traffic` (מקורות) |
+| High Disk I/O | swap / log writes / DB writes | `get_server_disk_usage` |
+| High response time but reasonable CPU/RAM | Varnish not running / slow external API | `get_server_services_status` + `get_app_varnish_settings` |
+| Traffic spike | DDoS / viral / bot | `get_app_analytics_traffic` (sources) |
 
 ---
 
 ## 5. SSL expiry monitoring
 
-**מתי:** סקירה שבועית של תוקפי SSL לקוחות
+**When:** weekly review of clients' SSL expiry dates
 
-**רצף לכל אפליקציה:**
+**Sequence for each application:**
 
 1. `list_servers`
-2. לכל server: `get_server_details` → רשימת apps
-3. לכל app: `get_app_details` → שדה `ssl` עם expiry date
-4. סנן: SSL שיפוג ב-30 ימים הקרובים → flag לחידוש
-5. לכל apps שבדגל: בדוק האם `letsencrypt_auto_renewal=true`. אם לא — flag כפול.
+2. For each server: `get_server_details` → list of apps
+3. For each app: `get_app_details` → `ssl` field with expiry date
+4. Filter: SSL expiring within the next 30 days → flag for renewal
+5. For each flagged app: check whether `letsencrypt_auto_renewal=true`. If not — double flag.
 
-> אם Let's Encrypt auto-renewal פעיל, Cloudways מחדש 30 יום לפני פג תוקף. אם הוא לא מחדש (DNS issue, rate limit) — תקבל alert. עדיין שווה לעבור ידנית פעם בשבועיים.
+> If Let's Encrypt auto-renewal is active, Cloudways renews 30 days before expiry. If it fails to renew (DNS issue, rate limit) — you'll get an alert. It's still worth reviewing manually once every two weeks.
 
 ---
 
 ## 6. Traffic anomaly detection
 
-**מתי:** "יש מקפצה ב-traffic" / "המכירות ירדו" / לפני קמפיין
+**When:** "there's a jump in traffic" / "sales dropped" / before a campaign
 
-**רצף:**
+**Sequence:**
 
 1. `get_app_analytics_traffic` — bottom line: visitors, pageviews
-2. אם spike: מקור ה-traffic? geographic distribution?
-3. השווה לאותו יום בשבוע הקודם / בחודש הקודם
-4. אם drop: `get_app_monitoring_summary` — error rate עלה?
-5. בדוק את `get_alerts` — אולי יש משהו שמפיל את האתר
+2. If a spike: source of the traffic? geographic distribution?
+3. Compare to the same day in the previous week / previous month
+4. If a drop: `get_app_monitoring_summary` — did the error rate go up?
+5. Check `get_alerts` — maybe something is taking the site down
 
-> Cloudways analytics לא מחליפים GA4/Plausible. הם משלימים עם metrics ברמת השרת (raw bandwidth, requests). שתי הזוויות יחד נותנות תמונה טובה.
+> Cloudways analytics do not replace GA4/Plausible. They complement them with server-level metrics (raw bandwidth, requests). The two angles together give a good picture.
 
 ---
 
 ## 7. Multi-server comparison
 
-**מתי:** "איזה שרת לקוח X על?" / "השוואה בין production לבין staging"
+**When:** "which server is client X on?" / "comparison between production and staging"
 
-**רצף:**
+**Sequence:**
 
-1. `list_servers` — מסנן לפי label/project
-2. לשניים-שלושה שרתים: `get_server_details` + `get_server_monitoring_detail` במקביל
-3. השווה: provider, region, size, RAM/CPU usage, אפליקציות
+1. `list_servers` — filter by label/project
+2. For two or three servers: `get_server_details` + `get_server_monitoring_detail` in parallel
+3. Compare: provider, region, size, RAM/CPU usage, applications
 
-**טיפ:** Cloudways לפעמים מקבץ apps של לקוח אחד על אותו שרת. זה יכול להיות בעיה בייצור: spike באפליקציה אחת משפיע על אחרות. ב-audit ללקוח חדש, זה דבר ראשון לבדוק.
+**Tip:** Cloudways sometimes groups one client's apps on the same server. This can be a problem in production: a spike in one application affects the others. In an audit for a new client, this is the first thing to check.

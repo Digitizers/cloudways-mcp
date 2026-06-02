@@ -1,184 +1,184 @@
 # Workflows — Onboarding & Audit (agency client takeover)
 
-תרחיש מרכזי: לקוח חדש שמגיע עם אתר על Cloudways, ואתה צריך לבנות תמונה מלאה — בלי קריסות, בלי surprises ב-3 בלילה.
+Core scenario: a new client arrives with a site on Cloudways, and you need to build a complete picture — no crashes, no surprises at 3 AM.
 
-> **עיקרון מנחה:** ב-audit הראשון, **אל תיגע בכלום.** רק קרא. תיעוד מלא של state נוכחי קודם. שינויים — אחרי שהבנת את התמונה ויש תוכנית מסודרת.
-
----
-
-## שלב 0 — Pre-flight (לפני קריאת MCP)
-
-ודא עם הלקוח:
-- [ ] גישה ל-API מאושרת מצדם
-- [ ] API key חדש (לא לחלוק עם הצוות הישן שלהם)
-- [ ] אם יש team members ישנים שלא צריכים גישה — להוסיף בנקודה הזו (לא דרך MCP — UI בלבד)
+> **Guiding principle:** On the first audit, **don't touch anything.** Just read. Full documentation of the current state first. Changes come after you understand the picture and have a structured plan.
 
 ---
 
-## שלב 1 — מיפוי חשבון
+## Stage 0 — Pre-flight (before calling MCP)
+
+Confirm with the client:
+- [ ] API access approved on their side
+- [ ] New API key (don't share with their old team)
+- [ ] If there are old team members who don't need access — add this at this point (not via MCP — UI only)
+
+---
+
+## Stage 1 — Account mapping
 
 ```
-1. customer_info               → מצב חבילה, רמת תמיכה, billing status
-2. list_servers                → כל השרתים: count, providers, regions, sizes
-3. list_projects               → איך הם מסודרים
-4. list_team_members           → מי יש לו גישה ומה הרמה
-5. get_alerts                  → הכל פתוח עכשיו
-6. get_ssh_keys                → מי יכול להיכנס ב-SSH
+1. customer_info               → plan status, support level, billing status
+2. list_servers                → all servers: count, providers, regions, sizes
+3. list_projects               → how they're organized
+4. list_team_members           → who has access and what level
+5. get_alerts                  → everything currently open
+6. get_ssh_keys                → who can log in via SSH
 ```
 
-**תוצרים שאתה רושם:**
+**Deliverables you record:**
 
-| שדה | ערך |
+| Field | Value |
 |------|-----|
 | Cloudways plan | (Starter/Growth/Enterprise?) |
-| מספר שרתים | |
-| Providers בשימוש | (DO/AWS/GCP/Vultr) |
+| Number of servers | |
+| Providers in use | (DO/AWS/GCP/Vultr) |
 | Regions | |
-| Total monthly $ Cloudways (אומדן) | |
-| Team members + הרשאות | |
-| SSH keys (לא לפרסם — רק מספר) | |
+| Total monthly $ Cloudways (estimate) | |
+| Team members + permissions | |
+| SSH keys (don't publish — only a count) | |
 | Open alerts | |
 
 ---
 
-## שלב 2 — מיפוי שרתים
+## Stage 2 — Server mapping
 
-לכל שרת ברשימה:
+For each server in the list:
 
 ```
 1. get_server_details          → label, size, IP, master credentials, app list
 2. get_server_settings         → PHP timeout, memory, upload limit, custom PHP
-3. get_server_services_status  → מה רץ (Apache/Nginx/MySQL/Memcached/Varnish/Redis)
-4. get_server_disk_usage       → שטח נוכחי + פירוט
-5. get_server_monitoring_detail → CPU/RAM trends 24h אחרון
+3. get_server_services_status  → what's running (Apache/Nginx/MySQL/Memcached/Varnish/Redis)
+4. get_server_disk_usage       → current space + breakdown
+5. get_server_monitoring_detail → CPU/RAM trends last 24h
 ```
 
-**Red flags שצריך לדגול:**
-- [ ] Disk > 80% → לא יכולים להוסיף content בלי risk
-- [ ] CPU spike מתמשך → בעיית performance
-- [ ] PHP timeout < 60s → עלול לשבור long operations
-- [ ] memory_limit < 256M → WordPress יתקע
-- [ ] Memcached/Redis off → אין object caching
-- [ ] Varnish off → אין page caching
-- [ ] שרת מארח 5+ apps של מקורות שונים → blast radius גבוה
+**Red flags to watch for:**
+- [ ] Disk > 80% → can't add content without risk
+- [ ] Sustained CPU spike → performance problem
+- [ ] PHP timeout < 60s → may break long operations
+- [ ] memory_limit < 256M → WordPress will get stuck
+- [ ] Memcached/Redis off → no object caching
+- [ ] Varnish off → no page caching
+- [ ] Server hosting 5+ apps from different sources → high blast radius
 
 ---
 
-## שלב 3 — מיפוי אפליקציות
+## Stage 3 — Application mapping
 
-לכל אפליקציה (לפי app list מהשלב הקודם):
+For each application (per the app list from the previous stage):
 
 ```
 1. get_app_details             → URL, FQDN, app folder, DB credentials, SSL status
 2. get_app_settings            → app-level overrides
 3. get_app_credentials         → SFTP/additional access
-4. get_app_monitoring_summary  → bandwidth, requests (לקבל תחושת גודל)
-5. get_app_analytics_traffic   → visitors הכי פחות 7 ימים
+4. get_app_monitoring_summary  → bandwidth, requests (to get a sense of scale)
+5. get_app_analytics_traffic   → visitors at least last 7 days
 6. get_app_analytics_php       → slow scripts? memory issues?
 7. get_app_analytics_mysql     → slow queries?
 8. get_app_varnish_settings    → cache configured?
 ```
 
-**טבלת תוצרים לכל app:**
+**Deliverables table for each app:**
 
-| שדה | ערך | red flag? |
+| Field | Value | red flag? |
 |------|-----|-----------|
 | App name | | |
 | Primary domain | | |
 | Additional domains/CNAMEs | | |
-| SSL provider + expiry | | בודק auto-renew? |
+| SSL provider + expiry | | check auto-renew? |
 | App type (WP/Magento/PHP/Laravel) | | |
 | PHP version | | < 8.1 = upgrade needed |
-| WP version (אם רלוונטי) | | < 6.0 = security risk |
-| Active plugins (אם WP) | ידני | פלגינים נטושים? |
-| DB size (גס) | | |
+| WP version (if relevant) | | < 6.0 = security risk |
+| Active plugins (if WP) | manual | abandoned plugins? |
+| DB size (rough) | | |
 | Daily traffic (avg) | | |
 | Daily bandwidth | | |
 | Avg response time | | > 1.5s = problem |
-| Backups schedule | | אין = critical risk |
+| Backups schedule | | none = critical risk |
 | Varnish enabled | | false = perf gap |
 | Object cache | | none = perf gap |
 | HTTPS enforced | | false = SEO+security gap |
 
 ---
 
-## שלב 4 — Security audit
+## Stage 4 — Security audit
 
 ```
-1. get_whitelisted_ips_ssh     → מי יכול ל-SSH?
-2. get_whitelisted_ips_mysql   → מי יכול לגשת ל-DB ישירות?
-3. get_ssh_keys                → מפתחות שמורים
-4. לכל IP חשוד: check_ip_blacklisted
+1. get_whitelisted_ips_ssh     → who can SSH?
+2. get_whitelisted_ips_mysql   → who can access the DB directly?
+3. get_ssh_keys                → stored keys
+4. For each suspicious IP: check_ip_blacklisted
 ```
 
 **Red flags:**
-- [ ] SSH whitelist ריק = פתוח לעולם (קריטי)
-- [ ] MySQL whitelist ריק = פתוח לעולם (אסון אבטחה)
-- [ ] SSH keys ישנים שלא ברור למי הם שייכים
-- [ ] Team member הישן עדיין יש לו גישה
-- [ ] גישה לאו רק לעובדי לקוח אלא גם לעובדים שעזבו
+- [ ] SSH whitelist empty = open to the world (critical)
+- [ ] MySQL whitelist empty = open to the world (security disaster)
+- [ ] Old SSH keys whose owners are unclear
+- [ ] The old team member still has access
+- [ ] Access not only for client employees but also for employees who have left
 
 ---
 
-## שלב 5 — Backups audit
+## Stage 5 — Backups audit
 
-מצערים: Cloudways MCP לא חושף `list_backups` ישירות. צריך לעבור ל-UI (או API call ישיר).
+Unfortunately: the Cloudways MCP does not expose `list_backups` directly. You need to go to the UI (or a direct API call).
 
-**שאלות לבדוק ידנית:**
-- האם backups אוטומטיים פעילים? (Cloudways → Server → Backups)
-- תדירות? (כל יום / כל יומיים / כל שבוע)
-- Retention? (כמה ימים אחורה?)
-- האם יש off-platform backup? (Cloudways backups זמינים רק מתוך Cloudways — אם החשבון נסגר, אובד)
+**Questions to check manually:**
+- Are automatic backups enabled? (Cloudways → Server → Backups)
+- Frequency? (daily / every two days / weekly)
+- Retention? (how many days back?)
+- Is there an off-platform backup? (Cloudways backups are available only from within Cloudways — if the account is closed, they're lost)
 
-**המלצה סטנדרטית:**
+**Standard recommendation:**
 - Daily Cloudways backups, 7-day retention
-- Weekly off-platform backup (UpdraftPlus ל-S3 / Wasabi / Cloudways → Drive)
+- Weekly off-platform backup (UpdraftPlus to S3 / Wasabi / Cloudways → Drive)
 
 ---
 
-## שלב 6 — Reporting ללקוח
+## Stage 6 — Reporting to the client
 
-מסמך onboarding חייב לכלול (Hebrew):
+The onboarding document must include (Hebrew):
 
-### 1. תקציר מנהלים
-- כמה servers, כמה apps, monthly spend גס
-- 3-5 ה-red flags הכי חמורים שמצאת
-- המלצה כללית (סדר עדיפות)
+### 1. Executive summary
+- How many servers, how many apps, rough monthly spend
+- The 3-5 most severe red flags you found
+- General recommendation (priority order)
 
-### 2. מצב נוכחי מפורט
-- טבלאות לכל server + לכל app
-- קישורים / IDs ב-Cloudways
+### 2. Detailed current state
+- Tables for each server + each app
+- Links / IDs in Cloudways
 
-### 3. רשימת tasks מומלצת
-לפי priority (P0/P1/P2):
+### 3. Recommended task list
+By priority (P0/P1/P2):
 
-**P0 — חייב לבצע בשבוע הקרוב:**
-- (קריטיות אבטחה: SSL פג, whitelist פתוח, וכו')
+**P0 — must be done within the coming week:**
+- (security criticalities: expired SSL, open whitelist, etc.)
 
-**P1 — חייב לבצע בחודש:**
+**P1 — must be done within the month:**
 - (PHP/WP upgrades, backup strategy, performance)
 
-**P2 — שיפורים לטווח ארוך:**
+**P2 — long-term improvements:**
 - (CDN integration, Varnish tuning, monitoring setup)
 
-### 4. הצעת מחיר
-שעות מוערכות לכל P (₪300/h). הכל מתועד.
+### 4. Quote
+Estimated hours per P (₪300/h). Everything documented.
 
-### 5. SLA / שיגרת תפעול
-- ניטור שבועי (אילו queries יורצו)
-- תגובה לalert (זמן יעד)
-- חידושי SSL — מי אחראי
+### 5. SLA / operational routine
+- Weekly monitoring (which queries will be run)
+- Response to an alert (target time)
+- SSL renewals — who is responsible
 
 ---
 
-## תבנית report מהירה
+## Quick report template
 
 ```markdown
 # Cloudways Audit — [Client Name]
 Date: [YYYY-MM-DD]
 Auditor: [your name]
 
-## תקציר
+## Summary
 - Servers: X | Apps: Y | Monthly spend (gross): $Z
 - Critical findings: [N items]
 - Recommendation summary: [one paragraph]
@@ -189,7 +189,7 @@ Auditor: [your name]
 | P0 | ... | ... | ... |
 
 ## Inventory
-(טבלאות מהשלבים 2-3)
+(tables from stages 2-3)
 
 ## Recommended actions
 ### Phase 1 (week 1) — P0 items

@@ -1,47 +1,47 @@
 # Workflows — Automation & Integration
 
-איך לבנות אוטומציות מסביב ל-Cloudways MCP — חיבור ל-n8n, Make.com, Claude Code, או cron jobs. מתאים לכל stack של ניהול תשתית.
+How to build automations around the Cloudways MCP — connecting to n8n, Make.com, Claude Code, or cron jobs. Suitable for any infrastructure management stack.
 
-> **עיקרון בסיסי:** ה-MCP server הוא קודם כל interface ל-Claude. לאוטומציה ללא human-in-the-loop, לרוב **עדיף לקרוא ישירות ל-Cloudways API** (curl/n8n HTTP node) ולא דרך MCP. ה-MCP מוסיף overhead, ובאוטומציה הוא לא נחוץ.
+> **Basic principle:** The MCP server is first and foremost an interface for Claude. For automation without human-in-the-loop, it's usually **better to call the Cloudways API directly** (curl/n8n HTTP node) rather than going through the MCP. The MCP adds overhead, and in automation it's not necessary.
 
 ---
 
-## מתי להשתמש ב-MCP vs API ישיר?
+## When to use MCP vs. direct API?
 
-| תרחיש | בחר |
+| Scenario | Choose |
 |--------|-----|
-| שיחה חיה ב-Claude / Claude Code | MCP |
-| Daily report שמיוצר אוטומטית | API ישיר (n8n/Make) |
-| Alerting → action אוטומטית | API ישיר |
+| Live conversation in Claude / Claude Code | MCP |
+| Daily report generated automatically | Direct API (n8n/Make) |
+| Alerting → automatic action | Direct API |
 | Audit one-off | MCP |
-| CI/CD trigger (post-deploy backup, etc.) | API ישיר |
-| Claude Code headless שמרץ pipelines | MCP (אם Claude הוא ה-orchestrator) |
+| CI/CD trigger (post-deploy backup, etc.) | Direct API |
+| Claude Code headless running pipelines | MCP (if Claude is the orchestrator) |
 
-ה-MCP חסך זמן בהקשר אינטראקטיבי. באוטומציה — overhead.
+The MCP saves time in an interactive context. In automation — overhead.
 
 ---
 
-## 1. Cloudways API direct (לאוטומציה)
+## 1. Cloudways API direct (for automation)
 
 ### Authentication flow
 
 ```bash
-# שלב 1: get access token
+# Step 1: get access token
 TOKEN=$(curl -sX POST "https://api.cloudways.com/api/v1/oauth/access_token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "email=$CLOUDWAYS_EMAIL&api_key=$CLOUDWAYS_API_KEY" \
   | jq -r '.access_token')
 
-# שלב 2: השתמש בו
+# Step 2: use it
 curl -sH "Authorization: Bearer $TOKEN" \
      "https://api.cloudways.com/api/v1/server"
 ```
 
-ה-token תקף לזמן מוגבל (בערך שעה). באוטומציה ארוכה, ייצר מחדש.
+The token is valid for a limited time (about an hour). In long-running automation, regenerate it.
 
-### Endpoints נפוצים
+### Common endpoints
 
-| Endpoint | Method | מה זה |
+| Endpoint | Method | What it is |
 |----------|--------|--------|
 | `/server` | GET | list servers |
 | `/server/{id}` | GET | server details |
@@ -51,7 +51,7 @@ curl -sH "Authorization: Bearer $TOKEN" \
 | `/app/analytics/visitor` | GET | traffic |
 | `/app/manage/cache` | POST | clear cache |
 
-תיעוד מלא: `https://developers.cloudways.com/docs/`.
+Full documentation: `https://developers.cloudways.com/docs/`.
 
 ---
 
@@ -74,7 +74,7 @@ curl -sH "Authorization: Bearer $TOKEN" \
 └─ Slack/Email: Send to team
 ```
 
-**הערה:** ה-API לא מחזיר alerts ב-endpoint נפרד באופן עקבי — לפעמים זה חלק מה-server response. בדוק עם curl ישיר קודם.
+**Note:** The API doesn't consistently return alerts in a separate endpoint — sometimes they're part of the server response. Check with direct curl first.
 
 ### Workflow: SSL expiry monitoring
 
@@ -105,12 +105,12 @@ curl -sH "Authorization: Bearer $TOKEN" \
 │   ├─ HTTP: GET /server/{id}/disk_usage
 │   ├─ IF usage > 85%:
 │   │   ├─ Slack alert: "[Server X] disk 87% — investigate"
-│   │   └─ (אופציונלי) IF usage > 95%: PagerDuty trigger
+│   │   └─ (optional) IF usage > 95%: PagerDuty trigger
 ```
 
-### Workflow: Auto-backup לפני deployment
+### Workflow: Auto-backup before deployment
 
-**Trigger:** Webhook מ-GitHub Actions / GitLab CI
+**Trigger:** Webhook from GitHub Actions / GitLab CI
 
 ```
 ┌─ Webhook IN (with: app_id, deployment_sha)
@@ -125,9 +125,9 @@ curl -sH "Authorization: Bearer $TOKEN" \
 
 ## 3. Make.com (Integromat) scenarios
 
-Make.com Custom App ייעודי (אם בנוי) יכול לעטוף את ה-API ב-modules נוחים יותר. אבל גם בלי app מותאם, HTTP module עובד.
+A dedicated Make.com Custom App (if built) can wrap the API in more convenient modules. But even without a custom app, the HTTP module works.
 
-### תבנית בסיסית:
+### Basic template:
 
 ```
 [HTTP — Make a request]
@@ -156,19 +156,19 @@ Make.com Custom App ייעודי (אם בנוי) יכול לעטוף את ה-API
 
 ## 4. Claude Code headless
 
-באוטומציה דרך `claude -p` (headless mode), ה-MCP server ממשיך לעבוד כרגיל. שימושי כאשר:
+In automation via `claude -p` (headless mode), the MCP server keeps working as usual. Useful when:
 
-- אתה רוצה ש-Claude יחליט מה לעשות (לא just rules-based)
-- האוטומציה כוללת analysis טקסטואלי (סיכום report, ניסוח email)
-- יש ערך ב-natural language interpretation של הנתונים
+- You want Claude to decide what to do (not just rules-based)
+- The automation involves textual analysis (summarizing a report, drafting an email)
+- There's value in natural language interpretation of the data
 
-**דוגמה: Daily summary בייצור**
+**Example: Daily summary in production**
 
 ```bash
 #!/bin/bash
 # /opt/cw-mcp/scripts/daily-summary.sh
 
-# כאן Claude קורא ל-MCP tools בעצמו ומייצר summary
+# Here Claude calls the MCP tools itself and generates a summary
 claude -p "
 Generate today's Cloudways health summary.
 Check all servers (list_servers), get alerts, and identify:
@@ -180,19 +180,19 @@ Check all servers (list_servers), get alerts, and identify:
 Output in Hebrew, markdown format, sent to /tmp/cw-summary.md
 "
 
-# שלח את הסיכום ל-Slack
+# Send the summary to Slack
 curl -X POST -H 'Content-type: application/json' \
      --data "{\"text\":\"$(cat /tmp/cw-summary.md)\"}" \
      "$SLACK_WEBHOOK_URL"
 ```
 
-**הערה:** headless דורש ש-Claude Code יודע איך לפנות ל-MCP server מקומי. תוודא שה-MCP config מוגדר ב-`~/.claude.json` של המשתמש שמריץ את ה-cron.
+**Note:** Headless requires Claude Code to know how to reach the local MCP server. Make sure the MCP config is set in the `~/.claude.json` of the user running the cron.
 
 ---
 
 ## 5. Airtable as state store
 
-לאוטומציות שמייצרות הרבה נתונים (audit results, alerts log, deployment history), Airtable הוא state store טוב. דפוס:
+For automations that generate a lot of data (audit results, alerts log, deployment history), Airtable is a good state store. Pattern:
 
 **Table: cloudways_servers**
 
@@ -220,21 +220,21 @@ curl -X POST -H 'Content-type: application/json' \
 | status | Single select (open/investigating/resolved) |
 | resolution_notes | Long text |
 
-**Sync:** n8n / Make scenario כל שעה: pull state מ-Cloudways → upsert ל-Airtable. הצוות מקבל view חי.
+**Sync:** n8n / Make scenario every hour: pull state from Cloudways → upsert to Airtable. The team gets a live view.
 
 ---
 
-## 6. Slack notifications — דפוסים מומלצים
+## 6. Slack notifications — recommended patterns
 
 **Slack message types:**
 
-| חומרה | פורמט | תגובה צפויה |
+| Severity | Format | Expected response |
 |--------|--------|--------------|
-| P0 (server down, SSL expired) | `<!channel>` + 🚨 | תגובה תוך 30 דקות |
-| P1 (disk > 90%, SSL < 7d) | `<!here>` + ⚠️ | תגובה תוך 4 שעות |
-| P2 (info: backup completed) | רגיל + ✅ | אין צורך בתגובה |
+| P0 (server down, SSL expired) | `<!channel>` + 🚨 | response within 30 minutes |
+| P1 (disk > 90%, SSL < 7d) | `<!here>` + ⚠️ | response within 4 hours |
+| P2 (info: backup completed) | regular + ✅ | no response needed |
 
-**דוגמת payload:**
+**Payload example:**
 
 ```json
 {
@@ -265,16 +265,16 @@ curl -X POST -H 'Content-type: application/json' \
 
 ## 7. Multi-account management
 
-אם אתה מנהל מספר חשבונות Cloudways (לקוחות שונים, חשבונות נפרדים) — לא להחזיק את כל ה-keys באותו `.env`.
+If you manage multiple Cloudways accounts (different clients, separate accounts) — don't keep all the keys in the same `.env`.
 
-**אסטרטגיה:**
+**Strategy:**
 
-1. **Account-per-client:** כל לקוח ב-Infisical project נפרד
-2. **MCP instance per account:** הפעל מספר MCP servers על פורטים שונים (7000, 7001, 7002...) עם credentials שונים
-3. **n8n credentials:** הגדר אותם ב-n8n credentials store, לא ב-workflow
-4. **Make.com connections:** אותו דבר ב-Make
+1. **Account-per-client:** each client in a separate Infisical project
+2. **MCP instance per account:** run multiple MCP servers on different ports (7000, 7001, 7002...) with different credentials
+3. **n8n credentials:** define them in the n8n credentials store, not in the workflow
+4. **Make.com connections:** same thing in Make
 
-**דוגמה ל-Claude Desktop config מ multi-account:**
+**Multi-account Claude Desktop config example:**
 
 ```json
 {
@@ -285,28 +285,28 @@ curl -X POST -H 'Content-type: application/json' \
 }
 ```
 
-Claude יראה כל אחד מהם כ-MCP נפרד עם prefix משלו.
+Claude will see each of them as a separate MCP with its own prefix.
 
 ---
 
 ## 8. Rate limiting considerations
 
-ה-MCP מוגבל ל-`RATE_LIMIT_REQUESTS=90` בדקה (default). באוטומציה — שים לב:
+The MCP is limited to `RATE_LIMIT_REQUESTS=90` per minute (default). In automation — be mindful:
 
-- **Daily summary** של 50 servers + 200 apps = ~250 reads. במצב רגיל — OK.
-- **Bulk audit** של חשבון מאסיבי — יכול לחצות מהר. השתמש ב-`rate_limit_status` כדי לבדוק.
-- **Cloudways API ישיר** יש לו rate limit נפרד (יותר נדיב — בערך 180/min). אם MCP rate limit מפריע, באוטומציה מסיבית — עבור ל-API ישיר.
+- **Daily summary** of 50 servers + 200 apps = ~250 reads. Under normal conditions — OK.
+- **Bulk audit** of a massive account — can exceed it quickly. Use `rate_limit_status` to check.
+- **Direct Cloudways API** has a separate rate limit (more generous — about 180/min). If the MCP rate limit gets in the way, in massive automation — switch to the direct API.
 
 ---
 
-## דפוסי anti-pattern (אל תעשה)
+## Anti-patterns (don't do)
 
-❌ **Auto-execute write operations** בלי human-in-the-loop. גם אם נראה בטוח, אל תעשה.
+❌ **Auto-execute write operations** without human-in-the-loop. Even if it looks safe, don't.
 
-❌ **לוגינג של credentials.** וודא שה-n8n / Make logs לא מציגים את ה-API key. השתמש ב-credential store הפנימי.
+❌ **Logging credentials.** Make sure the n8n / Make logs don't display the API key. Use the internal credential store.
 
-❌ **MCP server חשוף לאינטרנט.** אם אתה רוצה גישה מרחוק — Cloudflare Access / WireGuard, לא public port.
+❌ **MCP server exposed to the internet.** If you want remote access — Cloudflare Access / WireGuard, not a public port.
 
-❌ **Use MCP for monitoring loops.** ל-monitoring continuous (כל 30 שניות), עבור ל-API ישיר. ה-MCP overhead לא שווה.
+❌ **Use MCP for monitoring loops.** For continuous monitoring (every 30 seconds), switch to the direct API. The MCP overhead isn't worth it.
 
-❌ **One MCP server לכל הצוות.** סוכן אבטחה: כל עובד צריך MCP server משלו עם credentials משלו, או SSO proxy מותאם. שיתוף MCP server = שיתוף credentials.
+❌ **One MCP server for the whole team.** Security principle: every employee needs their own MCP server with their own credentials, or a custom SSO proxy. Sharing an MCP server = sharing credentials.

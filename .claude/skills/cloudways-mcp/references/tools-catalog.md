@@ -1,203 +1,203 @@
 # Tools Catalog — Cloudways MCP
 
-קטלוג כלים שתועד מהשרת הקהילתי `cw-mcp` (43+ כלים, 2026-Q1). מסווג לפי קטגוריה תפקודית, עם דגלי **R** (read-only) / **W** (write — דורש confirmation) / **W!** (write destructive — דורש confirmation כפול).
+Tools catalog documented from the community server `cw-mcp` (43+ tools, 2026-Q1). Classified by functional category, with flags **R** (read-only) / **W** (write — requires confirmation) / **W!** (write destructive — requires double confirmation).
 
-> ⚠️ **קרא לפני שתסתמך על הרשימה:**
-> - שמות הכלים כאן מהשרת **הקהילתי**. ל-MCP **הרשמי** של Cloudways ייתכנו שמות/יכולות שונים — **השרת החי הוא source of truth**. בדוק תמיד את ה-`mcp__cloudways*__*` הזמינים בפועל.
-> - **read-only מול write לא ודאי:** מקורות סותרים אם הגרסה הנוכחית כוללת פעולות write או רק read. דגלי ה-W כאן הם הנחה לזהירות, לא הבטחה. אם כלי write לא קיים בשרת שלך — פשוט אל תשתמש בו. אם כן — הוא חייב לעבור confirmation.
+> ⚠️ **Read before relying on this list:**
+> - The tool names here are from the **community** server. The **official** Cloudways MCP may have different names/capabilities — **the live server is the source of truth**. Always check the `mcp__cloudways*__*` tools actually available.
+> - **read-only vs write uncertain:** sources conflict on whether the current version includes write operations or only read. The W flags here are a cautious assumption, not a guarantee. If a write tool does not exist on your server — simply do not use it. If it does — it must pass confirmation.
 
 ---
 
 ## 1. Authentication & Account info
 
-| Tool | סוג | מתי להשתמש |
+| Tool | Type | When to use |
 |------|-----|------------|
-| `ping` | R | בדיקת חיים של ה-MCP endpoint. שימושי לאחר שינוי config. |
-| `customer_info` | R | פרטי החשבון, חבילה, יתרה, רמת תמיכה. נקודת פתיחה טובה לכל audit. |
-| `rate_limit_status` | R | כמה calls נשארו עד reset. שימושי לפני batch operation. |
+| `ping` | R | Liveness check of the MCP endpoint. Useful after a config change. |
+| `customer_info` | R | Account details, plan, balance, support tier. A good starting point for any audit. |
+| `rate_limit_status` | R | How many calls remain until reset. Useful before a batch operation. |
 
 ---
 
-## 2. Discovery (אילו משאבים אפשר להקצות)
+## 2. Discovery (which resources can be allocated)
 
-כל הכלים האלה R. שימושיים בעיקר לפני יצירת שרת/אפליקציה חדשים (כי הם מחזירים את המקצוע של ה-API: providers/regions/sizes/apps שתומכים).
+All these tools are R. Useful mainly before creating a new server/application (because they return the API's capabilities: providers/regions/sizes/apps that are supported).
 
-| Tool | מחזיר |
+| Tool | Returns |
 |------|--------|
 | `get_available_providers` | DigitalOcean, AWS, GCP, Vultr, Linode |
-| `get_available_regions` | אזורים זמינים לכל provider |
-| `get_available_server_sizes` | RAM/CPU/disk options לכל provider |
-| `get_available_apps` | WordPress, Magento, Laravel, custom PHP, וכו' — כולל גרסאות |
-| `get_available_packages` | חבילות תוכנה (PHP versions, MySQL/MariaDB, Redis, etc.) |
-| `get_ssh_keys` | רשימת SSH keys שמורות בחשבון |
+| `get_available_regions` | Available regions per provider |
+| `get_available_server_sizes` | RAM/CPU/disk options per provider |
+| `get_available_apps` | WordPress, Magento, Laravel, custom PHP, etc. — including versions |
+| `get_available_packages` | Software packages (PHP versions, MySQL/MariaDB, Redis, etc.) |
+| `get_ssh_keys` | List of SSH keys stored in the account |
 
 ---
 
 ## 3. Servers — list & inspect (read-only)
 
-| Tool | מחזיר |
+| Tool | Returns |
 |------|--------|
-| `list_servers` | כל השרתים: ID, label, provider, region, size, status, IP, master credentials |
-| `get_server_details` | פרטי שרת ספציפי: app list, ssh user, db credentials, ssl config |
-| `get_server_settings` | קונפיגורציה (PHP timeout, memory limit, upload_max_filesize, etc.) |
-| `get_server_disk_usage` | פירוט שטח לפי תיקייה — שימושי לאיתור log/cache שתפח |
-| `get_server_services_status` | סטטוס Apache, Nginx, MySQL, Memcached, Varnish, Redis |
-| `get_server_monitoring_detail` | metrics מפורט: CPU, RAM, disk I/O, network |
-| `get_server_analytics` | נתוני analytics על השרת (traffic, uptime) |
+| `list_servers` | All servers: ID, label, provider, region, size, status, IP, master credentials |
+| `get_server_details` | Details of a specific server: app list, ssh user, db credentials, ssl config |
+| `get_server_settings` | Configuration (PHP timeout, memory limit, upload_max_filesize, etc.) |
+| `get_server_disk_usage` | Space breakdown by directory — useful for locating a log/cache that has ballooned |
+| `get_server_services_status` | Status of Apache, Nginx, MySQL, Memcached, Varnish, Redis |
+| `get_server_monitoring_detail` | Detailed metrics: CPU, RAM, disk I/O, network |
+| `get_server_analytics` | Analytics data for the server (traffic, uptime) |
 
 ---
 
-## 4. Servers — power & lifecycle (W — דורש confirmation)
+## 4. Servers — power & lifecycle (W — requires confirmation)
 
-⚠️ **כל אלה משפיעים על *כל* האפליקציות בשרת.**
+⚠️ **All of these affect *every* application on the server.**
 
-| Tool | מה עושה | סיכון |
+| Tool | What it does | Risk |
 |------|---------|--------|
-| `start_server` | מפעיל שרת כבוי | אם השרת היה כבוי בכוונה — לבדוק למה |
-| `stop_server` | מכבה (downtime לכל האפליקציות) | כל האתרים יורדים. הזהר. |
-| `restart_server` | reboot מלא | downtime זמני (1-5 דקות) לכל האפליקציות |
-| `backup_server` | snapshot מלא | צורך זמן + שטח. לרוב חיוב. |
-| `optimize_server_disk` | מנקה logs ו-temp files | יכול למחוק logs חשובים. לבדוק policy. |
-| `change_service_state` | enable/disable Apache/Nginx/MySQL/etc. | downtime אם מבטל service קריטי |
-| `manage_server_varnish` | enable/disable/purge Varnish ברמת השרת | יכול לשבור cache strategy של אפליקציות |
+| `start_server` | Starts a stopped server | If the server was stopped intentionally — check why |
+| `stop_server` | Shuts down (downtime for all applications) | All sites go down. Be careful. |
+| `restart_server` | Full reboot | Temporary downtime (1-5 minutes) for all applications |
+| `backup_server` | Full snapshot | Takes time + space. Usually billed. |
+| `optimize_server_disk` | Cleans up logs and temp files | Can delete important logs. Check policy. |
+| `change_service_state` | enable/disable Apache/Nginx/MySQL/etc. | Downtime if disabling a critical service |
+| `manage_server_varnish` | enable/disable/purge Varnish at the server level | Can break applications' cache strategy |
 
 ---
 
 ## 5. Applications — inspect (read-only)
 
-| Tool | מחזיר |
+| Tool | Returns |
 |------|--------|
 | `get_app_details` | URL, FQDN, app folder, SSH user, DB credentials, SSL config |
-| `get_app_credentials` | רשימת additional credentials (SFTP, etc.) |
+| `get_app_credentials` | List of additional credentials (SFTP, etc.) |
 | `get_app_settings` | PHP-specific overrides, Cron jobs, environment |
-| `get_app_monitoring_summary` | bandwidth, requests, response time — תקציר |
+| `get_app_monitoring_summary` | bandwidth, requests, response time — summary |
 | `get_app_analytics_traffic` | traffic detailed (visitors, page views) |
 | `get_app_analytics_php` | PHP metrics (slow scripts, memory) |
 | `get_app_analytics_mysql` | MySQL metrics (slow queries, locks) |
-| `get_app_varnish_settings` | Varnish config ברמת אפליקציה |
+| `get_app_varnish_settings` | Varnish config at the application level |
 
 ---
 
-## 6. Applications — lifecycle & data (W — דורש confirmation)
+## 6. Applications — lifecycle & data (W — requires confirmation)
 
-| Tool | מה עושה | סיכון |
+| Tool | What it does | Risk |
 |------|---------|--------|
-| `clone_app` | יוצר עותק חדש על אותו שרת או אחר | משאבים + DB עותק |
-| `backup_app` | snapshot של files + DB | זמן + שטח |
-| `restore_app` | משחזר מ-backup | **דורסת state נוכחי**. גבה תחילה. |
-| `rollback_app_restore` | חוזרת אחורה אחרי restore | רק תוך זמן מוגבל מ-restore |
-| `clear_app_cache` | מנקה page cache, varnish | תנועה ראשונה תהיה איטית — אבל בדרך כלל בטוח |
-| `reset_app_file_permissions` | אופס chmod/chown לברירת מחדל | אם מודיפיקציות ידניות קיימות — תאבד אותן |
-| `enforce_app_https` | הוספת redirect HTTP→HTTPS | יכול לשבור אם SSL לא תקין; בדוק SSL קודם |
-| `manage_app_varnish` | enable/disable/purge רמת app | יכול לשבור caching strategy |
+| `clone_app` | Creates a new copy on the same server or another | Resources + DB copy |
+| `backup_app` | Snapshot of files + DB | Time + space |
+| `restore_app` | Restores from a backup | **Overwrites the current state**. Back up first. |
+| `rollback_app_restore` | Reverts after a restore | Only within a limited window after the restore |
+| `clear_app_cache` | Clears page cache, varnish | First traffic will be slow — but usually safe |
+| `reset_app_file_permissions` | Resets chmod/chown to default | If manual modifications exist — you'll lose them |
+| `enforce_app_https` | Adds an HTTP→HTTPS redirect | Can break if SSL is invalid; check SSL first |
+| `manage_app_varnish` | enable/disable/purge at the app level | Can break the caching strategy |
 
 ---
 
 ## 7. Domains & CNAME (W — careful)
 
-| Tool | מה עושה | סיכון |
+| Tool | What it does | Risk |
 |------|---------|--------|
-| `update_app_cname` | מעדכן/מוסיף CNAME לאפליקציה | אם DNS לא מוכן — אתה שובר את האתר |
-| `delete_app_cname` | מסיר CNAME | **הרס מיידי לאפליקציה production**. דורש אישור כפול. |
+| `update_app_cname` | Updates/adds a CNAME for the application | If DNS is not ready — you break the site |
+| `delete_app_cname` | Removes a CNAME | **Immediate destruction of a production application**. Requires double confirmation. |
 
-> תהליך מומלץ: לעולם לא לעדכן CNAME ב-Cloudways לפני שווידאת:
-> 1. ה-DNS המקור (Cloudflare, Route53, etc.) מצביע נכון
-> 2. TTL נמוך הוגדר כבר 24h קודם
-> 3. אין traffic חי כרגע (בודק b- analytics)
+> Recommended process: never update a CNAME in Cloudways before verifying:
+> 1. The source DNS (Cloudflare, Route53, etc.) points correctly
+> 2. A low TTL was already set 24h earlier
+> 3. There is no live traffic at the moment (check via analytics)
 
 ---
 
 ## 8. SSL — Let's Encrypt
 
-| Tool | סוג | מה עושה |
+| Tool | Type | What it does |
 |------|-----|---------|
-| `install_letsencrypt` | W | מתקין LE לדומיין/אפליקציה |
-| `renew_letsencrypt` | W | חידוש ידני |
-| `set_letsencrypt_auto_renewal` | W | מפעיל auto-renew (מומלץ תמיד) |
-| `revoke_letsencrypt` | **W!** | **מבטל את התעודה — האתר עלול לזרוק SSL error מיידית** |
+| `install_letsencrypt` | W | Installs LE for a domain/application |
+| `renew_letsencrypt` | W | Manual renewal |
+| `set_letsencrypt_auto_renewal` | W | Enables auto-renew (always recommended) |
+| `revoke_letsencrypt` | **W!** | **Revokes the certificate — the site may immediately throw an SSL error** |
 
 ## SSL — Custom certs
 
-| Tool | סוג | מה עושה |
+| Tool | Type | What it does |
 |------|-----|---------|
-| `install_ssl_certificate` | W | מתקין cert מותאם אישית (cert + private key) |
-| `remove_ssl_certificate` | W | מסיר cert מותאם (חוזר לברירת מחדל / חוסם SSL) |
+| `install_ssl_certificate` | W | Installs a custom cert (cert + private key) |
+| `remove_ssl_certificate` | W | Removes a custom cert (reverts to default / blocks SSL) |
 
 ---
 
 ## 9. Security & Access control
 
-| Tool | סוג | מה עושה |
+| Tool | Type | What it does |
 |------|-----|---------|
-| `get_whitelisted_ips_ssh` | R | רשימת IPs מורשים ל-SSH |
-| `get_whitelisted_ips_mysql` | R | רשימת IPs מורשים ל-MySQL חיצוני |
-| `update_whitelisted_ips` | W | מעדכן רשימה (יכול לנעול את עצמך החוצה אם טועה) |
-| `check_ip_blacklisted` | R | בדיקה אם IP מסוים חסום על ידי Cloudways |
-| `allow_ip_siab` | W | מעניק גישה ל-SIAB (Server-in-a-Box / DB tools) |
-| `allow_ip_adminer` | W | מעניק גישה ל-Adminer (web DB GUI) |
+| `get_whitelisted_ips_ssh` | R | List of IPs allowed for SSH |
+| `get_whitelisted_ips_mysql` | R | List of IPs allowed for external MySQL |
+| `update_whitelisted_ips` | W | Updates the list (can lock yourself out if you make a mistake) |
+| `check_ip_blacklisted` | R | Checks whether a given IP is blocked by Cloudways |
+| `allow_ip_siab` | W | Grants access to SIAB (Server-in-a-Box / DB tools) |
+| `allow_ip_adminer` | W | Grants access to Adminer (web DB GUI) |
 
-> **דגל:** `update_whitelisted_ips` יכול לחסום את עצמך. תמיד תוודא שה-IP שלך **נשאר** ברשימה החדשה.
+> **Flag:** `update_whitelisted_ips` can block yourself. Always make sure your IP **remains** in the new list.
 
 ---
 
 ## 10. Git deployment
 
-| Tool | סוג | מה עושה |
+| Tool | Type | What it does |
 |------|-----|---------|
-| `generate_git_ssh_key` | W | יוצר זוג מפתחות חדש |
-| `get_git_ssh_key` | R | מחזיר את ה-public key (להוסיף ל-GitHub/GitLab) |
-| `git_clone` | W | clone ראשוני של repo לאפליקציה |
-| `git_pull` | W | pull בכל ה-changes (יכול לשבור אם conflict) |
-| `get_git_deployment_history` | R | היסטוריה — שימושי לאיתור מתי משהו נשבר |
-| `get_git_branch_names` | R | רשימת branches |
+| `generate_git_ssh_key` | W | Creates a new key pair |
+| `get_git_ssh_key` | R | Returns the public key (to add to GitHub/GitLab) |
+| `git_clone` | W | Initial clone of a repo to the application |
+| `git_pull` | W | Pulls all changes (can break if there's a conflict) |
+| `get_git_deployment_history` | R | History — useful for pinpointing when something broke |
+| `get_git_branch_names` | R | List of branches |
 
-> ה-Git deployment של Cloudways לא מחליף CI/CD מלא. הוא טוב לאתרי לקוח שלא דורשים build step. לאתרים מורכבים — תמשיך עם GitHub Actions / Vercel / wpe.
+> Cloudways' Git deployment is not a replacement for full CI/CD. It's good for client sites that don't require a build step. For complex sites — stick with GitHub Actions / Vercel / wpe.
 
 ---
 
 ## 11. Team & Projects
 
-| Tool | סוג | מה עושה |
+| Tool | Type | What it does |
 |------|-----|---------|
-| `list_projects` | R | פרויקטים בחשבון (ארגון של servers/apps) |
-| `list_team_members` | R | משתמשים שהוזמנו + הרשאות |
-| `get_alerts` | R | התראות פתוחות (disk full, service down, etc.) |
+| `list_projects` | R | Projects in the account (organization of servers/apps) |
+| `list_team_members` | R | Invited users + permissions |
+| `get_alerts` | R | Open alerts (disk full, service down, etc.) |
 
 ---
 
-## 12. ארגון לפי תסריט שימוש (cross-reference מהיר)
+## 12. Organized by usage scenario (quick cross-reference)
 
-### בודק חשבון מקצה לקצה
+### End-to-end account check
 `customer_info` → `list_servers` → `get_alerts` → `rate_limit_status`
 
-### Health check לאפליקציה
+### Application health check
 `get_app_details` → `get_app_monitoring_summary` → `get_server_services_status` → `get_app_analytics_traffic`
 
-### חידוש SSL לפני פג תוקף
-`get_app_details` (לבדוק תוקף) → `renew_letsencrypt` (W) → `get_app_details` (verify)
+### SSL renewal before expiry
+`get_app_details` (check expiry) → `renew_letsencrypt` (W) → `get_app_details` (verify)
 
-### Audit לקוח חדש
-ראה `workflows-onboarding.md`
+### New client audit
+See `workflows-onboarding.md`
 
 ### Disk full warning
-`get_server_disk_usage` → לזהות אפליקציה אשמה → `clear_app_cache` (W) → אם לא מספיק → `optimize_server_disk` (W)
+`get_server_disk_usage` → identify the culprit application → `clear_app_cache` (W) → if not enough → `optimize_server_disk` (W)
 
 ### Cache nuke
-`clear_app_cache` (W) + `manage_app_varnish` עם action=purge (W)
+`clear_app_cache` (W) + `manage_app_varnish` with action=purge (W)
 
-### IP whitelist (פיתוח / debugging)
-`get_whitelisted_ips_ssh` → `update_whitelisted_ips` (W — וודא שאתה לא מוחק את עצמך)
+### IP whitelist (development / debugging)
+`get_whitelisted_ips_ssh` → `update_whitelisted_ips` (W — make sure you don't delete yourself)
 
 ---
 
-## כלים שלא קיימים (נכון לעכשיו) — workarounds
+## Tools that don't exist (as of now) — workarounds
 
-| מה שחסר | חלופה |
+| What's missing | Alternative |
 |---------|--------|
-| `create_server` | UI של Cloudways בלבד. ה-API public לא חושף provisioning דרך MCP נכון לעכשיו. |
-| `delete_server` | UI / API ישיר עם curl, לא דרך MCP. בטיחות. |
-| `transfer_app` בין שרתים | UI בלבד. |
-| `staging_url` toggle | חלק מ-`get_app_details` (תכונה existing). |
-| Application creation על שרת קיים | חלקית — בדוק האם `add_app` קיים בגרסה שלך. |
+| `create_server` | Cloudways UI only. The public API does not expose provisioning via MCP as of now. |
+| `delete_server` | UI / direct API with curl, not via MCP. Safety. |
+| `transfer_app` between servers | UI only. |
+| `staging_url` toggle | Part of `get_app_details` (existing feature). |
+| Application creation on an existing server | Partial — check whether `add_app` exists in your version. |
 
-אם משימה דורשת פעולה שאינה ב-MCP, אפשר עדיין להשתמש ב-Cloudways API REST ישירות עם curl + ה-credentials. ה-MCP הוא wrapper נוח, לא היחיד.
+If a task requires an action that isn't in the MCP, you can still use the Cloudways REST API directly with curl + the credentials. The MCP is a convenient wrapper, not the only one.

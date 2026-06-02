@@ -1,39 +1,39 @@
 # cloudways-mcp
 
-[Claude Code Agent Skill](https://docs.claude.com/en/docs/claude-code/skills) תפעולי לניהול תשתית [Cloudways](https://www.cloudways.com/) דרך ה-**Cloudways MCP server**. תומך בשתי דרכי חיבור:
+An operational [Claude Code Agent Skill](https://docs.claude.com/en/docs/claude-code/skills) for managing [Cloudways](https://www.cloudways.com/) infrastructure through the **Cloudways MCP server**. It supports two connection methods:
 
-1. **רשמי — Cloudways (Remote) MCP** *(מומלץ)*: MCP מתארח על ידי Cloudways (Q2 2026). מקור החיבור הוא ה[מאמר הרשמי](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management).
-2. **קהילתי — self-hosted `cw-mcp`**: שרת Python+Redis לוקאלי. ⚠️ הריפו `github.com/aphraz/cw-mcp` **כרגע 404** (נמחק/הוסתר) — דורש fork/עותק זמין.
+1. **Official — Cloudways (Remote) MCP** *(recommended)*: An MCP hosted by Cloudways (Q2 2026). The connection source is the [official article](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management).
+2. **Community — self-hosted `cw-mcp`**: A local Python+Redis server. ⚠️ The repo `github.com/aphraz/cw-mcp` is **currently 404** (deleted/hidden) — requires an available fork/copy.
 
-הסקיל בנוי לעבודה יומיומית של ניהול תשתית: monitoring, תחזוקה, onboarding/audit ללקוחות, ואוטומציות — עם **תמיכה בכמה חשבונות Cloudways** וכללי בטיחות לפעולות write.
+The skill is built for day-to-day infrastructure management: monitoring, maintenance, client onboarding/audit, and automations — with **support for multiple Cloudways accounts** and safety rules for write operations.
 
-## מבנה
+## Structure
 
 ```
 .claude/skills/cloudways-mcp/
-├── SKILL.md                          # ליבה: safety rules, multi-account, confirmation, דפוסים
+├── SKILL.md                          # core: safety rules, multi-account, confirmation, patterns
 └── references/
-    ├── installation.md               # הקמת השרת (Python+Redis) + חיבור Claude + multi-account config
-    ├── tools-catalog.md              # קטלוג 43+ כלים, מתויגים R / W / W!
-    ├── workflows-monitoring.md       # תרחישי ניטור (read-only)
-    ├── workflows-maintenance.md      # תרחישי תחזוקה (write — דורש confirmation)
-    ├── workflows-onboarding.md       # audit/onboarding ללקוח חדש
+    ├── installation.md               # server setup (Python+Redis) + Claude connection + multi-account config
+    ├── tools-catalog.md              # catalog of 43+ tools, tagged R / W / W!
+    ├── workflows-monitoring.md       # monitoring scenarios (read-only)
+    ├── workflows-maintenance.md      # maintenance scenarios (write — requires confirmation)
+    ├── workflows-onboarding.md       # audit/onboarding for a new client
     └── workflows-automation.md       # n8n / Make / Claude Code headless / multi-account
 ```
 
-## נקודות מפתח
+## Key points
 
-- **read-only מול write — לא ודאי.** מקורות סותרים אם הגרסה הנוכחית כוללת פעולות write או רק read. הסקיל נוקט זהירות: כל כלי שמשנה מצב חייב **אישור מפורש** (`SKILL.md`) — כלל שבטוח גם אם אין כלי write בפועל. תמיד אמת מול השרת החי.
-- **Multi-account.** כל חשבון מחובר כ-connection נפרד עם prefix משלו (`mcp__cloudways-clientA__*`). הסקיל מחייב לזהות את החשבון הנכון לפני כל פעולה, ואוסר ערבוב IDs/credentials בין חשבונות.
-- **Source of truth.** אם הקטלוג כאן סותר את מה שה-MCP החי מחזיר — **ה-MCP החי קובע**; עדכן את הקטלוג בהתאם.
+- **read-only vs. write — uncertain.** Sources conflict on whether the current version includes write operations or read only. The skill errs on the side of caution: any tool that changes state requires **explicit confirmation** (`SKILL.md`) — a rule that is safe even if no write tool actually exists. Always verify against the live server.
+- **Multi-account.** Each account is connected as a separate connection with its own prefix (`mcp__cloudways-clientA__*`). The skill requires identifying the correct account before any operation, and prohibits mixing IDs/credentials across accounts.
+- **Source of truth.** If the catalog here conflicts with what the live MCP returns — **the live MCP wins**; update the catalog accordingly.
 
-## הפעלה
+## Activation
 
-הסקיל מופעל אוטומטית כשמדברים על Cloudways, כל עוד הסקיל זמין וה-MCP server מחובר (הכלים מופיעים כ-`mcp__cloudways*__*`). להקמה וחיבור — ראה [`installation.md`](.claude/skills/cloudways-mcp/references/installation.md) ואת [`.mcp.json.example`](.mcp.json.example). תזדקק ל-email + API key של כל חשבון (Cloudways Platform → Account → API).
+The skill activates automatically when Cloudways is discussed, as long as the skill is available and the MCP server is connected (the tools appear as `mcp__cloudways*__*`). For setup and connection — see [`installation.md`](.claude/skills/cloudways-mcp/references/installation.md) and [`.mcp.json.example`](.mcp.json.example). You will need the email + API key for each account (Cloudways Platform → Account → API).
 
-## מקורות
+## Sources
 
-- [How to Use Cloudways MCP Server for AI-Based Server Management](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management) (רשמי — מקור האמת לחיבור)
-- [Cloudways Roadmap](https://www.cloudways.com/en/roadmap.php) (מציין את "Cloudways Remote MCP", Q2 2026)
-- `aphraz/cw-mcp` — השרת הקהילתי (⚠️ הריפו כרגע 404)
+- [How to Use Cloudways MCP Server for AI-Based Server Management](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management) (official — the source of truth for the connection)
+- [Cloudways Roadmap](https://www.cloudways.com/en/roadmap.php) (lists "Cloudways Remote MCP", Q2 2026)
+- `aphraz/cw-mcp` — the community server (⚠️ the repo is currently 404)
 </content>
