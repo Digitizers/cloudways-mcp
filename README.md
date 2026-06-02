@@ -1,38 +1,35 @@
 # cloudways-mcp
 
-A [Claude Code Agent Skill](https://docs.claude.com/en/docs/claude-code/skills)
-for managing [Cloudways](https://www.cloudways.com/) managed hosting through the
-**Cloudways MCP server**.
+[Claude Code Agent Skill](https://docs.claude.com/en/docs/claude-code/skills) תפעולי לניהול תשתית [Cloudways](https://www.cloudways.com/) דרך ה-**Cloudways MCP server** ([`aphraz/cw-mcp`](https://github.com/aphraz/cw-mcp), המימוש שמופיע ב[תיעוד הרשמי של Cloudways](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management)).
 
-The skill teaches Claude how to drive the Cloudways MCP tools: discovering
-servers and applications, reading monitoring metrics, fetching app credentials
-and settings, and inspecting account-level configuration (projects, team
-members, SSH keys, providers, regions, sizes). All operations are currently
-**read-only**.
+הסקיל בנוי לעבודה היומיומית של Digitizer: monitoring, תחזוקה, onboarding/audit ללקוחות, ואוטומציות — עם **תמיכה בכמה חשבונות Cloudways** וכללי בטיחות לפעולות write.
 
-## Contents
+## מבנה
 
 ```
-.claude/skills/cloudways/
-├── SKILL.md                 # main skill: workflow, conventions, safety
+.claude/skills/cloudways-mcp/
+├── SKILL.md                          # ליבה: safety rules, multi-account, confirmation, דפוסים
 └── references/
-    ├── tools.md             # catalog of available MCP tools by category
-    └── setup.md             # run the server + connect a client
+    ├── installation.md               # הקמת השרת (Python+Redis) + חיבור Claude + multi-account config
+    ├── tools-catalog.md              # קטלוג 43+ כלים, מתויגים R / W / W!
+    ├── workflows-monitoring.md       # תרחישי ניטור (read-only)
+    ├── workflows-maintenance.md      # תרחישי תחזוקה (write — דורש confirmation)
+    ├── workflows-onboarding.md       # audit/onboarding ללקוח חדש
+    └── workflows-automation.md       # n8n / Make / Claude Code headless / multi-account
 ```
 
-## Using the skill
+## נקודות מפתח
 
-The skill activates automatically when you ask Claude about your Cloudways
-servers, apps, or hosting — as long as the `cloudways` skill is available and
-the Cloudways MCP server is connected (tools appear as `mcp__cloudways__*`).
+- **לא read-only.** בניגוד לחומר השיווק של Cloudways, ה-MCP כולל גם פעולות **write** רבות (restart, backup, restore, SSL, git, IP whitelist). כל פעולת write דורשת **אישור מפורש** לפי הפטרן ב-`SKILL.md`.
+- **Multi-account.** כל חשבון מחובר כ-connection נפרד עם prefix משלו (`mcp__cloudways-clientA__*`). הסקיל מחייב לזהות את החשבון הנכון לפני כל פעולה, ואוסר ערבוב IDs/credentials בין חשבונות.
+- **Source of truth.** אם הקטלוג כאן סותר את מה שה-MCP החי מחזיר — **ה-MCP החי קובע**; עדכן את הקטלוג בהתאם.
 
-## Connecting the MCP server
+## הפעלה
 
-See [`.claude/skills/cloudways/references/setup.md`](.claude/skills/cloudways/references/setup.md)
-and the example [`.mcp.json.example`](.mcp.json.example). You'll need your
-Cloudways account email and API key (Cloudways Platform → Account → API Keys).
+הסקיל מופעל אוטומטית כשמדברים על Cloudways, כל עוד הסקיל זמין וה-MCP server מחובר (הכלים מופיעים כ-`mcp__cloudways*__*`). להקמה וחיבור — ראה [`installation.md`](.claude/skills/cloudways-mcp/references/installation.md) ואת [`.mcp.json.example`](.mcp.json.example). תזדקק ל-email + API key של כל חשבון (Cloudways Platform → Account → API).
 
-## References
+## מקורות
 
-- [How to Use Cloudways MCP Server for AI-Based Server Management](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management) (official)
-- [`aphraz/cw-mcp`](https://github.com/aphraz/cw-mcp) (upstream MCP server)
+- [How to Use Cloudways MCP Server for AI-Based Server Management](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management) (רשמי)
+- [`aphraz/cw-mcp`](https://github.com/aphraz/cw-mcp) (ה-MCP server)
+</content>
