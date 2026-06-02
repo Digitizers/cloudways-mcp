@@ -1,0 +1,2 @@
+# Real MCP config may contain Cloudways credentials — keep it local
+.mcp.json

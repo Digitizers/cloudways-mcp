@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "cloudways": {
+      "type": "http",
+      "url": "http://127.0.0.1:7000/mcp",
+      "headers": {
+        "X-Cloudways-Email": "you@example.com",
+        "X-Cloudways-API-Key": "YOUR_CLOUDWAYS_API_KEY"
+      }
+    }
+  }
+}
