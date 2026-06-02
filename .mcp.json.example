@@ -1,0 +1,21 @@
+{
+  "_comment": "Cloudways MCP — one connection per Cloudways account. Copy to .mcp.json (gitignored) and fill real credentials. Header names are case-insensitive. For Claude Desktop use the mcp-remote form in references/installation.md.",
+  "mcpServers": {
+    "cloudways-clientA": {
+      "type": "http",
+      "url": "http://127.0.0.1:7000/mcp",
+      "headers": {
+        "x-cloudways-email": "clientA@example.com",
+        "x-cloudways-api-key": "CLIENT_A_API_KEY"
+      }
+    },
+    "cloudways-clientB": {
+      "type": "http",
+      "url": "http://127.0.0.1:7000/mcp",
+      "headers": {
+        "x-cloudways-email": "clientB@example.com",
+        "x-cloudways-api-key": "CLIENT_B_API_KEY"
+      }
+    }
+  }
+}
