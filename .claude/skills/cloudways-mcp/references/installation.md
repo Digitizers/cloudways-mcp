@@ -1,12 +1,40 @@
 # Installation — Cloudways MCP Server
 
-מדריך התקנה והגדרה מלאים של ה-MCP server `aphraz/cw-mcp` עבור Claude Desktop / Claude Code.
+יש **שתי דרכים** להתחבר. בחר את שלך:
 
-> **חשוב להבין:** Cloudways לא מפעילים את ה-MCP server עבורך. ה-server רץ **אצלך** (לוקאלית או על VPS) ופונה ל-Cloudways API בשמך. המשמעות: אתה אחראי על האבטחה, ה-credentials, ועל זה שה-server רץ ברציפות כשאתה רוצה להשתמש בו.
+| | Official — Cloudways (Remote) MCP | Self-hosted — community `cw-mcp` |
+|---|---|---|
+| מי מריץ | **Cloudways** (מתארח) | **אתה** (Python+Redis לוקאלי/VPS) |
+| תחזוקה | אין | אתה אחראי על uptime, אבטחה, credentials |
+| מקור | המאמר הרשמי (למטה) | `aphraz/cw-mcp` — ⚠️ **כרגע 404** |
+| מתי | ברירת מחדל מומלצת (סופק Q2 2026) | רק אם יש לך עותק/fork זמין |
 
 ---
 
-## Prerequisites
+## Option 1 — Official Cloudways (Remote) MCP  ✅ מומלץ
+
+Cloudways השיקו MCP **מתארח** משלהם (Cloudways Remote MCP, Q2 2026). מתחברים אליו ישירות — **בלי** Python/Redis/self-hosting.
+
+> **מקור האמת לחיבור הוא המאמר הרשמי:**
+> https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management
+>
+> עקוב אחרי השלבים שם ל-endpoint המדויק ולשיטת ה-auth (OAuth / API key). **אל תמציא URL או headers** — הם עשויים להשתנות מהגרסה הקהילתית, ולכן הם לא משוכפלים כאן בקשיחות. כללי ה-credentials (Account → API) זהים — ראה למטה.
+>
+> אחרי החיבור, ה-tools יופיעו ב-Claude כ-`mcp__cloudways*__*` בלי שתריץ שום דבר מקומית. זה הסימן שאתה על הדרך הרשמית.
+
+לעבודה עם **כמה חשבונות** דרך הרשמי — אותו עיקרון של connection-לכל-חשבון; ראה סעיף "Multi-account configuration" למטה (חל על שתי הדרכים).
+
+---
+
+## Option 2 — Self-hosted (community `cw-mcp`)
+
+> **חשוב:** בדרך הזו אתה מריץ את ה-server. ⚠️ הריפו `github.com/aphraz/cw-mcp` **כרגע מחזיר 404** — לפני שתתחיל, ודא שיש לך עותק/fork זמין של הקוד. אם אין — עבור ל-Option 1.
+
+> Cloudways לא מפעילים את ה-server הזה עבורך. הוא רץ **אצלך** ופונה ל-Cloudways API בשמך — אתה אחראי על האבטחה, ה-credentials, וה-uptime.
+
+---
+
+## Prerequisites (Option 2)
 
 - **Python 3.11+** (לא 3.10 — ה-`asyncio.TaskGroup` שה-MCP משתמש בו דורש 3.11)
 - **Redis** רץ (לוקאלית או remote). שימושים: storage מוצפן של tokens, rate limiting, session isolation.

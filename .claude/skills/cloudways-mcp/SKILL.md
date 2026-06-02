@@ -1,7 +1,7 @@
 ---
 name: cloudways-mcp
 description: |
-  Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the Cloudways MCP server (aphraz/cw-mcp, the implementation referenced in Cloudways' official support docs).
+  Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the Cloudways MCP server (Cloudways' official MCP / Remote MCP per their support docs; or the community self-hosted cw-mcp implementation).
   Use whenever the user mentions Cloudways, a Cloudways server or app, server monitoring, app monitoring, bandwidth, disk usage, PHP/MySQL/traffic analytics, SSH/MySQL IP whitelisting, Let's Encrypt or SSL on Cloudways, Varnish cache, app cloning, backups/restore on Cloudways, Git deployments on Cloudways, or running an audit/onboarding on a Cloudways-hosted client site.
   Also use for self-hosting the MCP server itself (Python + Redis setup, mcp-remote configuration for Claude Desktop/Code).
   Any write operation (start/stop/restart server, backup, restore, rollback, install/revoke SSL, update CNAME, change whitelist, clear cache, change service state, git pull) requires explicit confirmation of target server/app and intended action before execution.
@@ -9,7 +9,13 @@ description: |
 
 # Cloudways MCP — Skill תפעולי
 
-ניהול תשתית Cloudways דרך MCP server של Cloudways (פרויקט `aphraz/cw-mcp`, אותו פרויקט שמופיע בתיעוד הרשמי של Cloudways ב-`support.cloudways.com/en/articles/14654372`).
+ניהול תשתית Cloudways דרך MCP server של Cloudways.
+
+> **שתי דרכים, וצריך לדעת באיזו אתה:**
+> 1. **רשמי — Cloudways (Remote) MCP** *(מומלץ, default)*: MCP מתארח על ידי Cloudways (סופק ב-Q2 2026). מתחברים אליו ישירות בלי self-hosting. מקור האמת לחיבור הוא **המאמר הרשמי**: `support.cloudways.com/en/articles/14654372`. ראה `references/installation.md` סעיף "Official".
+> 2. **קהילתי — self-hosted (`cw-mcp`)**: שרת Python+Redis שמריצים מקומית. ⚠️ **הריפו `github.com/aphraz/cw-mcp` כרגע מחזיר 404** (נמחק/הוסתר). אם זו הדרך שלך — צריך fork/עותק זמין; ראה `references/installation.md` סעיף "Self-hosted".
+>
+> אם לא ידוע באיזו דרך משתמשים — שאל את המשתמש, או זהה לפי אופן החיבור: אם ה-tools מופיעים ב-Claude בלי שהרצת שרת מקומי → זה הרשמי.
 
 > **הקשר Digitizer:** הסקיל נבנה כדי לתמוך בעבודה היומיומית של ניהול לקוחות על Cloudways — monitoring, תחזוקה שגרתית, onboarding/audit ללקוחות חדשים, ואוטומציות. כל ערכים כספיים שמדווחים על ידי ה-API הם $ (USD), לא ₪.
 
@@ -189,6 +195,6 @@ mcp__cloudways-internal__list_servers
 
 ## Versioning ו-source of truth
 
-- ה-MCP server מתפתח. מספר ה-tools הוא **43+ כפי שתועד ב-2026-Q1**. ייתכן שנוספו tools — לפני שאתה מצהיר ש-tool מסוים לא קיים, בדוק עם `tool_search` או הפעל את ה-MCP ובקש את רשימת ה-tools החיה.
-- אם יש סתירה בין הקטלוג כאן לבין מה שה-MCP מחזיר בפועל — **ה-MCP החי הוא source of truth.** עדכן את הקטלוג בהתאם.
-- חומר השיווק של Cloudways מציין "read-only operations only". זה **לא מדויק** נכון לגרסה הנוכחית של `aphraz/cw-mcp` — קיימות גם פעולות write רבות. אל תסמוך על השיווק; סמוך על רשימת ה-tools בפועל.
+- **ה-MCP החי הוא source of truth — תמיד.** שמות הכלים והקטגוריות בקטלוג כאן תועדו ב-2026-Q1 מתוך השרת הקהילתי (`cw-mcp`). ה-MCP הרשמי של Cloudways עשוי לחשוף שמות/יכולות שונים. לפני שאתה מצהיר ש-tool קיים/לא קיים — **בדוק את רשימת ה-tools החיה** שמחוברת ב-Claude (`mcp__cloudways*__*`), ועדכן את הקטלוג בהתאם.
+- **read-only מול write — לא ודאי, אז התנהג בזהירות.** מקורות שונים סותרים: חלק מתעדים את הקהילתי כ-read-only-בלבד (write "מתוכנן"), והתיעוד כאן הניח שקיימות פעולות write. **אל תניח** — בדוק מול השרת החי אילו כלים זמינים. בכל מקרה, כל כלי שמבצע שינוי **חייב** לעבור את פטרן ה-confirmation; הכלל הזה בטוח גם אם בפועל אין כלי write (אז הוא פשוט לא מופעל).
+- **`github.com/aphraz/cw-mcp` כרגע 404.** אם הסתמכת עליו להתקנה — ראה `references/installation.md`; אתרי אגרגציה (glama/lobehub/mcp.so) עדיין מחזיקים עותק מאוחסן, אבל המקור החי איננו.
