@@ -1,6 +1,6 @@
-# Workflows — Onboarding & Audit (Digitizer client takeover)
+# Workflows — Onboarding & Audit (agency client takeover)
 
-תרחיש מרכזי ל-Digitizer: לקוח חדש שמגיע עם אתר על Cloudways, ואתה צריך לבנות תמונה מלאה — בלי קריסות, בלי surprises ב-3 בלילה.
+תרחיש מרכזי: לקוח חדש שמגיע עם אתר על Cloudways, ואתה צריך לבנות תמונה מלאה — בלי קריסות, בלי surprises ב-3 בלילה.
 
 > **עיקרון מנחה:** ב-audit הראשון, **אל תיגע בכלום.** רק קרא. תיעוד מלא של state נוכחי קודם. שינויים — אחרי שהבנת את התמונה ויש תוכנית מסודרת.
 
@@ -130,7 +130,7 @@
 - Retention? (כמה ימים אחורה?)
 - האם יש off-platform backup? (Cloudways backups זמינים רק מתוך Cloudways — אם החשבון נסגר, אובד)
 
-**המלצה סטנדרטית של Digitizer:**
+**המלצה סטנדרטית:**
 - Daily Cloudways backups, 7-day retention
 - Weekly off-platform backup (UpdraftPlus ל-S3 / Wasabi / Cloudways → Drive)
 
@@ -176,7 +176,7 @@
 ```markdown
 # Cloudways Audit — [Client Name]
 Date: [YYYY-MM-DD]
-Auditor: Digitizer (Ben/Avi)
+Auditor: [your name]
 
 ## תקציר
 - Servers: X | Apps: Y | Monthly spend (gross): $Z

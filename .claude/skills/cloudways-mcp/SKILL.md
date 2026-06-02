@@ -1,5 +1,6 @@
 ---
 name: cloudways-mcp
+version: 1.0.0
 description: |
   Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the Cloudways MCP server (Cloudways' official MCP / Remote MCP per their support docs; or the community self-hosted cw-mcp implementation).
   Use whenever the user mentions Cloudways, a Cloudways server or app, server monitoring, app monitoring, bandwidth, disk usage, PHP/MySQL/traffic analytics, SSH/MySQL IP whitelisting, Let's Encrypt or SSL on Cloudways, Varnish cache, app cloning, backups/restore on Cloudways, Git deployments on Cloudways, or running an audit/onboarding on a Cloudways-hosted client site.
@@ -17,7 +18,7 @@ description: |
 >
 > אם לא ידוע באיזו דרך משתמשים — שאל את המשתמש, או זהה לפי אופן החיבור: אם ה-tools מופיעים ב-Claude בלי שהרצת שרת מקומי → זה הרשמי.
 
-> **הקשר Digitizer:** הסקיל נבנה כדי לתמוך בעבודה היומיומית של ניהול לקוחות על Cloudways — monitoring, תחזוקה שגרתית, onboarding/audit ללקוחות חדשים, ואוטומציות. כל ערכים כספיים שמדווחים על ידי ה-API הם $ (USD), לא ₪.
+> **הקשר:** הסקיל בנוי לעבודה יומיומית של ניהול לקוחות/סביבות על Cloudways — monitoring, תחזוקה שגרתית, onboarding/audit ללקוחות חדשים, ואוטומציות. כל ערכים כספיים שמדווחים על ידי ה-API הם $ (USD), לא ₪.
 
 ---
 
@@ -122,7 +123,7 @@ export CLOUDWAYS_API_KEY="your-cloudways-api-key"
 
 ## Multi-account — עבודה עם כמה חשבונות Cloudways
 
-ל-Digitizer יש **כמה חשבונות Cloudways** (לקוחות שונים / סביבות שונות). כל חשבון מחובר כ-MCP connection **נפרד** עם credentials משלו, ולכן מופיע ב-Claude עם **prefix משלו**:
+לרוב יש **כמה חשבונות Cloudways** (לקוחות שונים / סביבות שונות). כל חשבון מחובר כ-MCP connection **נפרד** עם credentials משלו, ולכן מופיע ב-Claude עם **prefix משלו**:
 
 ```
 mcp__cloudways-clientA__list_servers

@@ -5,7 +5,7 @@
 1. **רשמי — Cloudways (Remote) MCP** *(מומלץ)*: MCP מתארח על ידי Cloudways (Q2 2026). מקור החיבור הוא ה[מאמר הרשמי](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management).
 2. **קהילתי — self-hosted `cw-mcp`**: שרת Python+Redis לוקאלי. ⚠️ הריפו `github.com/aphraz/cw-mcp` **כרגע 404** (נמחק/הוסתר) — דורש fork/עותק זמין.
 
-הסקיל בנוי לעבודה היומיומית של Digitizer: monitoring, תחזוקה, onboarding/audit ללקוחות, ואוטומציות — עם **תמיכה בכמה חשבונות Cloudways** וכללי בטיחות לפעולות write.
+הסקיל בנוי לעבודה יומיומית של ניהול תשתית: monitoring, תחזוקה, onboarding/audit ללקוחות, ואוטומציות — עם **תמיכה בכמה חשבונות Cloudways** וכללי בטיחות לפעולות write.
 
 ## מבנה
 
