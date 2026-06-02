@@ -1,227 +1,227 @@
 # Workflows — Maintenance (write operations)
 
-תרחישי תחזוקה הדורשים פעולות write. **כל פעולה כאן דורשת confirmation מפורש מהמשתמש לפני ביצוע**, לפי הפטרן ב-`SKILL.md`.
+Maintenance scenarios requiring write operations. **Every operation here requires explicit confirmation from the user before execution**, per the pattern in `SKILL.md`.
 
-> **כלל בסיסי:** Read לפני Write. תמיד תקרא את המצב הנוכחי לפני שאתה משנה אותו. גם כדי לוודא שהפעולה נדרשת, וגם כדי שיהיה לך baseline לחזרה אחורה.
+> **Basic rule:** Read before Write. Always read the current state before you change it. Both to verify the operation is needed, and so you have a baseline to roll back to.
 
 ---
 
-## פטרן confirmation סטנדרטי
+## Standard confirmation pattern
 
-לפני **כל** קריאה לכלי W, הצג בלוק כזה למשתמש וחכה ל"כן" מפורש:
+Before **every** call to a W tool, display a block like this to the user and wait for an explicit "yes":
 
 ```
-🔒 מאשר ביצוע?
-   כלי: <tool_name>
-   יעד: <server name + ID או app name + URL>
-   פרמטרים: <key params>
-   השפעה צפויה: <what happens>
+🔒 Confirm execution?
+   tool: <tool_name>
+   target: <server name + ID or app name + URL>
+   parameters: <key params>
+   expected impact: <what happens>
    risks: <what could go wrong>
-   המשך? (כן / לא / השהה)
+   Continue? (yes / no / pause)
 ```
 
-אם המשתמש כתב "כן" — בצע. אם משהו אחר — בקש הבהרה.
+If the user wrote "yes" — execute. If anything else — ask for clarification.
 
-לפעולות מסוכנות במיוחד (W!): הוסף **שלב שני**: "הקלד את שם השרת/האפליקציה כדי לאשר". זה מוודא שהוא קורא ולא מסכים אוטומטית.
+For especially dangerous operations (W!): add a **second step**: "Type the server/application name to confirm". This ensures they are reading and not approving automatically.
 
 ---
 
 ## 1. Cache clear — basic
 
-**מתי:** "האתר לא מתעדכן אחרי שינוי" / "מסך אדמין מציג גרסה ישנה"
+**When:** "The site isn't updating after a change" / "Admin screen shows an old version"
 
-**רצף:**
+**Sequence:**
 
-1. `get_app_details` — לאשש את ה-target app
-2. `get_app_varnish_settings` — לראות אם Varnish פעיל
+1. `get_app_details` — confirm the target app
+2. `get_app_varnish_settings` — see if Varnish is active
 3. **CONFIRM:** `clear_app_cache` (W)
-4. אם Varnish פעיל: **CONFIRM:** `manage_app_varnish` עם action=purge (W)
-5. בדוק את האתר בדפדפן (curl או ידני)
+4. If Varnish is active: **CONFIRM:** `manage_app_varnish` with action=purge (W)
+5. Check the site in a browser (curl or manually)
 
-**אם הבעיה ממשיכה:**
-- בדוק plugin caches (W3 Total Cache, WP Rocket, LiteSpeed) — אלה לא ב-Cloudways, יש למחוק מתוך WP-Admin
-- בדוק Cloudflare cache אם בשימוש — `purge everything` ב-Cloudflare UI
+**If the problem persists:**
+- Check plugin caches (W3 Total Cache, WP Rocket, LiteSpeed) — these are not in Cloudways, they must be cleared from WP-Admin
+- Check Cloudflare cache if in use — `purge everything` in the Cloudflare UI
 - CDN caches
 
 ---
 
-## 2. SSL — חידוש Let's Encrypt
+## 2. SSL — Let's Encrypt renewal
 
-**מתי:** SSL מתקרב לפג תוקף ואין auto-renewal / auto-renewal נכשל
+**When:** SSL is approaching expiry and there is no auto-renewal / auto-renewal failed
 
-**רצף:**
+**Sequence:**
 
-1. `get_app_details` — בדוק את ה-domain ואת תאריך פג תוקף הנוכחי
-2. בדוק שה-DNS עדיין מצביע לשרת (קריטי ל-LE validation)
+1. `get_app_details` — check the domain and the current expiry date
+2. Check that the DNS still points to the server (critical for LE validation)
 3. **CONFIRM:** `renew_letsencrypt` (W)
-4. **CONFIRM:** `set_letsencrypt_auto_renewal` עם enabled=true (W) — אם לא היה פעיל
+4. **CONFIRM:** `set_letsencrypt_auto_renewal` with enabled=true (W) — if it wasn't active
 5. `get_app_details` — verify
 
-**אם renewal נכשל:**
-- בעיה הכי נפוצה: DNS לא מצביע נכון, או wildcard domains לא קונפיגורים
-- שנייה: rate limit של Let's Encrypt (5 attempts per week per domain)
-- שלישית: validation HTTP-01 לא מצליח כי האתר מאחורי Cloudflare proxy → פתור עם DNS-01 או disable proxy זמנית
+**If renewal fails:**
+- Most common problem: DNS doesn't point correctly, or wildcard domains aren't configured
+- Second: Let's Encrypt rate limit (5 attempts per week per domain)
+- Third: HTTP-01 validation fails because the site is behind a Cloudflare proxy → resolve with DNS-01 or disable the proxy temporarily
 
 ---
 
-## 3. SSL — התקנת cert מותאם
+## 3. SSL — installing a custom cert
 
-**מתי:** הלקוח קנה cert מ-CA אחר (DigiCert, Sectigo, וכו'), לא Let's Encrypt
+**When:** The client purchased a cert from another CA (DigiCert, Sectigo, etc.), not Let's Encrypt
 
-**רצף:**
+**Sequence:**
 
-1. אסוף מהלקוח: certificate, private key, ca bundle
-2. `get_app_details` — לאשש target
-3. **CONFIRM:** `install_ssl_certificate` (W) — עם cert + key
-4. בדוק SSL מהדפדפן (SSL Labs grade A+ עדיף)
-5. אם היה Let's Encrypt פעיל — תחליט: לשמור backup או revoke
+1. Collect from the client: certificate, private key, ca bundle
+2. `get_app_details` — confirm target
+3. **CONFIRM:** `install_ssl_certificate` (W) — with cert + key
+4. Check SSL from the browser (SSL Labs grade A+ preferred)
+5. If Let's Encrypt was active — decide: keep as backup or revoke
 
-> אזהרה: התקנת cert מותאם **מבטלת** את ה-Let's Encrypt אם היה פעיל. וודא שיש לך את ה-cert המותאם ביד **לפני** שמתחיל.
+> Warning: Installing a custom cert **cancels** the Let's Encrypt cert if one was active. Make sure you have the custom cert in hand **before** you start.
 
 ---
 
-## 4. Backup לפני שינוי
+## 4. Backup before a change
 
-**מתי:** לפני migration, restore, plugin update משמעותי, או כל "אני לא בטוח מה זה יעשה"
+**When:** Before a migration, restore, significant plugin update, or any "I'm not sure what this will do"
 
-**רצף:**
+**Sequence:**
 
-1. `get_app_details` — מאשש target
-2. `get_app_monitoring_summary` — לפני: snapshot של state
+1. `get_app_details` — confirm target
+2. `get_app_monitoring_summary` — before: snapshot of state
 3. **CONFIRM:** `backup_app` (W)
-4. בדוק שה-backup נוצר (`get_app_details` שוב, או דרך UI)
-5. רשום timestamp של backup — תצטרך אותו ל-restore אם משהו ישתבש
+4. Check that the backup was created (`get_app_details` again, or via the UI)
+5. Record the backup timestamp — you'll need it for restore if something goes wrong
 
-**Backup ברמת שרת:**
-- `backup_server` (W) — slower, includes everything, יותר יקר
-- שימושי לפני server-wide change (PHP upgrade, OS upgrade, package change)
+**Server-level backup:**
+- `backup_server` (W) — slower, includes everything, more expensive
+- Useful before a server-wide change (PHP upgrade, OS upgrade, package change)
 
 ---
 
-## 5. Restore אחרי שגיאה
+## 5. Restore after an error
 
-**מתי:** משהו השתבש (deployment רע, hack, accidental delete)
+**When:** Something went wrong (bad deployment, hack, accidental delete)
 
-**רצף — קריטי לעקוב לפי הסדר:**
+**Sequence — critical to follow in order:**
 
-1. **STOP** — אל תעשה כלום עד שאתה מבין את היקף הבעיה.
-2. `get_app_details` — מצב נוכחי
-3. בדוק רשימת backups זמינים (דרך Cloudways UI — MCP לא חושף list_backups ישירות)
-4. **CONFIRM שלב 1:** "האם backup מתאריך X הוא הנקודה שאתה רוצה לחזור אליה?"
-5. **CONFIRM שלב 2:** Type the app name to confirm restore
-6. **CONFIRM:** `restore_app` (W!) — דריסה מלאה של state נוכחי
-7. בדוק שהאתר עובד
-8. אם יש בעיה: **CONFIRM:** `rollback_app_restore` (W) תוך פרק זמן מוגבל
+1. **STOP** — don't do anything until you understand the scope of the problem.
+2. `get_app_details` — current state
+3. Check the list of available backups (via the Cloudways UI — MCP doesn't expose list_backups directly)
+4. **CONFIRM step 1:** "Is the backup from date X the point you want to roll back to?"
+5. **CONFIRM step 2:** Type the app name to confirm restore
+6. **CONFIRM:** `restore_app` (W!) — full overwrite of the current state
+7. Check that the site works
+8. If there's a problem: **CONFIRM:** `rollback_app_restore` (W) within a limited time window
 
-> **חלון rollback מוגבל.** אחרי מספר שעות / יום, אי אפשר לעשות rollback. תוודא שהאתר עובד **באותו יום** של ה-restore.
+> **Limited rollback window.** After a few hours / a day, rollback is no longer possible. Make sure the site works **on the same day** as the restore.
 
 ---
 
 ## 6. Restart server / service
 
-**מתי:** memory leak, services stuck, או troubleshooting
+**When:** memory leak, services stuck, or troubleshooting
 
-**Priority order — נסה את הכי שקט קודם:**
+**Priority order — try the quietest one first:**
 
-1. `clear_app_cache` (W) per app — לפעמים זה הכל
-2. `change_service_state` (W) על service בודד (למשל restart MySQL בלבד)
-3. אם לא עוזר: `restart_server` (W) — downtime 1-5 דקות לכל ה-apps
+1. `clear_app_cache` (W) per app — sometimes that's all it takes
+2. `change_service_state` (W) on a single service (e.g. restart MySQL only)
+3. If that doesn't help: `restart_server` (W) — 1-5 minutes downtime for all the apps
 
-**לפני restart_server:**
+**Before restart_server:**
 
-1. **חובה:** `get_server_details` → רשימת apps
-2. **חובה:** ספור משתמשים פעילים (אם רלוונטי — אתר חנות עם carts פתוחים?)
-3. **CONFIRM כפול:** "השרת מארח X אפליקציות — Y, Z, W. כל אחת מהן תהיה offline X דקות. המשך?"
-4. בצע
-5. **VERIFY:** `get_server_services_status` אחרי restart
+1. **Mandatory:** `get_server_details` → list of apps
+2. **Mandatory:** count active users (if relevant — a store site with open carts?)
+3. **Double CONFIRM:** "The server hosts X applications — Y, Z, W. Each of them will be offline for X minutes. Continue?"
+4. Execute
+5. **VERIFY:** `get_server_services_status` after the restart
 
 ---
 
 ## 7. IP whitelist — SSH/MySQL
 
-**מתי:** הוספת מפתח לחבר צוות, או הסרת גישה ל-IP ישן
+**When:** Adding a key for a team member, or removing access for an old IP
 
-**רצף:**
+**Sequence:**
 
-1. `get_whitelisted_ips_ssh` — מה יש עכשיו
-2. תכנן את הרשימה החדשה — **כולל IP שלך**
-3. **CONFIRM:** הצג למשתמש: "הרשימה החדשה היא: [...]. ה-IP שלך X.X.X.X נשאר ברשימה? כן/לא"
-4. אם המשתמש חסר ברשימה — **עצור והבהר**
+1. `get_whitelisted_ips_ssh` — what's there now
+2. Plan the new list — **including your own IP**
+3. **CONFIRM:** Show the user: "The new list is: [...]. Does your IP X.X.X.X stay on the list? yes/no"
+4. If the user is missing from the list — **stop and clarify**
 5. **CONFIRM:** `update_whitelisted_ips` (W)
-6. **VERIFY:** נסה SSH מיידית (אם לא עובד — Cloudways support כדי לשחזר)
+6. **VERIFY:** Try SSH immediately (if it doesn't work — Cloudways support to restore)
 
-> **תרחיש סיוט להימנע ממנו:** עדכון whitelist + הסרת ה-IP של עצמך + אין SSH אלטרנטיבי. הדרך החוצה היחידה — Cloudways UI (פאניקה) או support ticket (זמן). זהיר.
+> **Nightmare scenario to avoid:** updating the whitelist + removing your own IP + no alternative SSH. The only way out — the Cloudways UI (panic) or a support ticket (time). Be careful.
 
 ---
 
 ## 8. Disk cleanup
 
-**מתי:** disk usage > 80%
+**When:** disk usage > 80%
 
 **Priority order:**
 
-1. `get_server_disk_usage` — איפה השטח?
-2. **CONFIRM:** `clear_app_cache` (W) לכל ה-apps החשודים
-3. אם לא מספיק: **CONFIRM:** `optimize_server_disk` (W) — Cloudways magic cleanup
-4. אם לא מספיק: שדרוג size (UI בלבד) או SSH ידני לניקוי logs
-5. **VERIFY:** `get_server_disk_usage` שוב
+1. `get_server_disk_usage` — where's the space?
+2. **CONFIRM:** `clear_app_cache` (W) for all the suspect apps
+3. If not enough: **CONFIRM:** `optimize_server_disk` (W) — Cloudways magic cleanup
+4. If not enough: upgrade size (UI only) or manual SSH to clean logs
+5. **VERIFY:** `get_server_disk_usage` again
 
-> `optimize_server_disk` עלולה למחוק logs. אם הלקוח חייב לשמור logs (compliance, debugging), צא לידנית קודם.
+> `optimize_server_disk` may delete logs. If the client must keep logs (compliance, debugging), export them manually first.
 
 ---
 
 ## 9. Enforce HTTPS
 
-**מתי:** אתר ישן שרץ עדיין ב-HTTP / לקוח רוצה SEO/security boost
+**When:** An old site still running on HTTP / client wants an SEO/security boost
 
-**רצף:**
+**Sequence:**
 
-1. `get_app_details` — בדוק שיש SSL תקין מותקן
-2. אם אין SSL: התקן קודם (`install_letsencrypt` או `install_ssl_certificate`)
+1. `get_app_details` — check that a valid SSL is installed
+2. If there's no SSL: install one first (`install_letsencrypt` or `install_ssl_certificate`)
 3. **CONFIRM:** `enforce_app_https` (W)
-4. בדוק שה-redirect עובד: `curl -I http://example.com` → 301 ל-HTTPS
+4. Check that the redirect works: `curl -I http://example.com` → 301 to HTTPS
 
-> **WordPress quirk:** אחרי enforce HTTPS, ייתכן שתצטרך לעדכן את `WP_HOME` ו-`WP_SITEURL` ב-`wp-config.php` או דרך WP-CLI: `wp option update home https://example.com && wp option update siteurl https://example.com`. אחרת — mixed content errors.
+> **WordPress quirk:** After enforcing HTTPS, you may need to update `WP_HOME` and `WP_SITEURL` in `wp-config.php` or via WP-CLI: `wp option update home https://example.com && wp option update siteurl https://example.com`. Otherwise — mixed content errors.
 
 ---
 
 ## 10. Git pull deployment
 
-**מתי:** deploy של branch לאפליקציה
+**When:** Deploying a branch to an application
 
-**רצף:**
+**Sequence:**
 
-1. `get_git_branch_names` — לוודא שה-branch קיים
-2. `get_git_deployment_history` — מה ה-state נוכחי
-3. **CONFIRM:** `backup_app` (W) — תמיד backup לפני deploy
-4. **CONFIRM:** `git_pull` (W) עם branch + commit hash אם רלוונטי
-5. **VERIFY:** בדוק את האתר
-6. אם משהו נשבר: `restore_app` (W) ל-backup מסעיף 3
+1. `get_git_branch_names` — verify the branch exists
+2. `get_git_deployment_history` — what the current state is
+3. **CONFIRM:** `backup_app` (W) — always backup before a deploy
+4. **CONFIRM:** `git_pull` (W) with branch + commit hash if relevant
+5. **VERIFY:** Check the site
+6. If something broke: `restore_app` (W) to the backup from section 3
 
-> Cloudways Git deploy לא מריץ build steps. אם האתר דורש `npm run build` / `composer install` — תצטרך לעשות את זה ידנית ב-SSH אחרי ה-pull, או להחזיק build artifacts ב-repo.
+> Cloudways Git deploy doesn't run build steps. If the site requires `npm run build` / `composer install` — you'll need to do that manually over SSH after the pull, or keep build artifacts in the repo.
 
 ---
 
 ## 11. Varnish — configure/purge
 
-**מתי:** הגדרת cache strategy / טיוב performance
+**When:** Setting a cache strategy / performance tuning
 
-**רצף:**
+**Sequence:**
 
-1. `get_app_varnish_settings` — config נוכחי
-2. הבן את ה-policy: cache TTL, exceptions, purge rules
-3. **CONFIRM:** `manage_app_varnish` (W) עם action ספציפי (enable/disable/purge/configure)
-4. אם purge: בדוק שה-cache נקי (`curl -I` ל-URL → צריך `X-Cache: MISS` בקריאה ראשונה)
+1. `get_app_varnish_settings` — current config
+2. Understand the policy: cache TTL, exceptions, purge rules
+3. **CONFIRM:** `manage_app_varnish` (W) with a specific action (enable/disable/purge/configure)
+4. If purge: check that the cache is clean (`curl -I` to the URL → should be `X-Cache: MISS` on the first request)
 
-> Varnish לא תואם לכל אפליקציה. ל-WooCommerce או אפליקציות עם session-heavy data, צריך exclusion rules מדויקות. תמיד תבדוק אחרי שינוי.
+> Varnish isn't compatible with every application. For WooCommerce or applications with session-heavy data, precise exclusion rules are needed. Always check after a change.
 
 ---
 
-## Cleanup לאחר session
+## Cleanup after a session
 
-לפני שמסיים שיחה שכללה פעולות write:
+Before ending a conversation that included write operations:
 
-1. סכם מה בוצע
-2. הזכר אם backups נוצרו ומתי תוקפם
-3. הזכר אם יש פעולות שעדיין דורשות verification מאוחרת (SSL renewal, cache propagation)
-4. אם משהו לא הסתיים — תעד מה נשאר פתוח
+1. Summarize what was done
+2. Mention if backups were created and when they expire
+3. Mention if there are operations that still require later verification (SSL renewal, cache propagation)
+4. If something wasn't finished — document what remains open

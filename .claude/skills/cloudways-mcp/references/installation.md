@@ -1,60 +1,60 @@
 # Installation — Cloudways MCP Server
 
-יש **שתי דרכים** להתחבר. בחר את שלך:
+There are **two ways** to connect. Pick yours:
 
 | | Official — Cloudways (Remote) MCP | Self-hosted — community `cw-mcp` |
 |---|---|---|
-| מי מריץ | **Cloudways** (מתארח) | **אתה** (Python+Redis לוקאלי/VPS) |
-| תחזוקה | אין | אתה אחראי על uptime, אבטחה, credentials |
-| מקור | המאמר הרשמי (למטה) | `aphraz/cw-mcp` — ⚠️ **כרגע 404** |
-| מתי | ברירת מחדל מומלצת (סופק Q2 2026) | רק אם יש לך עותק/fork זמין |
+| Who runs it | **Cloudways** (hosted) | **You** (Python+Redis local/VPS) |
+| Maintenance | None | You are responsible for uptime, security, credentials |
+| Source | The official article (below) | `aphraz/cw-mcp` — ⚠️ **currently 404** |
+| When | Recommended default (shipped Q2 2026) | Only if you have a copy/fork available |
 
 ---
 
-## Option 1 — Official Cloudways (Remote) MCP  ✅ מומלץ
+## Option 1 — Official Cloudways (Remote) MCP  ✅ Recommended
 
-Cloudways השיקו MCP **מתארח** משלהם (Cloudways Remote MCP, Q2 2026). מתחברים אליו ישירות — **בלי** Python/Redis/self-hosting.
+Cloudways launched their own **hosted** MCP (Cloudways Remote MCP, Q2 2026). You connect to it directly — **without** Python/Redis/self-hosting.
 
-> **מקור האמת לחיבור הוא המאמר הרשמי:**
+> **The source of truth for connecting is the official article:**
 > https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management
 >
-> עקוב אחרי השלבים שם ל-endpoint המדויק ולשיטת ה-auth (OAuth / API key). **אל תמציא URL או headers** — הם עשויים להשתנות מהגרסה הקהילתית, ולכן הם לא משוכפלים כאן בקשיחות. כללי ה-credentials (Account → API) זהים — ראה למטה.
+> Follow the steps there for the exact endpoint and the auth method (OAuth / API key). **Do not invent a URL or headers** — they may differ from the community version, which is why they are not hard-coded here. The credentials rules (Account → API) are the same — see below.
 >
-> אחרי החיבור, ה-tools יופיעו ב-Claude כ-`mcp__cloudways*__*` בלי שתריץ שום דבר מקומית. זה הסימן שאתה על הדרך הרשמית.
+> After connecting, the tools will appear in Claude as `mcp__cloudways*__*` without you running anything locally. That is the sign you are on the official path.
 
-לעבודה עם **כמה חשבונות** דרך הרשמי — אותו עיקרון של connection-לכל-חשבון; ראה סעיף "Multi-account configuration" למטה (חל על שתי הדרכים).
+To work with **multiple accounts** via the official path — the same connection-per-account principle; see the "Multi-account configuration" section below (applies to both ways).
 
 ---
 
 ## Option 2 — Self-hosted (community `cw-mcp`)
 
-> **חשוב:** בדרך הזו אתה מריץ את ה-server. ⚠️ הריפו `github.com/aphraz/cw-mcp` **כרגע מחזיר 404** — לפני שתתחיל, ודא שיש לך עותק/fork זמין של הקוד. אם אין — עבור ל-Option 1.
+> **Important:** In this approach you run the server yourself. ⚠️ The repo `github.com/aphraz/cw-mcp` **currently returns 404** — before you start, make sure you have a copy/fork of the code available. If you don't — go to Option 1.
 
-> Cloudways לא מפעילים את ה-server הזה עבורך. הוא רץ **אצלך** ופונה ל-Cloudways API בשמך — אתה אחראי על האבטחה, ה-credentials, וה-uptime.
+> Cloudways does not run this server for you. It runs **on your side** and calls the Cloudways API on your behalf — you are responsible for the security, the credentials, and the uptime.
 
 ---
 
 ## Prerequisites (Option 2)
 
-- **Python 3.11+** (לא 3.10 — ה-`asyncio.TaskGroup` שה-MCP משתמש בו דורש 3.11)
-- **Redis** רץ (לוקאלית או remote). שימושים: storage מוצפן של tokens, rate limiting, session isolation.
-- **חשבון Cloudways** עם API access מופעל
-- **Node.js 18+** עבור `npx mcp-remote` (אם מתחברים מ-Claude Desktop)
+- **Python 3.11+** (not 3.10 — the `asyncio.TaskGroup` that the MCP uses requires 3.11)
+- **Redis** running (locally or remote). Uses: encrypted storage of tokens, rate limiting, session isolation.
+- **Cloudways account** with API access enabled
+- **Node.js 18+** for `npx mcp-remote` (if connecting from Claude Desktop)
 
 ---
 
-## שלב 1 — הוצאת API credentials מ-Cloudways
+## Step 1 — Obtaining API credentials from Cloudways
 
-1. התחבר ל-Cloudways Platform
-2. למעלה מימין: **Account → API**
-3. צור/העתק את `API Key`
-4. רשום את ה-email של החשבון
+1. Log in to the Cloudways Platform
+2. Top right: **Account → API**
+3. Create/copy the `API Key`
+4. Note the account's email
 
-> ה-API key מאפשר **כל** הפעולות שהחשבון יכול לבצע ב-UI. שמור אותו כמו סיסמה.
+> The API key allows **all** the operations the account can perform in the UI. Keep it like a password.
 
 ---
 
-## שלב 2 — Clone והתקנת ה-MCP server
+## Step 2 — Clone and install the MCP server
 
 ```bash
 # Clone
@@ -64,7 +64,7 @@ cd cw-mcp
 # Virtual env
 python3 -m venv venv
 source venv/bin/activate    # macOS/Linux
-# או: venv\Scripts\activate  # Windows
+# or: venv\Scripts\activate  # Windows
 
 # Dependencies
 pip install -r requirements.txt
@@ -72,36 +72,36 @@ pip install -r requirements.txt
 
 ---
 
-## שלב 3 — Redis
+## Step 3 — Redis
 
-### לוקאלית (macOS):
+### Local (macOS):
 ```bash
 brew install redis
 brew services start redis
-# בדיקה:
-redis-cli ping   # מצופה: PONG
+# Check:
+redis-cli ping   # Expected: PONG
 ```
 
-### לוקאלית (Linux):
+### Local (Linux):
 ```bash
 sudo apt install redis-server
 sudo systemctl enable --now redis-server
 redis-cli ping
 ```
 
-### Docker (כל פלטפורמה):
+### Docker (any platform):
 ```bash
 docker run -d --name cw-mcp-redis -p 6379:6379 redis:7-alpine
 ```
 
 ---
 
-## שלב 4 — Environment variables
+## Step 4 — Environment variables
 
-צור קובץ `.env` ב-root של ה-repo (וודא שהוא ב-`.gitignore`):
+Create a `.env` file in the root of the repo (make sure it's in `.gitignore`):
 
 ```bash
-# Encryption key — חובה. ייצור פעם אחת ושמור:
+# Encryption key — required. Generate once and save:
 ENCRYPTION_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')
 
 # Redis URL
@@ -120,20 +120,20 @@ LOG_LEVEL=INFO
 LOG_FORMAT=console
 ```
 
-**שמור את `ENCRYPTION_KEY` במקום בטוח.** אם תאבד אותו, כל ה-tokens השמורים ב-Redis לא יהיו ניתנים לפענוח. אם תחליף אותו, כל המשתמשים יצטרכו לבצע auth מחדש.
+**Keep `ENCRYPTION_KEY` in a safe place.** If you lose it, all the tokens stored in Redis will not be decryptable. If you replace it, all users will have to re-auth.
 
-> **טיפ אבטחה:** `ENCRYPTION_KEY` הוא בדיוק הסוג של secret שכדאי לשמור ב-vault (Infisical / OpenBao / 1Password), לא ב-`.env` plain text.
+> **Security tip:** `ENCRYPTION_KEY` is exactly the kind of secret you should keep in a vault (Infisical / OpenBao / 1Password), not in `.env` plain text.
 
 ---
 
-## שלב 5 — הפעלת ה-server
+## Step 5 — Starting the server
 
 ```bash
 source venv/bin/activate
 python cw-mcp.py
 ```
 
-מצופה לראות:
+Expected to see:
 ```
 ==================================================
 🚀 Cloudways MCP Server
@@ -142,28 +142,28 @@ INFO: Started server process [XXXX]
 INFO: Uvicorn running on http://127.0.0.1:7000
 ```
 
-ה-endpoint הוא `http://127.0.0.1:7000/mcp`.
+The endpoint is `http://127.0.0.1:7000/mcp`.
 
-### בדיקת חיים מהירה:
+### Quick liveness check:
 ```bash
 curl -v "http://127.0.0.1:7000/mcp/"
-# צריך להחזיר 200 או 405 (לא 404/connection refused)
+# Should return 200 or 405 (not 404/connection refused)
 ```
 
 ---
 
-## שלב 6 — חיבור ל-Claude Desktop / Claude Code
+## Step 6 — Connecting to Claude Desktop / Claude Code
 
-ה-MCP server החי הוא HTTP. כדי לחבר אותו ל-Claude (שמדבר stdio), משתמשים ב-`mcp-remote` כפרוקסי.
+The live MCP server is HTTP. To connect it to Claude (which speaks stdio), you use `mcp-remote` as a proxy.
 
 ### Claude Desktop config
 
-מיקום הקובץ:
+File location:
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 - **Linux:** `~/.config/Claude/claude_desktop_config.json`
 
-ערוך והוסף ל-`mcpServers`:
+Edit and add to `mcpServers`:
 
 ```json
 {
@@ -188,13 +188,13 @@ curl -v "http://127.0.0.1:7000/mcp/"
 }
 ```
 
-אחרי שמירה — **Quit & Reopen** ל-Claude Desktop (לא רק לסגור חלון).
+After saving — **Quit & Reopen** Claude Desktop (not just close the window).
 
 ### Claude Code config
 
-עבור Claude Code, הוסף את אותו blob ל-`~/.claude.json` או דרך `claude mcp add` (תלוי בגרסה).
+For Claude Code, add the same blob to `~/.claude.json` or via `claude mcp add` (depending on the version).
 
-גרסאות Claude Code חדשות תומכות גם ב-transport `http` ישיר (בלי `mcp-remote` כפרוקסי), עם headers:
+Newer Claude Code versions also support a direct `http` transport (without `mcp-remote` as a proxy), with headers:
 
 ```bash
 claude mcp add --transport http cloudways http://127.0.0.1:7000/mcp \
@@ -204,13 +204,13 @@ claude mcp add --transport http cloudways http://127.0.0.1:7000/mcp \
 
 ---
 
-## Multi-account configuration — כמה חשבונות Cloudways
+## Multi-account configuration — multiple Cloudways accounts
 
-נניח שיש **כמה חשבונות Cloudways**. ה-MCP server של `aphraz/cw-mcp` הוא **multi-tenant** — הוא קורא את ה-credentials מתוך ה-headers של **כל request**, ומבודד sessions ב-Redis לפי customer. המשמעות: לרוב **לא צריך כמה server instances** — מספיק להגדיר ב-Claude **connection אחד לכל חשבון**, כולם מצביעים לאותו URL, רק עם headers שונים.
+Suppose there are **multiple Cloudways accounts**. The `aphraz/cw-mcp` MCP server is **multi-tenant** — it reads the credentials from the headers of **every request**, and isolates sessions in Redis by customer. This means: usually you **don't need multiple server instances** — it's enough to set up in Claude **one connection per account**, all pointing to the same URL, just with different headers.
 
-### גישה A — connection לכל חשבון (מומלצת)
+### Approach A — connection per account (recommended)
 
-server instance אחד (`http://127.0.0.1:7000/mcp`), וכמה entries ב-`mcpServers`, אחד לכל חשבון. שמות תיאוריים לפי לקוח — הם הופכים ל-prefix של ה-tools (`mcp__cloudways-clientA__*`):
+One server instance (`http://127.0.0.1:7000/mcp`), and several entries in `mcpServers`, one per account. Descriptive names by client — they become the prefix of the tools (`mcp__cloudways-clientA__*`):
 
 ```json
 {
@@ -237,46 +237,46 @@ server instance אחד (`http://127.0.0.1:7000/mcp`), וכמה entries ב-`mcpSe
 }
 ```
 
-(ב-Claude Code עם transport `http` ישיר — אותו רעיון, entry לכל חשבון עם headers משלו.)
+(In Claude Code with the direct `http` transport — same idea, an entry per account with its own headers.)
 
-### גישה B — instance לכל חשבון (בידוד חזק יותר)
+### Approach B — instance per account (stronger isolation)
 
-אם אתה רוצה הפרדת תהליכים מלאה (credentials מ-Infisical projects נפרדים, או rate-limit/לוגים נפרדים לכל לקוח), הפעל כמה server instances על פורטים שונים — כל אחד עם `.env` משלו:
+If you want full process separation (credentials from separate Infisical projects, or separate rate-limit/logs per client), run several server instances on different ports — each with its own `.env`:
 
 ```bash
 PORT=7000 ENV_FILE=.env.clientA  python cw-mcp.py   # clientA
 PORT=7001 ENV_FILE=.env.clientB  python cw-mcp.py   # clientB
 ```
 
-ואז ב-config כל connection מצביע לפורט שלו (`:7000`, `:7001`...). שקול systemd unit / Docker Compose service לכל instance.
+Then in the config each connection points to its own port (`:7000`, `:7001`...). Consider a systemd unit / Docker Compose service per instance.
 
-### כללי בטיחות ל-multi-account (חובה)
+### Safety rules for multi-account (mandatory)
 
-- **שמות עקביים:** השתמש ב-prefix אחיד `cloudways-<client>` כדי ש-Claude (וגם אתה) תזהו מיד לאיזה חשבון שייך כל tool.
-- **Secrets בנפרד:** אל תשים את כל ה-keys באותו `.env`. עדיף Infisical/OpenBao project לכל לקוח (ראה checklist האבטחה למטה).
-- **אל תערבב:** לעולם אל תשתמש באותו API key לשני חשבונות, ואל תיקח server/app ID מחשבון אחד מול connection של אחר.
-- **runtime:** התנהגות Claude בזמן ריצה (זיהוי חשבון, חיפוש חוצה-חשבונות, אישורי write פר-חשבון) מתועדת ב-`SKILL.md` סעיף **Multi-account**.
+- **Consistent names:** Use a uniform prefix `cloudways-<client>` so that Claude (and you too) immediately recognize which account each tool belongs to.
+- **Separate secrets:** Don't put all the keys in the same `.env`. Prefer an Infisical/OpenBao project per client (see the security checklist below).
+- **Don't mix:** Never use the same API key for two accounts, and don't take a server/app ID from one account against another's connection.
+- **runtime:** Claude's runtime behavior (account identification, cross-account search, per-account write-confirmations) is documented in `SKILL.md` section **Multi-account**.
 
 ---
 
-## שלב 7 — בדיקה ב-Claude
+## Step 7 — Testing in Claude
 
-פתח שיחה ב-Claude Desktop. בקש:
+Open a conversation in Claude Desktop. Ask:
 ```
 list my Cloudways servers
 ```
 
-מצופה: רשימת השרתים שלך. אם מקבל error:
+Expected: a list of your servers. If you get an error:
 
-| Error | משמעות | פתרון |
+| Error | Meaning | Solution |
 |--------|--------|--------|
-| `connection refused` | ה-server לא רץ | `python cw-mcp.py` |
-| `401 / authentication` | credentials לא נכונים | בדוק email + API key |
-| `429 / rate limited` | הגעת ל-cap | חכה דקה / הגדל `RATE_LIMIT_REQUESTS` |
-| `redis connection error` | Redis לא רץ | `redis-cli ping` → להפעיל |
-| `cryptography invalid token` | `ENCRYPTION_KEY` שונה ממה ששימש לקודינג | החזר את ה-key הישן או נקה Redis |
+| `connection refused` | The server is not running | `python cw-mcp.py` |
+| `401 / authentication` | Incorrect credentials | Check email + API key |
+| `429 / rate limited` | You hit the cap | Wait a minute / increase `RATE_LIMIT_REQUESTS` |
+| `redis connection error` | Redis is not running | `redis-cli ping` → start it |
+| `cryptography invalid token` | `ENCRYPTION_KEY` differs from what was used for encoding | Restore the old key or clear Redis |
 
-לבדיקה ישירה של credentials מול ה-API (בלי לעבור דרך MCP):
+To directly test credentials against the API (without going through MCP):
 
 ```bash
 curl -X POST "https://api.cloudways.com/api/v1/oauth/access_token" \
@@ -286,11 +286,11 @@ curl -X POST "https://api.cloudways.com/api/v1/oauth/access_token" \
 
 ---
 
-## הפעלה כשירות (production-grade)
+## Running as a service (production-grade)
 
-### עם systemd (Linux):
+### With systemd (Linux):
 
-צור `/etc/systemd/system/cw-mcp.service`:
+Create `/etc/systemd/system/cw-mcp.service`:
 
 ```ini
 [Unit]
@@ -315,7 +315,7 @@ sudo systemctl enable --now cw-mcp
 sudo systemctl status cw-mcp
 ```
 
-### עם Docker Compose (מומלץ אם ה-VPS שלך כבר רץ n8n על Docker):
+### With Docker Compose (recommended if your VPS already runs n8n on Docker):
 
 ```yaml
 services:
@@ -339,54 +339,54 @@ volumes:
   cw-mcp-redis:
 ```
 
-> **בטיחות:** `ports: 127.0.0.1:7000:7000` — bind רק ל-loopback, לא לאינטרנט. אם אתה רוצה גישה מרחוק, השם תוכל מאחורי Nginx + Cloudflare Access או דומה, ולא תחשוף את הפורט ישירות.
+> **Safety:** `ports: 127.0.0.1:7000:7000` — bind only to loopback, not to the internet. If you want remote access, put it behind Nginx + Cloudflare Access or similar, and don't expose the port directly.
 
 ---
 
-## Self-hosting על Cloudways עצמו
+## Self-hosting on Cloudways itself
 
-אפשרי, ואפילו אלגנטי. ה-VPS שאתה כבר משלם עליו יכול לארח גם את ה-MCP server של עצמו. שיקולים:
-- אל תשים את זה על שרת production שמארח אפליקציות לקוח — שים על שרת operational/internal.
-- חבר Cloudflare Access (Zero Trust) כדי שרק אתה תוכל לגשת ל-endpoint מרחוק.
-- אל תפעיל את זה על שרת shared של פרויקטים שונים — credentials יחשפו בין הסביבות.
+Possible, and even elegant. The VPS you're already paying for can also host its own MCP server. Considerations:
+- Don't put this on a production server that hosts client applications — put it on an operational/internal server.
+- Connect Cloudflare Access (Zero Trust) so that only you can access the endpoint remotely.
+- Don't run this on a shared server of different projects — credentials will be exposed between the environments.
 
 ---
 
-## אבטחה — checklist לפני שימוש בייצור
+## Security — checklist before production use
 
-- [ ] `ENCRYPTION_KEY` נשמר ב-Infisical / OpenBao / 1Password (לא ב-plain `.env`)
-- [ ] `.env` ב-`.gitignore`
-- [ ] Redis לא חשוף לאינטרנט (`bind 127.0.0.1` או password protected)
-- [ ] ה-port 7000 לא חשוף לאינטרנט (loopback only או מאחורי auth proxy)
-- [ ] API key של Cloudways — נפרד לכל סביבה אם רלוונטי, ניתן לשנן/לבטל
-- [ ] לוגים לא מודפסים עם credentials (`LOG_LEVEL=INFO` ולא `DEBUG` בייצור)
-- [ ] Rate limit מוגדר — לא להשאיר default אם אתה משרת מספר משתמשים
+- [ ] `ENCRYPTION_KEY` stored in Infisical / OpenBao / 1Password (not in plain `.env`)
+- [ ] `.env` in `.gitignore`
+- [ ] Redis not exposed to the internet (`bind 127.0.0.1` or password protected)
+- [ ] Port 7000 not exposed to the internet (loopback only or behind an auth proxy)
+- [ ] Cloudways API key — separate per environment if relevant, rotatable/revocable
+- [ ] Logs are not printed with credentials (`LOG_LEVEL=INFO` and not `DEBUG` in production)
+- [ ] Rate limit configured — don't leave the default if you serve multiple users
 
 ---
 
 ## Troubleshooting
 
 ```bash
-# האם ה-process רץ?
+# Is the process running?
 ps aux | grep cw-mcp
 
-# האם הפורט תפוס?
+# Is the port taken?
 lsof -i :7000
 
-# האם Redis זמין?
+# Is Redis available?
 redis-cli ping
 
-# Logs (אם רץ ב-systemd):
+# Logs (if running under systemd):
 journalctl -u cw-mcp -f
 
-# Logs (אם רץ idiomatically):
-# stdout — תפנה אותו ל-file אם אתה רץ ב-nohup
+# Logs (if running idiomatically):
+# stdout — redirect it to a file if you run under nohup
 ```
 
 ---
 
 ## Issues / contribute
 
-ה-repo: `https://github.com/aphraz/cw-mcp`
+The repo: `https://github.com/aphraz/cw-mcp`
 
-לפני שאתה מדווח באג — נסה לחזור על הבעיה עם `LOG_LEVEL=DEBUG` ושמור את הלוג. ה-MCP server עדיין צעיר ובאופן יחסי לא יציב; ייתכן שתיתקל ב-edge cases.
+Before you report a bug — try to reproduce the problem with `LOG_LEVEL=DEBUG` and save the log. The MCP server is still young and relatively unstable; you may run into edge cases.

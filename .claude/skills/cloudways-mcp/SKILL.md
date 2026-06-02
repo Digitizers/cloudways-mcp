@@ -8,59 +8,59 @@ description: |
   Any write operation (start/stop/restart server, backup, restore, rollback, install/revoke SSL, update CNAME, change whitelist, clear cache, change service state, git pull) requires explicit confirmation of target server/app and intended action before execution.
 ---
 
-# Cloudways MCP — Skill תפעולי
+# Cloudways MCP — Operational Skill
 
-ניהול תשתית Cloudways דרך MCP server של Cloudways.
+Managing Cloudways infrastructure through the Cloudways MCP server.
 
-> **שתי דרכים, וצריך לדעת באיזו אתה:**
-> 1. **רשמי — Cloudways (Remote) MCP** *(מומלץ, default)*: MCP מתארח על ידי Cloudways (סופק ב-Q2 2026). מתחברים אליו ישירות בלי self-hosting. מקור האמת לחיבור הוא **המאמר הרשמי**: `support.cloudways.com/en/articles/14654372`. ראה `references/installation.md` סעיף "Official".
-> 2. **קהילתי — self-hosted (`cw-mcp`)**: שרת Python+Redis שמריצים מקומית. ⚠️ **הריפו `github.com/aphraz/cw-mcp` כרגע מחזיר 404** (נמחק/הוסתר). אם זו הדרך שלך — צריך fork/עותק זמין; ראה `references/installation.md` סעיף "Self-hosted".
+> **Two paths, and you need to know which one you're on:**
+> 1. **Official — Cloudways (Remote) MCP** *(recommended, default)*: MCP hosted by Cloudways (delivered in Q2 2026). You connect to it directly, without self-hosting. The source of truth for connecting is the **official article**: `support.cloudways.com/en/articles/14654372`. See `references/installation.md` section "Official".
+> 2. **Community — self-hosted (`cw-mcp`)**: A Python+Redis server you run locally. ⚠️ **The repo `github.com/aphraz/cw-mcp` currently returns 404** (deleted/hidden). If this is your path — you need an available fork/copy; see `references/installation.md` section "Self-hosted".
 >
-> אם לא ידוע באיזו דרך משתמשים — שאל את המשתמש, או זהה לפי אופן החיבור: אם ה-tools מופיעים ב-Claude בלי שהרצת שרת מקומי → זה הרשמי.
+> If it's unknown which path is being used — ask the user, or identify it by the connection method: if the tools appear in Claude without you having run a local server → it's the official one.
 
-> **הקשר:** הסקיל בנוי לעבודה יומיומית של ניהול לקוחות/סביבות על Cloudways — monitoring, תחזוקה שגרתית, onboarding/audit ללקוחות חדשים, ואוטומציות. כל ערכים כספיים שמדווחים על ידי ה-API הם $ (USD), לא ₪.
+> **Context:** The skill is built for day-to-day work managing clients/environments on Cloudways — monitoring, routine maintenance, onboarding/audit for new clients, and automations. All monetary values reported by the API are in $ (USD), not ₪.
 
 ---
 
 ## Quick Route
 
-| כוונה | טען |
+| Intent | Load |
 |--------|------|
-| התקנה/הגדרה ראשונית של ה-MCP server | `references/installation.md` |
-| לא יודע איזה כלי קיים / חיפוש כלי לפי שם | `references/tools-catalog.md` |
-| ניטור, status check, bandwidth, analytics | `references/workflows-monitoring.md` |
+| Initial installation/configuration of the MCP server | `references/installation.md` |
+| Don't know which tool exists / searching for a tool by name | `references/tools-catalog.md` |
+| Monitoring, status check, bandwidth, analytics | `references/workflows-monitoring.md` |
 | Cache clear, SSL, backup, restart, IP whitelist | `references/workflows-maintenance.md` |
-| Audit חדש / onboarding לקוח חדש | `references/workflows-onboarding.md` |
-| בניית workflow ל-n8n/Make/Claude Code אוטומטי | `references/workflows-automation.md` |
-| כמה חשבונות Cloudways / הגדרת multi-account | `references/installation.md` (סעיף Multi-account) |
+| New audit / onboarding a new client | `references/workflows-onboarding.md` |
+| Building an automated workflow for n8n/Make/Claude Code | `references/workflows-automation.md` |
+| Multiple Cloudways accounts / multi-account configuration | `references/installation.md` (Multi-account section) |
 
-**טען רק את מה שנדרש.** מקסימום 2-3 references למשימה. אם המשתמש רק שואל "תראה לי את השרתים שלי", אל תטען את כל הקטלוג — קרא ישירות `list_servers`.
-
----
-
-## Safety rules (קריא לפני כל פעולה)
-
-1. **בחירת חשבון נכון — לפני כל דבר אחר (multi-account).** קיימים **כמה חשבונות Cloudways**, כל אחד כ-MCP connection נפרד עם prefix משלו (למשל `mcp__cloudways-clientA__*`). לפני כל קריאה — ודא לאיזה חשבון היא שייכת. אם יותר מחשבון אחד מחובר ולא ברור מההקשר על איזה מדובר — **עצור ושאל**, אל תנחש. server/app IDs **לא ניתנים להחלפה בין חשבונות** — ID 1234567 בחשבון A הוא משאב אחר לגמרי (או לא קיים) בחשבון B. אל תיקח ID מתשובה של חשבון אחד ותריץ אותו מול חשבון אחר. ראה הסעיף "Multi-account" למטה.
-
-2. **Write operations דורשות אישור מפורש.** לפני כל קריאה ל-tool ששייכת לקטגוריה Write (ראה רשימה למטה), הצג למשתמש: **החשבון**, שם הכלי, השרת/אפליקציה היעד (ID + שם), הפרמטרים, ההשפעה הצפויה. חכה לתשובת אישור לפני ביצוע. אל תניח שאישור לפעולה אחת מקנה אישור לפעולות נוספות — וגם לא שאישור בחשבון אחד חל על חשבון אחר.
-
-3. **Backup לפני שינוי משמעותי.** לפני `restore_app`, `rollback_app_restore`, `reset_app_file_permissions`, `manage_server_varnish`, או כל שינוי קונפיגורציה — בדוק עם המשתמש אם יש backup עדכני. אם לא, הצע להריץ `backup_app` / `backup_server` קודם.
-
-4. **כפל שירות = כפל סיכון.** Cloudways מארח לרוב **כמה אפליקציות על אותו שרת**. `stop_server` או `restart_server` משפיע על **כל** האפליקציות. תמיד תוודא שהמשתמש מודע לרשימת האפליקציות על השרת לפני פעולה ברמת השרת.
-
-5. **`revoke_letsencrypt` ו-`delete_app_cname` = הרס מיידי בייצור.** דורש אישור כפול: גם של הפעולה וגם של הדומיין/האפליקציה הספציפיים.
-
-6. **Credentials.** לכל חשבון API key + email משלו, שנחשפים דרך headers ב-MCP. אל תדפיס אותם בתגובות. אל תערבב credentials בין חשבונות. אם המשתמש מבקש לראות אותם, הפנה ל-Cloudways Platform → Account → API.
-
-7. **Read-only by default.** אם המשתמש רק מבקש "תראה לי / תבדוק / תנטר" — בחר תמיד את הכלי ה-read-only שמתאים. אל תציע פעולה destructive אלא אם המשתמש ביקש במפורש.
+**Load only what's needed.** Maximum 2-3 references per task. If the user just asks "show me my servers", don't load the entire catalog — call `list_servers` directly.
 
 ---
 
-## Write operations — רשימה מלאה לקטגוריה
+## Safety rules (read before every operation)
 
-לכל אחת מהפעולות הבאות **חובה לקבל אישור מפורש לפני ביצוע**:
+1. **Selecting the correct account — before anything else (multi-account).** There are **multiple Cloudways accounts**, each as a separate MCP connection with its own prefix (e.g. `mcp__cloudways-clientA__*`). Before every call — verify which account it belongs to. If more than one account is connected and it's not clear from context which one is meant — **stop and ask**, don't guess. server/app IDs are **not interchangeable between accounts** — ID 1234567 in account A is an entirely different resource (or nonexistent) in account B. Don't take an ID from one account's response and run it against another account. See the "Multi-account" section below.
 
-**Server level (משפיע על כל האפליקציות בשרת):**
+2. **Write operations require explicit confirmation.** Before every call to a tool that belongs to the Write category (see list below), present to the user: **the account**, the tool name, the target server/application (ID + name), the parameters, the expected impact. Wait for a confirmation response before executing. Don't assume that confirming one operation grants confirmation for further operations — nor that confirmation on one account applies to another.
+
+3. **Backup before a significant change.** Before `restore_app`, `rollback_app_restore`, `reset_app_file_permissions`, `manage_server_varnish`, or any configuration change — check with the user whether a recent backup exists. If not, offer to run `backup_app` / `backup_server` first.
+
+4. **Multiple services = multiplied risk.** Cloudways usually hosts **several applications on the same server**. `stop_server` or `restart_server` affects **all** the applications. Always make sure the user is aware of the list of applications on the server before a server-level operation.
+
+5. **`revoke_letsencrypt` and `delete_app_cname` = immediate destruction in production.** Requires double confirmation: of both the operation and the specific domain/application.
+
+6. **Credentials.** Each account has its own API key + email, exposed through headers in the MCP. Don't print them in responses. Don't mix credentials between accounts. If the user asks to see them, refer them to Cloudways Platform → Account → API.
+
+7. **Read-only by default.** If the user just asks "show me / check / monitor" — always choose the appropriate read-only tool. Don't suggest a destructive operation unless the user explicitly asked for it.
+
+---
+
+## Write operations — full list by category
+
+For each of the following operations, **explicit confirmation is mandatory before execution**:
+
+**Server level (affects all applications on the server):**
 - `start_server`, `stop_server`, `restart_server`
 - `backup_server`
 - `optimize_server_disk`
@@ -68,62 +68,62 @@ description: |
 - `manage_server_varnish`
 
 **App level:**
-- `clone_app` (יוצר עותק חדש — צורך משאבים)
+- `clone_app` (creates a new copy — consumes resources)
 - `backup_app`, `restore_app`, `rollback_app_restore`
 - `reset_app_file_permissions`
 - `enforce_app_https`
-- `update_app_cname`, `delete_app_cname` ⚠️ (יכול לשבור production)
+- `update_app_cname`, `delete_app_cname` ⚠️ (can break production)
 - `clear_app_cache`, `manage_app_varnish`
 
 **Security & SSL:**
 - `install_ssl_certificate`, `remove_ssl_certificate` ⚠️
 - `install_letsencrypt`, `renew_letsencrypt`, `set_letsencrypt_auto_renewal`
-- `revoke_letsencrypt` ⚠️⚠️ (הרס מיידי)
+- `revoke_letsencrypt` ⚠️⚠️ (immediate destruction)
 - `update_whitelisted_ips`, `allow_ip_siab`, `allow_ip_adminer`
 
 **Git deployment:**
-- `git_clone`, `git_pull` (יכול לשבור production אם יש conflict)
+- `git_clone`, `git_pull` (can break production if there's a conflict)
 - `generate_git_ssh_key`
 
 ---
 
-## פטרן confirmation לפעולה destructive
+## Confirmation pattern for a destructive operation
 
-לפני ביצוע, הצג בלוק כזה:
+Before execution, present a block like this:
 
 ```
-🔒 מאשר ביצוע פעולה?
-   חשבון: clientA (mcp__cloudways-clientA)
-   כלי: stop_server
-   שרת: production-shop-il (ID: 1234567)
-   אפליקציות שיושפעו: woocommerce-prod, staging-clone, admin-tools
-   השפעה: כל 3 האפליקציות יהיו offline עד restart ידני
-   המשך? (כן / לא / השהה ובדוק backup קודם)
+🔒 Confirm operation execution?
+   Account: clientA (mcp__cloudways-clientA)
+   Tool: stop_server
+   Server: production-shop-il (ID: 1234567)
+   Applications affected: woocommerce-prod, staging-clone, admin-tools
+   Impact: all 3 applications will be offline until a manual restart
+   Proceed? (yes / no / pause and check backup first)
 ```
 
-המתן לתשובה מפורשת. "כן" מילולי בלבד = אישור. הסכמה משתמעת לא מספיקה. שורת **החשבון חובה** כשמחובר יותר מחשבון אחד — היא מונעת ביצוע פעולה על החשבון הלא נכון.
+Wait for an explicit response. A literal "yes" only = confirmation. Implied consent is not enough. The **account line is mandatory** when more than one account is connected — it prevents executing an operation on the wrong account.
 
 ---
 
-## Authentication — מבט מהיר
+## Authentication — quick overview
 
-ה-MCP server רץ **אצלך מקומית** (לא שירות hosted של Cloudways). הוא מקבל credentials דרך HTTP headers:
+The MCP server runs **locally on your machine** (not a hosted Cloudways service). It receives credentials through HTTP headers:
 
 ```bash
-# סודות שאתה מייצא לסביבה (לא commit ל-git)
+# Secrets you export to the environment (don't commit to git)
 export CLOUDWAYS_EMAIL="your-account@example.com"
 export CLOUDWAYS_API_KEY="your-cloudways-api-key"
 ```
 
-ה-API key מופק ב-Cloudways Platform → **Account → API**.
+The API key is generated in Cloudways Platform → **Account → API**.
 
-לקונפיגורציה מלאה של Claude Desktop / Claude Code עם `mcp-remote`, ראה `references/installation.md`.
+For the full configuration of Claude Desktop / Claude Code with `mcp-remote`, see `references/installation.md`.
 
 ---
 
-## Multi-account — עבודה עם כמה חשבונות Cloudways
+## Multi-account — working with multiple Cloudways accounts
 
-לרוב יש **כמה חשבונות Cloudways** (לקוחות שונים / סביבות שונות). כל חשבון מחובר כ-MCP connection **נפרד** עם credentials משלו, ולכן מופיע ב-Claude עם **prefix משלו**:
+There are usually **multiple Cloudways accounts** (different clients / different environments). Each account is connected as a **separate** MCP connection with its own credentials, and therefore appears in Claude with **its own prefix**:
 
 ```
 mcp__cloudways-clientA__list_servers
@@ -131,32 +131,32 @@ mcp__cloudways-clientB__list_servers
 mcp__cloudways-internal__list_servers
 ```
 
-> ההגדרה (איך מחברים כמה חשבונות — connection אחד לכל חשבון, עם headers שונים, או instance-per-port) מתועדת ב-`references/installation.md` סעיף **Multi-account configuration**. כללי ה-runtime כאן.
+> The configuration (how multiple accounts are connected — one connection per account, with different headers, or instance-per-port) is documented in `references/installation.md` section **Multi-account configuration**. The runtime rules are here.
 
-### כלל הזהב: לזהות חשבון לפני כל פעולה
+### The golden rule: identify the account before every operation
 
-1. **חשבון בודד מחובר** → השתמש בו, אין צורך לשאול.
-2. **כמה חשבונות מחוברים** → קבע לאיזה חשבון הבקשה שייכת **לפני** שאתה קורא ל-tool:
-   - אם המשתמש ציין במפורש לקוח/חשבון ("תבדוק את prod של clientB") → השתמש ב-connection התואם.
-   - אם שם השרת/הדומיין מזהה חד-משמעית חשבון אחד → אפשר להסיק, אבל ציין במפורש באיזה חשבון אתה פועל.
-   - אם **לא ברור** → עצור ושאל: "על איזה חשבון? (clientA / clientB / internal)". אל תנחש, ואל תריץ על כולם "ליתר ביטחון".
+1. **A single account connected** → use it, no need to ask.
+2. **Multiple accounts connected** → determine which account the request belongs to **before** you call a tool:
+   - If the user explicitly specified a client/account ("check clientB's prod") → use the matching connection.
+   - If the server/domain name unambiguously identifies a single account → you may infer, but explicitly state which account you're operating on.
+   - If **it's unclear** → stop and ask: "Which account? (clientA / clientB / internal)". Don't guess, and don't run on all of them "just to be safe".
 
-### בידוד מוחלט בין חשבונות
+### Complete isolation between accounts
 
-- **IDs לא חוצים חשבונות.** server_id / app_id שקיבלת מ-`mcp__cloudways-clientA` תקפים **רק** מול clientA. לעולם אל תיקח ID מתשובה של חשבון אחד ותעביר לכלי של connection אחר.
-- **אישור פר-חשבון.** אישור write בחשבון אחד לא חל על אחר. כל פעולת write על חשבון חדש = בלוק confirmation חדש (כולל שורת חשבון).
-- **Credentials לא מתערבבים.** לכל connection ה-email + API key שלו. אל תניח שאותם credentials עובדים על חשבון אחר.
+- **IDs don't cross accounts.** A server_id / app_id you received from `mcp__cloudways-clientA` is valid **only** against clientA. Never take an ID from one account's response and pass it to a tool of another connection.
+- **Per-account confirmation.** A write confirmation on one account does not apply to another. Every write operation on a new account = a new confirmation block (including the account line).
+- **Credentials don't mix.** Each connection has its own email + API key. Don't assume the same credentials work on another account.
 
-### חיפוש חוצה-חשבונות (read בלבד)
+### Cross-account search (read only)
 
-כשהמשתמש מבקש משהו רוחבי — "באיזה חשבון יושב הדומיין shop.example.co.il?", "תן לי סקירת disk לכל החשבונות" — מותר ולגיטימי **לקרוא (read-only)** מכל ה-connections, אבל:
-- הרץ את אותו רצף reads על כל connection **בנפרד**, ותייג כל תוצאה עם שם החשבון.
-- סכם בטבלה עם עמודת "חשבון" ברורה.
-- **לעולם אל** תבצע פעולת write רוחבית על כמה חשבונות בלי אישור פרטני לכל אחד.
+When the user asks for something broad — "which account does the domain shop.example.co.il live on?", "give me a disk overview for all accounts" — it's permitted and legitimate to **read (read-only)** from all the connections, but:
+- Run the same sequence of reads on each connection **separately**, and tag each result with the account name.
+- Summarize in a table with a clear "Account" column.
+- **Never** perform a broad write operation across multiple accounts without individual confirmation for each one.
 
 ```
-דוגמת תיוג בתשובה:
-| חשבון    | שרת              | disk |
+Example tagging in the response:
+| Account  | Server           | disk |
 |----------|------------------|------|
 | clientA  | prod-shop-il     | 87%  |
 | clientB  | prod-blog        | 41%  |
@@ -165,37 +165,37 @@ mcp__cloudways-internal__list_servers
 
 ---
 
-## דפוסי שימוש נפוצים (לדוגמה)
+## Common usage patterns (examples)
 
-### תמונת מצב מהירה של חשבון
+### Quick snapshot of an account
 ```
-1. list_servers              → רשימת כל השרתים
-2. get_alerts                → התראות פעילות
-3. customer_info             → פרטי חשבון + מצב חבילה
+1. list_servers              → list of all servers
+2. get_alerts                → active alerts
+3. customer_info             → account details + plan status
 ```
 
-### Health check ליציאה לסוף שבוע (לקוח production)
+### Health check before a weekend (production client)
 ```
 1. get_server_details        → CPU/RAM/disk
 2. get_server_monitoring_detail → metrics
-3. get_app_monitoring_summary   → לכל אפליקציה
-4. get_alerts                → התראות פתוחות
-5. get_server_disk_usage     → אם disk > 80% — דגל אדום
+3. get_app_monitoring_summary   → for each application
+4. get_alerts                → open alerts
+5. get_server_disk_usage     → if disk > 80% — red flag
 ```
 
-### חידוש SSL לפני פג תוקף
+### Renewing SSL before expiry
 ```
-1. get_app_details           → מה ה-FQDN הנכון
-2. renew_letsencrypt          ← write — דורש אישור
-3. get_app_details (שוב)      → ודא שה-SSL התעדכן
+1. get_app_details           → what's the correct FQDN
+2. renew_letsencrypt          ← write — requires confirmation
+3. get_app_details (again)    → verify the SSL was updated
 ```
 
-לדפוסים מפורטים יותר, טען את ה-workflows הרלוונטיים.
+For more detailed patterns, load the relevant workflows.
 
 ---
 
-## Versioning ו-source of truth
+## Versioning and source of truth
 
-- **ה-MCP החי הוא source of truth — תמיד.** שמות הכלים והקטגוריות בקטלוג כאן תועדו ב-2026-Q1 מתוך השרת הקהילתי (`cw-mcp`). ה-MCP הרשמי של Cloudways עשוי לחשוף שמות/יכולות שונים. לפני שאתה מצהיר ש-tool קיים/לא קיים — **בדוק את רשימת ה-tools החיה** שמחוברת ב-Claude (`mcp__cloudways*__*`), ועדכן את הקטלוג בהתאם.
-- **read-only מול write — לא ודאי, אז התנהג בזהירות.** מקורות שונים סותרים: חלק מתעדים את הקהילתי כ-read-only-בלבד (write "מתוכנן"), והתיעוד כאן הניח שקיימות פעולות write. **אל תניח** — בדוק מול השרת החי אילו כלים זמינים. בכל מקרה, כל כלי שמבצע שינוי **חייב** לעבור את פטרן ה-confirmation; הכלל הזה בטוח גם אם בפועל אין כלי write (אז הוא פשוט לא מופעל).
-- **`github.com/aphraz/cw-mcp` כרגע 404.** אם הסתמכת עליו להתקנה — ראה `references/installation.md`; אתרי אגרגציה (glama/lobehub/mcp.so) עדיין מחזיקים עותק מאוחסן, אבל המקור החי איננו.
+- **The live MCP is the source of truth — always.** The tool names and categories in the catalog here were documented in 2026-Q1 from the community server (`cw-mcp`). Cloudways' official MCP may expose different names/capabilities. Before you declare that a tool exists/doesn't exist — **check the live list of tools** connected in Claude (`mcp__cloudways*__*`), and update the catalog accordingly.
+- **read-only vs. write — uncertain, so proceed with caution.** Different sources contradict each other: some document the community one as read-only-only (write "planned"), and the documentation here assumed write operations exist. **Don't assume** — check against the live server which tools are available. In any case, every tool that makes a change **must** go through the confirmation pattern; this rule is safe even if in practice there's no write tool (in which case it simply isn't triggered).
+- **`github.com/aphraz/cw-mcp` is currently 404.** If you relied on it for installation — see `references/installation.md`; aggregation sites (glama/lobehub/mcp.so) still hold a cached copy, but the live source is gone.
