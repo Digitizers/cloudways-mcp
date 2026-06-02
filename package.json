@@ -1,0 +1,8 @@
+{
+  "name": "cloudways-mcp",
+  "version": "1.0.0",
+  "description": "Operational Claude skill for managing Cloudways infrastructure via the Cloudways MCP server (multi-account, monitoring, maintenance, audit, write-confirmation safety).",
+  "private": false,
+  "license": "MIT",
+  "files": [".claude/skills/cloudways-mcp"]
+}

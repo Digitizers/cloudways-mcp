@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  skill:
+    runs-on: ubuntu-latest
+    env:
+      SKILL: .claude/skills/cloudways-mcp/SKILL.md
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SKILL frontmatter lint
+        run: |
+          python3 - <<'PY'
+          import re, pathlib, os
+          p = pathlib.Path(os.environ["SKILL"]).read_text()
+          m = re.match(r'^---\n(.*?)\n---\n', p, re.S)
+          assert m, "missing frontmatter"
+          fm = m.group(1)
+          for k in ("name", "description", "version"):
+              mm = re.search(rf'^{k}:\s*(.+)$', fm, re.M)
+              assert mm and mm.group(1).strip(), f"frontmatter missing non-empty {k}"
+          print("frontmatter OK")
+          PY
+
+      - name: Reference links exist
+        run: |
+          python3 - <<'PY'
+          import re, pathlib, os
+          skill = pathlib.Path(os.environ["SKILL"])
+          base = skill.parent
+          refs = re.findall(r'references/[A-Za-z0-9_-]+\.md', skill.read_text())
+          missing = [r for r in set(refs) if not (base / r).exists()]
+          assert not missing, f"missing referenced files: {missing}"
+          print(f"references OK ({len(set(refs))} linked)")
+          PY
+
+      - name: No-leak guard
+        run: |
+          # Fail if studio-specific framing, personal names, or secret-shaped
+          # strings reappear in the skill payload (this repo is heading public).
+          if grep -rniE "digitizer|דיגיטייזר|Ben/Avi" .claude/ README.md; then
+            echo "::error::studio-specific framing / names found — genericize before merge"; exit 1
+          fi
+          if grep -rniE "(api[_-]?key|bearer|secret|password)[\"'[:space:]=:]+[A-Za-z0-9/_-]{24,}" .claude/ \
+             | grep -viE "your-|YOUR_|CLIENT_[AB]|example|<|\$\{|placeholder"; then
+            echo "::error::possible real secret found"; exit 1
+          fi
+          echo "no-leak guard passed"
