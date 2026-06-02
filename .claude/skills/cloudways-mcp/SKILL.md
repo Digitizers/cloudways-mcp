@@ -17,7 +17,7 @@ description: |
 >
 > אם לא ידוע באיזו דרך משתמשים — שאל את המשתמש, או זהה לפי אופן החיבור: אם ה-tools מופיעים ב-Claude בלי שהרצת שרת מקומי → זה הרשמי.
 
-> **הקשר Digitizer:** הסקיל נבנה כדי לתמוך בעבודה היומיומית של ניהול לקוחות על Cloudways — monitoring, תחזוקה שגרתית, onboarding/audit ללקוחות חדשים, ואוטומציות. כל ערכים כספיים שמדווחים על ידי ה-API הם $ (USD), לא ₪.
+> **הקשר:** הסקיל בנוי לעבודה יומיומית של ניהול לקוחות/סביבות על Cloudways — monitoring, תחזוקה שגרתית, onboarding/audit ללקוחות חדשים, ואוטומציות. כל ערכים כספיים שמדווחים על ידי ה-API הם $ (USD), לא ₪.
 
 ---
 
@@ -122,7 +122,7 @@ export CLOUDWAYS_API_KEY="your-cloudways-api-key"
 
 ## Multi-account — עבודה עם כמה חשבונות Cloudways
 
-ל-Digitizer יש **כמה חשבונות Cloudways** (לקוחות שונים / סביבות שונות). כל חשבון מחובר כ-MCP connection **נפרד** עם credentials משלו, ולכן מופיע ב-Claude עם **prefix משלו**:
+לרוב יש **כמה חשבונות Cloudways** (לקוחות שונים / סביבות שונות). כל חשבון מחובר כ-MCP connection **נפרד** עם credentials משלו, ולכן מופיע ב-Claude עם **prefix משלו**:
 
 ```
 mcp__cloudways-clientA__list_servers

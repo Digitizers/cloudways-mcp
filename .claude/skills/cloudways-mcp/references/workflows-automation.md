@@ -1,6 +1,6 @@
 # Workflows — Automation & Integration
 
-איך לבנות אוטומציות מסביב ל-Cloudways MCP — חיבור ל-n8n, Make.com, Claude Code, או cron jobs. בנוי במיוחד ל-Digitizer stack.
+איך לבנות אוטומציות מסביב ל-Cloudways MCP — חיבור ל-n8n, Make.com, Claude Code, או cron jobs. מתאים לכל stack של ניהול תשתית.
 
 > **עיקרון בסיסי:** ה-MCP server הוא קודם כל interface ל-Claude. לאוטומציה ללא human-in-the-loop, לרוב **עדיף לקרוא ישירות ל-Cloudways API** (curl/n8n HTTP node) ולא דרך MCP. ה-MCP מוסיף overhead, ובאוטומציה הוא לא נחוץ.
 
@@ -55,7 +55,7 @@ curl -sH "Authorization: Bearer $TOKEN" \
 
 ---
 
-## 2. n8n workflows (Digitizer stack)
+## 2. n8n workflows
 
 ### Workflow: Daily account health check
 
@@ -125,7 +125,7 @@ curl -sH "Authorization: Bearer $TOKEN" \
 
 ## 3. Make.com (Integromat) scenarios
 
-ה-Make.com Custom App של Digitizer (אם בנוי) יכול לעטוף את ה-API ב-modules נוחים יותר. אבל גם בלי app מותאם, HTTP module עובד.
+Make.com Custom App ייעודי (אם בנוי) יכול לעטוף את ה-API ב-modules נוחים יותר. אבל גם בלי app מותאם, HTTP module עובד.
 
 ### תבנית בסיסית:
 
@@ -265,7 +265,7 @@ curl -X POST -H 'Content-type: application/json' \
 
 ## 7. Multi-account management
 
-אם Digitizer מנהל מספר חשבונות Cloudways (לקוחות שונים, חשבונות נפרדים) — לא להחזיק את כל ה-keys באותו `.env`.
+אם אתה מנהל מספר חשבונות Cloudways (לקוחות שונים, חשבונות נפרדים) — לא להחזיק את כל ה-keys באותו `.env`.
 
 **אסטרטגיה:**
 

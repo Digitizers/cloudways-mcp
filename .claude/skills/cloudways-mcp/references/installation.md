@@ -122,7 +122,7 @@ LOG_FORMAT=console
 
 **שמור את `ENCRYPTION_KEY` במקום בטוח.** אם תאבד אותו, כל ה-tokens השמורים ב-Redis לא יהיו ניתנים לפענוח. אם תחליף אותו, כל המשתמשים יצטרכו לבצע auth מחדש.
 
-> **הקשר Digitizer:** הקשר ישיר ל-Infisical / OpenBao שאתה בודק — `ENCRYPTION_KEY` הוא בדיוק הסוג של secret שמתאים להישמר שם, לא ב-`.env` plain text.
+> **טיפ אבטחה:** `ENCRYPTION_KEY` הוא בדיוק הסוג של secret שכדאי לשמור ב-vault (Infisical / OpenBao / 1Password), לא ב-`.env` plain text.
 
 ---
 
@@ -206,7 +206,7 @@ claude mcp add --transport http cloudways http://127.0.0.1:7000/mcp \
 
 ## Multi-account configuration — כמה חשבונות Cloudways
 
-ל-Digitizer יש **כמה חשבונות Cloudways**. ה-MCP server של `aphraz/cw-mcp` הוא **multi-tenant** — הוא קורא את ה-credentials מתוך ה-headers של **כל request**, ומבודד sessions ב-Redis לפי customer. המשמעות: לרוב **לא צריך כמה server instances** — מספיק להגדיר ב-Claude **connection אחד לכל חשבון**, כולם מצביעים לאותו URL, רק עם headers שונים.
+נניח שיש **כמה חשבונות Cloudways**. ה-MCP server של `aphraz/cw-mcp` הוא **multi-tenant** — הוא קורא את ה-credentials מתוך ה-headers של **כל request**, ומבודד sessions ב-Redis לפי customer. המשמעות: לרוב **לא צריך כמה server instances** — מספיק להגדיר ב-Claude **connection אחד לכל חשבון**, כולם מצביעים לאותו URL, רק עם headers שונים.
 
 ### גישה A — connection לכל חשבון (מומלצת)
 
