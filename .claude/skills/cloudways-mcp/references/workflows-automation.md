@@ -166,7 +166,7 @@ In automation via `claude -p` (headless mode), the MCP server keeps working as u
 
 ```bash
 #!/bin/bash
-# /opt/cw-mcp/scripts/daily-summary.sh
+# scripts/cw-daily-summary.sh
 
 # Here Claude calls the MCP tools itself and generates a summary
 claude -p "
@@ -186,7 +186,7 @@ curl -X POST -H 'Content-type: application/json' \
      "$SLACK_WEBHOOK_URL"
 ```
 
-**Note:** Headless requires Claude Code to know how to reach the local MCP server. Make sure the MCP config is set in the `~/.claude.json` of the user running the cron.
+**Note:** Headless requires Claude Code to have the Cloudways MCP connection configured. Make sure the MCP config is set in the `~/.claude.json` of the user running the cron.
 
 ---
 
@@ -265,22 +265,22 @@ For automations that generate a lot of data (audit results, alerts log, deployme
 
 ## 7. Multi-account management
 
-If you manage multiple Cloudways accounts (different clients, separate accounts) — don't keep all the keys in the same `.env`.
+If you manage multiple Cloudways accounts (different clients, separate accounts) — don't keep all the keys in one place.
 
 **Strategy:**
 
-1. **Account-per-client:** each client in a separate Infisical project
-2. **MCP instance per account:** run multiple MCP servers on different ports (7000, 7001, 7002...) with different credentials
+1. **Account-per-client:** each client's credentials in a separate secrets-manager project (e.g. a vault project)
+2. **Connection per account:** one MCP connection per account in Claude, each with its own credentials (see `installation.md` → Multi-account configuration)
 3. **n8n credentials:** define them in the n8n credentials store, not in the workflow
 4. **Make.com connections:** same thing in Make
 
-**Multi-account Claude Desktop config example:**
+**Multi-account Claude config example:**
 
 ```json
 {
   "mcpServers": {
-    "cloudways-account1": { "command": "npx", "args": ["-y", "mcp-remote", "http://127.0.0.1:7000/mcp", ...] },
-    "cloudways-account2": { "command": "npx", "args": ["-y", "mcp-remote", "http://127.0.0.1:7001/mcp", ...] }
+    "cloudways-clientA": { "__": "official MCP connection, clientA credentials (per the support article)" },
+    "cloudways-clientB": { "__": "official MCP connection, clientB credentials (per the support article)" }
   }
 }
 ```
@@ -291,11 +291,11 @@ Claude will see each of them as a separate MCP with its own prefix.
 
 ## 8. Rate limiting considerations
 
-The MCP is limited to `RATE_LIMIT_REQUESTS=90` per minute (default). In automation — be mindful:
+The MCP enforces a per-account rate limit (check the current budget with `rate_limit_status`). In automation — be mindful:
 
 - **Daily summary** of 50 servers + 200 apps = ~250 reads. Under normal conditions — OK.
-- **Bulk audit** of a massive account — can exceed it quickly. Use `rate_limit_status` to check.
-- **Direct Cloudways API** has a separate rate limit (more generous — about 180/min). If the MCP rate limit gets in the way, in massive automation — switch to the direct API.
+- **Bulk audit** of a massive account — can exceed the budget quickly. Use `rate_limit_status` to check.
+- **Direct Cloudways API** has its own, separate rate limit. If the MCP rate limit gets in the way of massive automation — switch to the direct API.
 
 ---
 
@@ -305,8 +305,8 @@ The MCP is limited to `RATE_LIMIT_REQUESTS=90` per minute (default). In automati
 
 ❌ **Logging credentials.** Make sure the n8n / Make logs don't display the API key. Use the internal credential store.
 
-❌ **MCP server exposed to the internet.** If you want remote access — Cloudflare Access / WireGuard, not a public port.
+❌ **Credentials in shared or committed config.** Keep each account's API key in a secrets manager / local git-ignored config — never in a workflow body or a committed file.
 
 ❌ **Use MCP for monitoring loops.** For continuous monitoring (every 30 seconds), switch to the direct API. The MCP overhead isn't worth it.
 
-❌ **One MCP server for the whole team.** Security principle: every employee needs their own MCP server with their own credentials, or a custom SSO proxy. Sharing an MCP server = sharing credentials.
+❌ **Sharing one account's credentials across the team.** Each person should connect with their own Cloudways credentials (or via a proper SSO/proxy). Sharing a connection = sharing credentials.

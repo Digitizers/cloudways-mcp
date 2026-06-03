@@ -1,9 +1,6 @@
 # cloudways-mcp
 
-An operational [Claude Code Agent Skill](https://docs.claude.com/en/docs/claude-code/skills) for managing [Cloudways](https://www.cloudways.com/) infrastructure through the **Cloudways MCP server**. It supports two connection methods:
-
-1. **Official — Cloudways (Remote) MCP** *(recommended)*: An MCP hosted by Cloudways (Q2 2026). The connection source is the [official article](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management).
-2. **Community — self-hosted `cw-mcp`**: A local Python+Redis server. ⚠️ The repo `github.com/aphraz/cw-mcp` is **currently 404** (deleted/hidden) — requires an available fork/copy.
+An operational [Claude Code Agent Skill](https://docs.claude.com/en/docs/claude-code/skills) for managing [Cloudways](https://www.cloudways.com/) infrastructure through the **official Cloudways (Remote) MCP server** — a Cloudways-hosted MCP you connect to directly (listed as "Cloudways Remote MCP", Q2 2026, on the [Cloudways roadmap](https://www.cloudways.com/en/roadmap.php)). The connection source of truth is the [official article](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management).
 
 The skill is built for day-to-day infrastructure management: monitoring, maintenance, client onboarding/audit, and automations — with **support for multiple Cloudways accounts** and safety rules for write operations.
 
@@ -13,8 +10,8 @@ The skill is built for day-to-day infrastructure management: monitoring, mainten
 .claude/skills/cloudways-mcp/
 ├── SKILL.md                          # core: safety rules, multi-account, confirmation, patterns
 └── references/
-    ├── installation.md               # server setup (Python+Redis) + Claude connection + multi-account config
-    ├── tools-catalog.md              # catalog of 43+ tools, tagged R / W / W!
+    ├── installation.md               # Claude connection (official MCP) + multi-account config
+    ├── tools-catalog.md              # catalog of tools (illustrative), tagged R / W / W!
     ├── workflows-monitoring.md       # monitoring scenarios (read-only)
     ├── workflows-maintenance.md      # maintenance scenarios (write — requires confirmation)
     ├── workflows-onboarding.md       # audit/onboarding for a new client
@@ -35,5 +32,7 @@ The skill activates automatically when Cloudways is discussed, as long as the sk
 
 - [How to Use Cloudways MCP Server for AI-Based Server Management](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management) (official — the source of truth for the connection)
 - [Cloudways Roadmap](https://www.cloudways.com/en/roadmap.php) (lists "Cloudways Remote MCP", Q2 2026)
-- `aphraz/cw-mcp` — the community server (⚠️ the repo is currently 404)
+- [Cloudways API reference](https://developers.cloudways.com/)
+
+> Tool names in the catalog are illustrative — compiled from an earlier community MCP and not verified against the official server. The live `mcp__cloudways*__*` tools are authoritative.
 </content>

@@ -1,10 +1,9 @@
 ---
 name: cloudways-mcp
-version: 1.0.0
+version: 1.1.0
 description: |
-  Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the Cloudways MCP server (Cloudways' official MCP / Remote MCP per their support docs; or the community self-hosted cw-mcp implementation).
+  Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the official Cloudways MCP server (Cloudways' hosted MCP / Remote MCP, per their support docs).
   Use whenever the user mentions Cloudways, a Cloudways server or app, server monitoring, app monitoring, bandwidth, disk usage, PHP/MySQL/traffic analytics, SSH/MySQL IP whitelisting, Let's Encrypt or SSL on Cloudways, Varnish cache, app cloning, backups/restore on Cloudways, Git deployments on Cloudways, or running an audit/onboarding on a Cloudways-hosted client site.
-  Also use for self-hosting the MCP server itself (Python + Redis setup, mcp-remote configuration for Claude Desktop/Code).
   Any write operation (start/stop/restart server, backup, restore, rollback, install/revoke SSL, update CNAME, change whitelist, clear cache, change service state, git pull) requires explicit confirmation of target server/app and intended action before execution.
 ---
 
@@ -12,11 +11,9 @@ description: |
 
 Managing Cloudways infrastructure through the Cloudways MCP server.
 
-> **Two paths, and you need to know which one you're on:**
-> 1. **Official — Cloudways (Remote) MCP** *(recommended, default)*: MCP hosted by Cloudways (delivered in Q2 2026). You connect to it directly, without self-hosting. The source of truth for connecting is the **official article**: `support.cloudways.com/en/articles/14654372`. See `references/installation.md` section "Official".
-> 2. **Community — self-hosted (`cw-mcp`)**: A Python+Redis server you run locally. ⚠️ **The repo `github.com/aphraz/cw-mcp` currently returns 404** (deleted/hidden). If this is your path — you need an available fork/copy; see `references/installation.md` section "Self-hosted".
+> **Connection:** This skill targets the **official Cloudways (Remote) MCP** — an MCP hosted by Cloudways (delivered Q2 2026) that you connect to directly. The source of truth for connecting is the **official article**: `support.cloudways.com/en/articles/14654372`. See `references/installation.md`.
 >
-> If it's unknown which path is being used — ask the user, or identify it by the connection method: if the tools appear in Claude without you having run a local server → it's the official one.
+> **Tool names are illustrative.** The tool catalog and workflows in this skill were compiled from an earlier community MCP implementation and are **not verified** against the official server. Always treat the live `mcp__cloudways*__*` tools as the source of truth (see "Versioning and source of truth" below).
 
 > **Context:** The skill is built for day-to-day work managing clients/environments on Cloudways — monitoring, routine maintenance, onboarding/audit for new clients, and automations. All monetary values reported by the API are in $ (USD), not ₪.
 
@@ -107,17 +104,9 @@ Wait for an explicit response. A literal "yes" only = confirmation. Implied cons
 
 ## Authentication — quick overview
 
-The MCP server runs **locally on your machine** (not a hosted Cloudways service). It receives credentials through HTTP headers:
+Each account authenticates with its **Cloudways email + API key**, generated in Cloudways Platform → **Account → API**. The API key grants every action the account can perform in the UI — treat it like a password and never print it in responses.
 
-```bash
-# Secrets you export to the environment (don't commit to git)
-export CLOUDWAYS_EMAIL="your-account@example.com"
-export CLOUDWAYS_API_KEY="your-cloudways-api-key"
-```
-
-The API key is generated in Cloudways Platform → **Account → API**.
-
-For the full configuration of Claude Desktop / Claude Code with `mcp-remote`, see `references/installation.md`.
+How the credentials are passed depends on the connection method (follow the official article). For the full connection and multi-account setup, see `references/installation.md`.
 
 ---
 
@@ -131,7 +120,7 @@ mcp__cloudways-clientB__list_servers
 mcp__cloudways-internal__list_servers
 ```
 
-> The configuration (how multiple accounts are connected — one connection per account, with different headers, or instance-per-port) is documented in `references/installation.md` section **Multi-account configuration**. The runtime rules are here.
+> The configuration (how multiple accounts are connected — one connection per account, each with its own credentials) is documented in `references/installation.md` section **Multi-account configuration**. The runtime rules are here.
 
 ### The golden rule: identify the account before every operation
 
@@ -196,6 +185,5 @@ For more detailed patterns, load the relevant workflows.
 
 ## Versioning and source of truth
 
-- **The live MCP is the source of truth — always.** The tool names and categories in the catalog here were documented in 2026-Q1 from the community server (`cw-mcp`). Cloudways' official MCP may expose different names/capabilities. Before you declare that a tool exists/doesn't exist — **check the live list of tools** connected in Claude (`mcp__cloudways*__*`), and update the catalog accordingly.
-- **read-only vs. write — uncertain, so proceed with caution.** Different sources contradict each other: some document the community one as read-only-only (write "planned"), and the documentation here assumed write operations exist. **Don't assume** — check against the live server which tools are available. In any case, every tool that makes a change **must** go through the confirmation pattern; this rule is safe even if in practice there's no write tool (in which case it simply isn't triggered).
-- **`github.com/aphraz/cw-mcp` is currently 404.** If you relied on it for installation — see `references/installation.md`; aggregation sites (glama/lobehub/mcp.so) still hold a cached copy, but the live source is gone.
+- **The live MCP is the source of truth — always.** The tool names and categories in the catalog here were compiled from an earlier community MCP implementation and are **not verified** against Cloudways' official MCP, which may expose different names/capabilities. Before you declare that a tool exists/doesn't exist — **check the live list of tools** connected in Claude (`mcp__cloudways*__*`), and update the catalog accordingly.
+- **read-only vs. write — uncertain, so proceed with caution.** Sources conflict: some documented read-only-only (write "planned"), while this catalog assumed write operations exist. **Don't assume** — check against the live server which tools are available. In any case, every tool that makes a change **must** go through the confirmation pattern; this rule is safe even if in practice there's no write tool (in which case it simply isn't triggered).
