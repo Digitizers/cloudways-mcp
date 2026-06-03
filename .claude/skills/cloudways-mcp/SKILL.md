@@ -1,6 +1,7 @@
 ---
 name: cloudways-mcp
 version: 1.2.0
+license: MIT
 description: |
   Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the official Cloudways MCP server (Cloudways' hosted MCP / Remote MCP, per their support docs).
   Use whenever the user mentions Cloudways, a Cloudways server or app, server monitoring, app monitoring, bandwidth, disk usage, PHP/MySQL/traffic analytics, Varnish cache, app cloning, backups/restore on Cloudways, Git deployments on Cloudways, or running an audit/onboarding on a Cloudways-hosted client site. (SSL/Let's Encrypt and SSH/MySQL IP whitelisting are not MCP tools — do those in the Cloudways UI or direct API.)
