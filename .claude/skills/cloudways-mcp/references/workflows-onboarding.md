@@ -18,26 +18,25 @@ Confirm with the client:
 ## Stage 1 — Account mapping
 
 ```
-1. customer_info               → plan status, support level, billing status
-2. list_servers                → all servers: count, providers, regions, sizes
-3. list_projects               → how they're organized
-4. list_team_members           → who has access and what level
-5. get_alerts                  → everything currently open
-6. get_ssh_keys                → who can log in via SSH
+1. server_list                 → all servers: count, providers, regions, sizes (this is the entry point — infer the account from the connection prefix; there is no whoami/customer_info tool)
+2. project_list                → how they're organized
+3. copilot_insights_list       → insights, alerts, and recommendations currently open
 ```
+
+> **No MCP tool for:** account/plan/billing status (`customer_info`), team-member roster (`list_team_members`), or SSH-key listing. Plan/billing and the team roster are checked in the Cloudways Platform UI; SSH keys are managed via `ssh_key_create` / `ssh_key_update` / `ssh_key_delete` but there is no read/list tool — confirm SSH access in the UI or via the direct Cloudways API (<https://developers.cloudways.com/>).
 
 **Deliverables you record:**
 
 | Field | Value |
 |------|-----|
-| Cloudways plan | (Starter/Growth/Enterprise?) |
+| Cloudways plan | (Starter/Growth/Enterprise? — UI only) |
 | Number of servers | |
 | Providers in use | (DO/AWS/GCP/Vultr) |
 | Regions | |
 | Total monthly $ Cloudways (estimate) | |
-| Team members + permissions | |
-| SSH keys (don't publish — only a count) | |
-| Open alerts | |
+| Team members + permissions | (UI only) |
+| SSH keys (don't publish — only a count) | (UI / direct API) |
+| Open insights/alerts | (copilot_insights_list) |
 
 ---
 
@@ -46,11 +45,12 @@ Confirm with the client:
 For each server in the list:
 
 ```
-1. get_server_details          → label, size, IP, master credentials, app list
-2. get_server_settings         → PHP timeout, memory, upload limit, custom PHP
-3. get_server_services_status  → what's running (Apache/Nginx/MySQL/Memcached/Varnish/Redis)
-4. get_server_disk_usage       → current space + breakdown
-5. get_server_monitoring_detail → CPU/RAM trends last 24h
+1. server_get                  → label, size, IP, master credentials, app list
+2. server_settings_get         → PHP timeout, memory, upload limit, custom PHP
+3. service_status              → what's running (Apache/Nginx/MySQL/Memcached/Varnish/Redis)
+4. server_disk_usage_fetch     → trigger a fresh disk-usage calculation (init), then:
+5. monitoring_server_summary   → current disk + bandwidth usage (read)
+6. monitoring_server_graph     → CPU/RAM trends last 24h
 ```
 
 **Red flags to watch for:**
@@ -69,15 +69,18 @@ For each server in the list:
 For each application (per the app list from the previous stage):
 
 ```
-1. get_app_details             → URL, FQDN, app folder, DB credentials, SSL status
-2. get_app_settings            → app-level overrides
-3. get_app_credentials         → SFTP/additional access
-4. get_app_monitoring_summary  → bandwidth, requests (to get a sense of scale)
-5. get_app_analytics_traffic   → visitors at least last 7 days
-6. get_app_analytics_php       → slow scripts? memory issues?
-7. get_app_analytics_mysql     → slow queries?
-8. get_app_varnish_settings    → cache configured?
+1. app_get                     → URL, FQDN, app folder, DB credentials
+2. app_settings_get            → app-level overrides + security flags (XML-RPC, password protection, etc.)
+3. app_credentials             → SFTP/additional access
+4. monitoring_app_summary      → bandwidth, requests (to get a sense of scale)
+5. analytics_app_traffic       → visitors at least last 7 days (drill in with analytics_app_traffic_details)
+6. analytics_app_php           → slow scripts? memory issues?
+7. analytics_app_mysql         → slow queries?
+8. app_varnish_settings_get    → cache configured?
+9. app_vulnerabilities_list    → (WordPress) known plugin/theme/core vulnerabilities
 ```
+
+> **SSL status is not exposed by an MCP tool.** Check certificate provider + expiry in the Cloudways Platform UI or via the direct Cloudways API.
 
 **Deliverables table for each app:**
 
@@ -86,10 +89,11 @@ For each application (per the app list from the previous stage):
 | App name | | |
 | Primary domain | | |
 | Additional domains/CNAMEs | | |
-| SSL provider + expiry | | check auto-renew? |
+| SSL provider + expiry | UI / API | check auto-renew? |
 | App type (WP/Magento/PHP/Laravel) | | |
 | PHP version | | < 8.1 = upgrade needed |
 | WP version (if relevant) | | < 6.0 = security risk |
+| Known vulnerabilities (if WP) | app_vulnerabilities_list | any open CVEs? |
 | Active plugins (if WP) | manual | abandoned plugins? |
 | DB size (rough) | | |
 | Daily traffic (avg) | | |
@@ -105,24 +109,29 @@ For each application (per the app list from the previous stage):
 ## Stage 4 — Security audit
 
 ```
-1. get_whitelisted_ips_ssh     → who can SSH?
-2. get_whitelisted_ips_mysql   → who can access the DB directly?
-3. get_ssh_keys                → stored keys
-4. For each suspicious IP: check_ip_blacklisted
+1. app_settings_get            → per-app security flags (XML-RPC enabled? password protection?)
+2. app_vulnerabilities_list    → (WordPress) open plugin/theme/core vulnerabilities
+3. copilot_insights_list       → security-related insights/recommendations Cloudways has surfaced
 ```
 
-**Red flags:**
+> **No MCP tools for IP whitelisting or SSH-key listing.** The SSH IP whitelist, MySQL IP whitelist, and the stored-SSH-key roster are **not** exposed by the official Cloudways MCP. Audit these in the Cloudways Platform UI (Server → Security) or via the direct Cloudways API (<https://developers.cloudways.com/>). The same goes for the team-member roster (who still has access) — UI / API only.
+
+**Red flags (check in the UI / API):**
 - [ ] SSH whitelist empty = open to the world (critical)
 - [ ] MySQL whitelist empty = open to the world (security disaster)
 - [ ] Old SSH keys whose owners are unclear
 - [ ] The old team member still has access
 - [ ] Access not only for client employees but also for employees who have left
 
+**Red flags (from MCP):**
+- [ ] XML-RPC left enabled on WordPress (`app_settings_get`) = brute-force/DDoS vector
+- [ ] Open vulnerabilities reported by `app_vulnerabilities_list`
+
 ---
 
 ## Stage 5 — Backups audit
 
-Unfortunately: the Cloudways MCP does not expose `list_backups` directly. You need to go to the UI (or a direct API call).
+The official Cloudways MCP has no "list all backups" tool. `app_backup_status_get` reports only whether a backup is currently **in progress** for an app, and backup scheduling is changed via `server_backup_settings_update`. To audit the existing schedule and retention you still need the UI (or a direct API call).
 
 **Questions to check manually:**
 - Are automatic backups enabled? (Cloudways → Server → Backups)
@@ -208,9 +217,9 @@ Auditor: [your name]
 
 ## Quick reference — Audit checklist (printable)
 
-- [ ] **Account:** customer_info / list_servers / list_projects / list_team_members / get_alerts
-- [ ] **Per server:** get_server_details / get_server_settings / get_server_services_status / get_server_disk_usage / get_server_monitoring_detail
-- [ ] **Per app:** get_app_details / get_app_settings / get_app_monitoring_summary / get_app_analytics_traffic / get_app_analytics_php / get_app_analytics_mysql / get_app_varnish_settings
-- [ ] **Security:** get_whitelisted_ips_ssh / get_whitelisted_ips_mysql / get_ssh_keys
-- [ ] **Manual (UI):** Backup schedule + retention / Cloudflare integration (if any) / WP version (if WP) / Active plugins (if WP)
+- [ ] **Account:** server_list / project_list / copilot_insights_list  (plan/billing + team roster = UI only)
+- [ ] **Per server:** server_get / server_settings_get / service_status / server_disk_usage_fetch + monitoring_server_summary / monitoring_server_graph
+- [ ] **Per app:** app_get / app_settings_get / monitoring_app_summary / analytics_app_traffic / analytics_app_php / analytics_app_mysql / app_varnish_settings_get / app_vulnerabilities_list (WP)
+- [ ] **Security:** app_settings_get (XML-RPC etc.) / app_vulnerabilities_list / copilot_insights_list  (IP whitelists + SSH-key roster = UI / API only)
+- [ ] **Manual (UI):** Backup schedule + retention / SSL provider + expiry / IP whitelists / SSH-key roster / team members / Cloudflare integration (if any) / WP version (if WP) / Active plugins (if WP)
 - [ ] **Document:** Red flags / Recommendations / Quote / SLA

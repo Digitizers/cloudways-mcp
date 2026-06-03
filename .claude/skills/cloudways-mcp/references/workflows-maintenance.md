@@ -32,10 +32,10 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. `get_app_details` — confirm the target app
-2. `get_app_varnish_settings` — see if Varnish is active
-3. **CONFIRM:** `clear_app_cache` (W)
-4. If Varnish is active: **CONFIRM:** `manage_app_varnish` with action=purge (W)
+1. `app_get` — confirm the target app
+2. `app_varnish_settings_get` — see if Varnish is active
+3. **CONFIRM:** `app_purge_cache` (W)
+4. If Varnish is active: **CONFIRM:** `varnish_app_manage` with action=purge (W)
 5. Check the site in a browser (curl or manually)
 
 **If the problem persists:**
@@ -49,13 +49,15 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **When:** SSL is approaching expiry and there is no auto-renewal / auto-renewal failed
 
+> **GAP — not available via the MCP.** The official Cloudways MCP exposes **no SSL/Let's Encrypt tools** (no install, renew, revoke, or auto-renewal toggle). Perform SSL operations in the **Cloudways Platform UI** (Application → SSL Certificate) or via the **direct Cloudways API** (https://developers.cloudways.com/). The MCP can still help you *diagnose* and *verify* around the manual SSL step.
+
 **Sequence:**
 
-1. `get_app_details` — check the domain and the current expiry date
+1. `app_get` — check the domain and read what you can about the app's current state
 2. Check that the DNS still points to the server (critical for LE validation)
-3. **CONFIRM:** `renew_letsencrypt` (W)
-4. **CONFIRM:** `set_letsencrypt_auto_renewal` with enabled=true (W) — if it wasn't active
-5. `get_app_details` — verify
+3. **Do the renewal in the Cloudways UI** (Application → SSL Certificate → Renew) or via the direct API. There is no MCP tool for this.
+4. **Enable auto-renewal in the UI** if it wasn't active — there is no MCP tool for this either.
+5. `app_get` — re-read and verify the app looks healthy; confirm the cert in the browser
 
 **If renewal fails:**
 - Most common problem: DNS doesn't point correctly, or wildcard domains aren't configured
@@ -68,13 +70,15 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **When:** The client purchased a cert from another CA (DigiCert, Sectigo, etc.), not Let's Encrypt
 
+> **GAP — not available via the MCP.** The official MCP has **no tool to install or remove a custom SSL certificate**. Do this in the **Cloudways Platform UI** (Application → SSL Certificate → Custom SSL) or via the **direct Cloudways API** (https://developers.cloudways.com/).
+
 **Sequence:**
 
 1. Collect from the client: certificate, private key, ca bundle
-2. `get_app_details` — confirm target
-3. **CONFIRM:** `install_ssl_certificate` (W) — with cert + key
+2. `app_get` — confirm target
+3. **Install the custom cert in the Cloudways UI** (paste cert + key) or via the direct API. There is no MCP tool for this.
 4. Check SSL from the browser (SSL Labs grade A+ preferred)
-5. If Let's Encrypt was active — decide: keep as backup or revoke
+5. If Let's Encrypt was active — decide: keep as backup or revoke (also a UI/API action)
 
 > Warning: Installing a custom cert **cancels** the Let's Encrypt cert if one was active. Make sure you have the custom cert in hand **before** you start.
 
@@ -86,14 +90,14 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. `get_app_details` — confirm target
-2. `get_app_monitoring_summary` — before: snapshot of state
-3. **CONFIRM:** `backup_app` (W)
-4. Check that the backup was created (`get_app_details` again, or via the UI)
+1. `app_get` — confirm target
+2. `monitoring_app_summary` — before: snapshot of state
+3. **CONFIRM:** `app_backup` (W)
+4. Check that the backup is progressing (`app_backup_status_get` for in-progress state, or via the UI). Note: there is no general "list backups" tool — the available restore points are visible in the Cloudways UI.
 5. Record the backup timestamp — you'll need it for restore if something goes wrong
 
 **Server-level backup:**
-- `backup_server` (W) — slower, includes everything, more expensive
+- `server_backup` (W) — slower, includes everything, more expensive
 - Useful before a server-wide change (PHP upgrade, OS upgrade, package change)
 
 ---
@@ -105,13 +109,13 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 **Sequence — critical to follow in order:**
 
 1. **STOP** — don't do anything until you understand the scope of the problem.
-2. `get_app_details` — current state
-3. Check the list of available backups (via the Cloudways UI — MCP doesn't expose list_backups directly)
+2. `app_get` — current state
+3. Check the list of available backups (via the Cloudways UI — there is no MCP "list backups" tool; `app_backup_status_get` only reports in-progress backup status)
 4. **CONFIRM step 1:** "Is the backup from date X the point you want to roll back to?"
 5. **CONFIRM step 2:** Type the app name to confirm restore
-6. **CONFIRM:** `restore_app` (W!) — full overwrite of the current state
+6. **CONFIRM:** `app_restore` (W!) — full overwrite of the current state
 7. Check that the site works
-8. If there's a problem: **CONFIRM:** `rollback_app_restore` (W) within a limited time window
+8. If there's a problem: roll back via the Cloudways UI within the limited time window (there is no MCP rollback tool)
 
 > **Limited rollback window.** After a few hours / a day, rollback is no longer possible. Make sure the site works **on the same day** as the restore.
 
@@ -123,17 +127,17 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Priority order — try the quietest one first:**
 
-1. `clear_app_cache` (W) per app — sometimes that's all it takes
-2. `change_service_state` (W) on a single service (e.g. restart MySQL only)
-3. If that doesn't help: `restart_server` (W) — 1-5 minutes downtime for all the apps
+1. `app_purge_cache` (W) per app — sometimes that's all it takes
+2. `service_restart` (W) on a single service (e.g. restart MySQL only)
+3. If that doesn't help: `server_restart` (W) — 1-5 minutes downtime for all the apps
 
-**Before restart_server:**
+**Before server_restart:**
 
-1. **Mandatory:** `get_server_details` → list of apps
+1. **Mandatory:** `server_get` → list of apps
 2. **Mandatory:** count active users (if relevant — a store site with open carts?)
 3. **Double CONFIRM:** "The server hosts X applications — Y, Z, W. Each of them will be offline for X minutes. Continue?"
 4. Execute
-5. **VERIFY:** `get_server_services_status` after the restart
+5. **VERIFY:** `service_status` after the restart
 
 ---
 
@@ -141,13 +145,15 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **When:** Adding a key for a team member, or removing access for an old IP
 
+> **GAP — not available via the MCP.** The official MCP has **no IP-whitelisting tools** (no read or update of SSH/MySQL whitelisted IPs). Manage the whitelist in the **Cloudways Platform UI** (Server → Security → Application/Server IP Whitelisting) or via the **direct Cloudways API** (https://developers.cloudways.com/). The discipline below still applies — just execute the change in the UI/API, not via a tool.
+
 **Sequence:**
 
-1. `get_whitelisted_ips_ssh` — what's there now
+1. **Read the current whitelist in the Cloudways UI** — what's there now (no MCP tool for this)
 2. Plan the new list — **including your own IP**
 3. **CONFIRM:** Show the user: "The new list is: [...]. Does your IP X.X.X.X stay on the list? yes/no"
 4. If the user is missing from the list — **stop and clarify**
-5. **CONFIRM:** `update_whitelisted_ips` (W)
+5. **Apply the change in the Cloudways UI** or via the direct API. There is no MCP tool for this.
 6. **VERIFY:** Try SSH immediately (if it doesn't work — Cloudways support to restore)
 
 > **Nightmare scenario to avoid:** updating the whitelist + removing your own IP + no alternative SSH. The only way out — the Cloudways UI (panic) or a support ticket (time). Be careful.
@@ -160,13 +166,13 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Priority order:**
 
-1. `get_server_disk_usage` — where's the space?
-2. **CONFIRM:** `clear_app_cache` (W) for all the suspect apps
-3. If not enough: **CONFIRM:** `optimize_server_disk` (W) — Cloudways magic cleanup
+1. `server_disk_usage_fetch` (init) then `monitoring_server_summary` (read) — where's the space?
+2. **CONFIRM:** `app_purge_cache` (W) for all the suspect apps
+3. If not enough: **CONFIRM:** `server_disk_cleanup_*` (W) — Cloudways magic cleanup
 4. If not enough: upgrade size (UI only) or manual SSH to clean logs
-5. **VERIFY:** `get_server_disk_usage` again
+5. **VERIFY:** `server_disk_usage_fetch` + `monitoring_server_summary` again
 
-> `optimize_server_disk` may delete logs. If the client must keep logs (compliance, debugging), export them manually first.
+> `server_disk_cleanup_*` may delete logs. If the client must keep logs (compliance, debugging), export them manually first.
 
 ---
 
@@ -176,9 +182,9 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. `get_app_details` — check that a valid SSL is installed
-2. If there's no SSL: install one first (`install_letsencrypt` or `install_ssl_certificate`)
-3. **CONFIRM:** `enforce_app_https` (W)
+1. `app_get` — check that a valid SSL is installed
+2. If there's no SSL: install one first **in the Cloudways UI** (Application → SSL Certificate) or via the direct Cloudways API — there is **no MCP SSL tool** (see sections 2 and 3). Enforcing HTTPS without a valid cert will break the site.
+3. **CONFIRM:** `app_enforce_https_update` (W) — toggles the HTTP→HTTPS redirect (this is separate from installing the cert)
 4. Check that the redirect works: `curl -I http://example.com` → 301 to HTTPS
 
 > **WordPress quirk:** After enforcing HTTPS, you may need to update `WP_HOME` and `WP_SITEURL` in `wp-config.php` or via WP-CLI: `wp option update home https://example.com && wp option update siteurl https://example.com`. Otherwise — mixed content errors.
@@ -191,12 +197,12 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. `get_git_branch_names` — verify the branch exists
-2. `get_git_deployment_history` — what the current state is
-3. **CONFIRM:** `backup_app` (W) — always backup before a deploy
+1. `git_branches_get` — verify the branch exists
+2. `git_history_get` — what the current state is
+3. **CONFIRM:** `app_backup` (W) — always backup before a deploy
 4. **CONFIRM:** `git_pull` (W) with branch + commit hash if relevant
 5. **VERIFY:** Check the site
-6. If something broke: `restore_app` (W) to the backup from section 3
+6. If something broke: `app_restore` (W!) to the backup from section 3
 
 > Cloudways Git deploy doesn't run build steps. If the site requires `npm run build` / `composer install` — you'll need to do that manually over SSH after the pull, or keep build artifacts in the repo.
 
@@ -208,9 +214,9 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. `get_app_varnish_settings` — current config
+1. `app_varnish_settings_get` — current config
 2. Understand the policy: cache TTL, exceptions, purge rules
-3. **CONFIRM:** `manage_app_varnish` (W) with a specific action (enable/disable/purge/configure)
+3. **CONFIRM:** `varnish_app_manage` (W) with a specific action (enable/disable/purge/configure). For changing Varnish settings, `app_varnish_settings_update` (W) is also available.
 4. If purge: check that the cache is clean (`curl -I` to the URL → should be `X-Cache: MISS` on the first request)
 
 > Varnish isn't compatible with every application. For WooCommerce or applications with session-heavy data, precise exclusion rules are needed. Always check after a change.
