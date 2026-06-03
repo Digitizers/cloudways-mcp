@@ -1,6 +1,6 @@
 # Tools Catalog — Cloudways MCP
 
-Tools catalog documented from the community server `cw-mcp` (43+ tools, 2026-Q1). Classified by functional category, with flags **R** (read-only) / **W** (write — requires confirmation) / **W!** (write destructive — requires double confirmation).
+Tools catalog compiled from an earlier community MCP implementation. Classified by functional category, with flags **R** (read-only) / **W** (write — requires confirmation) / **W!** (write destructive — requires double confirmation).
 
 > ⚠️ **Read before relying on this list:**
 > - The tool names here are from the **community** server. The **official** Cloudways MCP may have different names/capabilities — **the live server is the source of truth**. Always check the `mcp__cloudways*__*` tools actually available.

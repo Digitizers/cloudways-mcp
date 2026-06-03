@@ -1,21 +1,15 @@
 {
-  "_comment": "Example for the SELF-HOSTED community cw-mcp server (Option 2, localhost:7000). For the OFFICIAL Cloudways Remote MCP (Option 1, recommended) follow the connection steps in the official support article — endpoint/auth may differ; do not assume this URL. One connection per Cloudways account. Copy to .mcp.json (gitignored) and fill real credentials. Header names are case-insensitive.",
+  "_comment": "Per-account connection skeleton. Replace url and auth with the OFFICIAL Cloudways (Remote) MCP details from the support article (https://support.cloudways.com/en/articles/14654372) — the endpoint and auth method are not assumed here. One connection per account; name each cloudways-<client>. Copy to .mcp.json (gitignored) and fill real credentials; never commit them.",
   "mcpServers": {
     "cloudways-clientA": {
       "type": "http",
-      "url": "http://127.0.0.1:7000/mcp",
-      "headers": {
-        "x-cloudways-email": "clientA@example.com",
-        "x-cloudways-api-key": "CLIENT_A_API_KEY"
-      }
+      "url": "https://REPLACE-WITH-OFFICIAL-CLOUDWAYS-MCP-ENDPOINT/mcp",
+      "_auth": "Set per the official article (e.g. API key / OAuth), using clientA's Cloudways email + API key from Account -> API."
     },
     "cloudways-clientB": {
       "type": "http",
-      "url": "http://127.0.0.1:7000/mcp",
-      "headers": {
-        "x-cloudways-email": "clientB@example.com",
-        "x-cloudways-api-key": "CLIENT_B_API_KEY"
-      }
+      "url": "https://REPLACE-WITH-OFFICIAL-CLOUDWAYS-MCP-ENDPOINT/mcp",
+      "_auth": "Set per the official article, using clientB's Cloudways email + API key from Account -> API."
     }
   }
 }
