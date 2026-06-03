@@ -41,11 +41,17 @@ jobs:
 
       - name: No-leak guard
         run: |
-          # Fail if studio-specific framing, personal names, or secret-shaped
-          # strings reappear in the skill payload (this repo is heading public).
-          if grep -rniE "digitizer|דיגיטייזר|Ben/Avi" .claude/ README.md; then
-            echo "::error::studio-specific framing / names found — genericize before merge"; exit 1
+          # The shipped skill payload (.claude/) must stay studio-neutral and
+          # generic — no studio framing or personal names inside the skill itself.
+          if grep -rniE "digitizer|דיגיטייזר|Ben/Avi" .claude/; then
+            echo "::error::studio framing / personal names found in the skill payload — keep .claude/ generic"; exit 1
           fi
+          # The repo-level README may carry the studio brand footer (Digitizer),
+          # but must never expose personal names.
+          if grep -rniE "Ben/Avi|benkalsky" README.md; then
+            echo "::error::personal name found in README — use the studio brand, not personal names"; exit 1
+          fi
+          # Secret-shaped strings must never appear in the payload.
           if grep -rniE "(api[_-]?key|bearer|secret|password)[\"'[:space:]=:]+[A-Za-z0-9/_-]{24,}" .claude/ \
              | grep -viE "your-|YOUR_|CLIENT_[AB]|example|<|\$\{|placeholder"; then
             echo "::error::possible real secret found"; exit 1

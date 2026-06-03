@@ -1,8 +1,24 @@
-# cloudways-mcp
+# Cloudways MCP — Claude Code & OpenClaw Skill
 
-An operational [Claude Code Agent Skill](https://docs.claude.com/en/docs/claude-code/skills) for managing [Cloudways](https://www.cloudways.com/) infrastructure through the **official Cloudways (Remote) MCP server** — a Cloudways-hosted MCP you connect to directly (listed as "Cloudways Remote MCP", Q2 2026, on the [Cloudways roadmap](https://www.cloudways.com/en/roadmap.php)). The connection source of truth is the [official article](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management).
+[![CI](https://github.com/Digitizers/cloudways-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Digitizers/cloudways-mcp/actions/workflows/ci.yml)
+![Claude Code Skill](https://img.shields.io/badge/Claude_Code-Skill-d97757)
+![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-Skill-purple)
+![Cloudways](https://img.shields.io/badge/Cloudways-MCP-2b6cb0)
+![License: MIT](https://img.shields.io/badge/License-MIT-green)
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
 
-The skill is built for day-to-day infrastructure management: monitoring, maintenance, client onboarding/audit, and automations — with **support for multiple Cloudways accounts** and safety rules for write operations.
+A production-grade **Claude Code & OpenClaw skill** for managing [Cloudways](https://www.cloudways.com/) infrastructure through the official **Cloudways (Remote) MCP** — connect directly to the hosted server, run one or many accounts, with a safety rule on every write.
+
+This is not just a tool reference. It is an operational playbook for running Cloudways infrastructure responsibly: server and app monitoring, routine maintenance, client onboarding/audit, and automation — with write-confirmation guardrails on anything that changes state. The connection source of truth is the [official Cloudways article](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management).
+
+## Features
+
+- ✅ **Official Cloudways (Remote) MCP** — connect directly to the hosted server at `mcp.cloudways.com`; no self-hosting, no proxy to maintain.
+- ✅ **Complete tool catalog** — the full official toolset across servers, apps, services, DNS, CDN, Git, SSH keys, and analytics, tagged R / W / W!.
+- ✅ **Write-confirmation safety** — every state-changing operation requires explicit target + action confirmation; destructive operations double-confirm.
+- ✅ **Multi-account** — one connection per Cloudways account, each with its own prefix; no cross-account ID or credential mixing.
+- ✅ **Operational playbooks** — monitoring, maintenance, client onboarding/audit, and n8n / Make / headless automation.
+- ✅ **Honest gaps** — SSL, IP-whitelisting, and team management are flagged as Cloudways UI / direct-API (not MCP tools), never faked.
 
 ## Structure
 
@@ -20,7 +36,7 @@ The skill is built for day-to-day infrastructure management: monitoring, mainten
 
 ## Key points
 
-- **read-only vs. write — uncertain.** Sources conflict on whether the current version includes write operations or read only. The skill errs on the side of caution: any tool that changes state requires **explicit confirmation** (`SKILL.md`) — a rule that is safe even if no write tool actually exists. Always verify against the live server.
+- **Write safety.** Any tool that changes state requires **explicit confirmation** of the target and action (`SKILL.md`); destructive operations (delete, restore, scale) double-confirm. The tool catalog is verified against the official article — see `tools-catalog.md` for the R / W / W! tags.
 - **Multi-account.** Each account is connected as a separate connection with its own prefix (`mcp__cloudways-clientA__*`). The skill requires identifying the correct account before any operation, and prohibits mixing IDs/credentials across accounts.
 - **Source of truth.** If the catalog here conflicts with what the live MCP returns — **the live MCP wins**; update the catalog accordingly.
 
@@ -37,4 +53,19 @@ The official hosted MCP is at `https://mcp.cloudways.com/mcp/`. Authenticate wit
 - [Cloudways API reference](https://developers.cloudways.com/)
 
 > The tool catalog is verified against the official support article. If it ever conflicts with what the live `mcp__cloudways*__*` tools return, the live MCP is authoritative.
+
+## Links
+
+- **Repository:** https://github.com/Digitizers/cloudways-mcp
+- **OpenClaw:** https://openclaw.ai
+- **Cloudways MCP article:** https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management
+- **Digitizer:** https://www.digitizer.studio
+
+## License
+
+MIT
+
+---
+
+Built with ❤️ for OpenClaw by [Digitizer](https://www.digitizer.studio)
 </content>
