@@ -109,6 +109,7 @@ Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = de
 | `service_restart` | W | Restart a service (nginx, mysql, php-fpm…). |
 | `varnish_manage` | W | Enable/disable/purge Varnish at server level. |
 | `varnish_app_manage` | W | Enable/disable Varnish per application. |
+| `varnish_app_status` | R | Current Varnish status for an application. |
 
 ## Add-on Management
 
@@ -199,6 +200,16 @@ Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = de
 | `ssh_key_create` | W | Add an SSH public key to a server/app/user. |
 | `ssh_key_update` | W | Rename an SSH key (label only). |
 | `ssh_key_delete` | W! | Revoke an SSH key by `ssh_key_id`. |
+
+## Toolset meta-tools
+
+The server also exposes discovery/proxy tools for navigating its toolsets. Usually you call the named tools above directly; these are for when the client groups tools into on-demand toolsets.
+
+| Tool | Flag | What it does |
+|------|------|--------------|
+| `list_available_toolsets` | R | List the server's toolsets (categories of tools). |
+| `get_toolset_tools` | R | List the tools inside a given toolset. |
+| `execute_tool` | varies | Invoke a tool by name through the proxy (inherits that tool's R/W/W! risk). |
 
 ---
 

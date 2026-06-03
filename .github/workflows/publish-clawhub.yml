@@ -57,7 +57,7 @@ jobs:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
         run: |
           if [ "$DRY_RUN" = "true" ]; then
-            echo "Dry run — would publish: clawhub skill publish $SKILL_DIR --version ${{ steps.ver.outputs.version }}"
+            echo "Dry run — would publish: clawhub skill publish $SKILL_DIR --slug cloudways-mcp --name 'Cloudways MCP' --version ${{ steps.ver.outputs.version }}"
             exit 0
           fi
-          clawhub skill publish "$SKILL_DIR" --version "${{ steps.ver.outputs.version }}"
+          clawhub skill publish "$SKILL_DIR" --slug cloudways-mcp --name "Cloudways MCP" --version "${{ steps.ver.outputs.version }}"
