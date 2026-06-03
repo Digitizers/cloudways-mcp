@@ -12,10 +12,9 @@ Monitoring scenarios only. None of the actions here require confirmation — the
 
 **Call sequence:**
 
-1. `customer_info` — verify the account is active, plan is valid
-2. `list_servers` — list + status for each server
-3. `get_alerts` — what's open right now
-4. For each server with a status other than Running: `get_server_details` to check why
+1. `server_list` — list + status for each server (also confirms the account/connection is reachable; there is no separate account-info tool)
+2. `copilot_insights_list` — what's open right now
+3. For each server with a status other than Running: `server_get` to check why
 
 **How to summarize:**
 - How many servers, how many apps, how many active / inactive
@@ -33,13 +32,13 @@ Monitoring scenarios only. None of the actions here require confirmation — the
 
 **Call sequence:**
 
-1. `get_server_details` (the target server) — current state
-2. `get_server_monitoring_detail` — CPU, RAM, disk I/O over the last 5 minutes
-3. `get_server_services_status` — verify all the services are running
-4. `get_server_disk_usage` — free space
-5. `get_app_monitoring_summary` (for each relevant application) — bandwidth, response time
-6. `get_alerts` — no active surprises
-7. `get_app_analytics_traffic` (last 24h) — to know what the normal traffic is
+1. `server_get` (the target server) — current state
+2. `monitoring_server_graph` — CPU, RAM, disk I/O over the last 5 minutes
+3. `service_status` — verify all the services are running
+4. `monitoring_server_summary` — free space (run `server_disk_usage_fetch` first to initialize the data, then read with `monitoring_server_summary`)
+5. `monitoring_app_summary` (for each relevant application) — bandwidth, response time
+6. `copilot_insights_list` — no active surprises
+7. `analytics_app_traffic` (last 24h) — to know what the normal traffic is
 
 **Save the output before starting the change.** After the change, repeat the same sequence and compare.
 
@@ -51,10 +50,10 @@ Monitoring scenarios only. None of the actions here require confirmation — the
 
 **Sequence:**
 
-1. `get_server_disk_usage` — where is the space?
-2. If application folders are large: for each suspect app `get_app_details` + `get_app_settings`
+1. `server_disk_usage_fetch` (init) then `monitoring_server_summary` (read) — where is the space?
+2. If application folders are large: for each suspect app `app_get` + `app_settings_get`
 3. Check logs via manual SSH (Cloudways MCP does not expose direct file system access): the administrator will need to connect via SSH to `/var/log/`, `/home/master/applications/<app>/logs/`
-4. Check MySQL slow logs: `get_app_analytics_mysql` — if there are a lot of slow queries, the bin logs can balloon
+4. Check MySQL slow logs: `analytics_app_mysql` — if there are a lot of slow queries, the bin logs can balloon
 
 **Good report:**
 ```
@@ -64,8 +63,8 @@ Breakdown:
   - /var/log: 4.2GB (30 days of logs — rotation possible)
   - /tmp: 2.1GB
   - other: 6GB
-Recommendation: clear_app_cache for all apps + manual log rotation via SSH
-Next action requires confirmation: clear_app_cache (W)
+Recommendation: app_purge_cache for all apps + manual log rotation via SSH
+Next action requires confirmation: app_purge_cache (W)
 ```
 
 ---
@@ -76,26 +75,26 @@ Next action requires confirmation: clear_app_cache (W)
 
 **Step 1 — Is it really slow, or just their perception?**
 
-1. `get_app_analytics_traffic` (last hour) — basically, traffic spike?
-2. `get_app_monitoring_summary` — response time avg + p95
-3. `get_server_monitoring_detail` — CPU/RAM of the server overall
+1. `analytics_app_traffic` (last hour) — basically, traffic spike?
+2. `monitoring_app_summary` — response time avg + p95
+3. `monitoring_server_graph` — CPU/RAM of the server overall
 
 **Step 2 — Where is the problem?**
 
-1. `get_app_analytics_php` — slow scripts? memory exhaustion?
-2. `get_app_analytics_mysql` — slow queries? locks?
-3. `get_server_services_status` — Varnish/Memcached/Redis running?
-4. `get_app_varnish_settings` — cache mode configured?
+1. `analytics_app_php` — slow scripts? memory exhaustion?
+2. `analytics_app_mysql` — slow queries? locks?
+3. `service_status` — Varnish/Memcached/Redis running?
+4. `app_varnish_settings_get` — cache mode configured?
 
 **Diagnostic matrix:**
 
 | Symptom | Likely cause | Diagnostic tool |
 |--------|----------|-----------|
-| Sustained CPU 100% | PHP heavy / DB heavy | `get_app_analytics_php` + `get_app_analytics_mysql` |
-| RAM 95%+ | memory leak / cache bloat | `get_server_services_status` + restart services |
-| High Disk I/O | swap / log writes / DB writes | `get_server_disk_usage` |
-| High response time but reasonable CPU/RAM | Varnish not running / slow external API | `get_server_services_status` + `get_app_varnish_settings` |
-| Traffic spike | DDoS / viral / bot | `get_app_analytics_traffic` (sources) |
+| Sustained CPU 100% | PHP heavy / DB heavy | `analytics_app_php` + `analytics_app_mysql` |
+| RAM 95%+ | memory leak / cache bloat | `service_status` + restart services |
+| High Disk I/O | swap / log writes / DB writes | `server_disk_usage_fetch` (init) + `monitoring_server_summary` (read) |
+| High response time but reasonable CPU/RAM | Varnish not running / slow external API | `service_status` + `app_varnish_settings_get` |
+| Traffic spike | DDoS / viral / bot | `analytics_app_traffic` (sources) |
 
 ---
 
@@ -105,13 +104,13 @@ Next action requires confirmation: clear_app_cache (W)
 
 **Sequence for each application:**
 
-1. `list_servers`
-2. For each server: `get_server_details` → list of apps
-3. For each app: `get_app_details` → `ssl` field with expiry date
+1. `server_list`
+2. For each server: `server_get` → list of apps
+3. For each app: `app_get` → inspect the SSL/expiry detail returned for the app
 4. Filter: SSL expiring within the next 30 days → flag for renewal
-5. For each flagged app: check whether `letsencrypt_auto_renewal=true`. If not — double flag.
+5. For each flagged app: confirm whether Let's Encrypt auto-renewal is enabled. SSL status and auto-renewal are not exposed as MCP tools — verify (and renew/configure) in the Cloudways Platform UI or via the direct Cloudways API (https://developers.cloudways.com/). If auto-renewal is off — double flag.
 
-> If Let's Encrypt auto-renewal is active, Cloudways renews 30 days before expiry. If it fails to renew (DNS issue, rate limit) — you'll get an alert. It's still worth reviewing manually once every two weeks.
+> If Let's Encrypt auto-renewal is active, Cloudways renews 30 days before expiry. If it fails to renew (DNS issue) — you'll get an alert. It's still worth reviewing manually once every two weeks. Note: SSL install/renew/revoke and auto-renewal are not MCP tools — handle them in the Cloudways UI or the direct API.
 
 ---
 
@@ -121,11 +120,11 @@ Next action requires confirmation: clear_app_cache (W)
 
 **Sequence:**
 
-1. `get_app_analytics_traffic` — bottom line: visitors, pageviews
-2. If a spike: source of the traffic? geographic distribution?
+1. `analytics_app_traffic` — bottom line: visitors, pageviews
+2. If a spike: source of the traffic? geographic distribution? (`analytics_app_traffic_details`)
 3. Compare to the same day in the previous week / previous month
-4. If a drop: `get_app_monitoring_summary` — did the error rate go up?
-5. Check `get_alerts` — maybe something is taking the site down
+4. If a drop: `monitoring_app_summary` — did the error rate go up?
+5. Check `copilot_insights_list` — maybe something is taking the site down
 
 > Cloudways analytics do not replace GA4/Plausible. They complement them with server-level metrics (raw bandwidth, requests). The two angles together give a good picture.
 
@@ -137,8 +136,8 @@ Next action requires confirmation: clear_app_cache (W)
 
 **Sequence:**
 
-1. `list_servers` — filter by label/project
-2. For two or three servers: `get_server_details` + `get_server_monitoring_detail` in parallel
+1. `server_list` — filter by label/project
+2. For two or three servers: `server_get` + `monitoring_server_graph` in parallel
 3. Compare: provider, region, size, RAM/CPU usage, applications
 
 **Tip:** Cloudways sometimes groups one client's apps on the same server. This can be a problem in production: a spike in one application affects the others. In an audit for a new client, this is the first thing to check.

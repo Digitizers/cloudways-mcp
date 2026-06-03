@@ -11,7 +11,7 @@ The skill is built for day-to-day infrastructure management: monitoring, mainten
 ├── SKILL.md                          # core: safety rules, multi-account, confirmation, patterns
 └── references/
     ├── installation.md               # Claude connection (official MCP) + multi-account config
-    ├── tools-catalog.md              # catalog of tools (illustrative), tagged R / W / W!
+    ├── tools-catalog.md              # official tool catalog, tagged R / W / W!
     ├── workflows-monitoring.md       # monitoring scenarios (read-only)
     ├── workflows-maintenance.md      # maintenance scenarios (write — requires confirmation)
     ├── workflows-onboarding.md       # audit/onboarding for a new client
@@ -26,7 +26,9 @@ The skill is built for day-to-day infrastructure management: monitoring, mainten
 
 ## Activation
 
-The skill activates automatically when Cloudways is discussed, as long as the skill is available and the MCP server is connected (the tools appear as `mcp__cloudways*__*`). For setup and connection — see [`installation.md`](.claude/skills/cloudways-mcp/references/installation.md) and [`.mcp.json.example`](.mcp.json.example). You will need the email + API key for each account (Cloudways Platform → Account → API).
+The skill activates automatically when Cloudways is discussed, as long as the skill is available and the MCP server is connected (the tools appear as `mcp__cloudways*__*`). For setup and connection — see [`installation.md`](.claude/skills/cloudways-mcp/references/installation.md) and [`.mcp.json.example`](.mcp.json.example).
+
+The official hosted MCP is at `https://mcp.cloudways.com/mcp/`. Authenticate with per-account request headers: `X-CW-Email`, `X-CW-Api-Key`, and `X-Mcp-Host` (the client name, e.g. `claude-code`). Generate the API key at [platform.cloudways.com](https://platform.cloudways.com/) → API Integration. One connection per account, named `cloudways-<client>`.
 
 ## Sources
 
@@ -34,5 +36,5 @@ The skill activates automatically when Cloudways is discussed, as long as the sk
 - [Cloudways Roadmap](https://www.cloudways.com/en/roadmap.php) (lists "Cloudways Remote MCP", Q2 2026)
 - [Cloudways API reference](https://developers.cloudways.com/)
 
-> Tool names in the catalog are illustrative — compiled from an earlier community MCP and not verified against the official server. The live `mcp__cloudways*__*` tools are authoritative.
+> The tool catalog is verified against the official support article. If it ever conflicts with what the live `mcp__cloudways*__*` tools return, the live MCP is authoritative.
 </content>

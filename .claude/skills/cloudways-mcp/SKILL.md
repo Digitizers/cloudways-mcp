@@ -1,19 +1,19 @@
 ---
 name: cloudways-mcp
-version: 1.1.0
+version: 1.2.0
 description: |
   Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the official Cloudways MCP server (Cloudways' hosted MCP / Remote MCP, per their support docs).
-  Use whenever the user mentions Cloudways, a Cloudways server or app, server monitoring, app monitoring, bandwidth, disk usage, PHP/MySQL/traffic analytics, SSH/MySQL IP whitelisting, Let's Encrypt or SSL on Cloudways, Varnish cache, app cloning, backups/restore on Cloudways, Git deployments on Cloudways, or running an audit/onboarding on a Cloudways-hosted client site.
-  Any write operation (start/stop/restart server, backup, restore, rollback, install/revoke SSL, update CNAME, change whitelist, clear cache, change service state, git pull) requires explicit confirmation of target server/app and intended action before execution.
+  Use whenever the user mentions Cloudways, a Cloudways server or app, server monitoring, app monitoring, bandwidth, disk usage, PHP/MySQL/traffic analytics, Varnish cache, app cloning, backups/restore on Cloudways, Git deployments on Cloudways, or running an audit/onboarding on a Cloudways-hosted client site. (SSL/Let's Encrypt and SSH/MySQL IP whitelisting are not MCP tools — do those in the Cloudways UI or direct API.)
+  Any write operation (start/stop/restart server, backup, restore, update CNAME, purge cache, change service state, git pull, delete server/app) requires explicit confirmation of target server/app and intended action before execution.
 ---
 
 # Cloudways MCP — Operational Skill
 
 Managing Cloudways infrastructure through the Cloudways MCP server.
 
-> **Connection:** This skill targets the **official Cloudways (Remote) MCP** — an MCP hosted by Cloudways (delivered Q2 2026) that you connect to directly. The source of truth for connecting is the **official article**: `support.cloudways.com/en/articles/14654372`. See `references/installation.md`.
+> **Connection:** This skill targets the **official Cloudways (Remote) MCP** — an MCP hosted by Cloudways at `https://mcp.cloudways.com/mcp/` that you connect to directly. The source of truth for connecting is the **official article**: `support.cloudways.com/en/articles/14654372`. See `references/installation.md`.
 >
-> **Tool names are illustrative.** The tool catalog and workflows in this skill were compiled from an earlier community MCP implementation and are **not verified** against the official server. Always treat the live `mcp__cloudways*__*` tools as the source of truth (see "Versioning and source of truth" below).
+> **Tool names match the official article.** The tool catalog and workflows in this skill use the official Cloudways MCP tool names (verified against the support article). Always treat the live `mcp__cloudways*__*` tools as the source of truth if Cloudways changes them (see "Versioning and source of truth" below).
 
 > **Context:** The skill is built for day-to-day work managing clients/environments on Cloudways — monitoring, routine maintenance, onboarding/audit for new clients, and automations. All monetary values reported by the API are in $ (USD), not ₪.
 
@@ -31,7 +31,7 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 | Building an automated workflow for n8n/Make/Claude Code | `references/workflows-automation.md` |
 | Multiple Cloudways accounts / multi-account configuration | `references/installation.md` (Multi-account section) |
 
-**Load only what's needed.** Maximum 2-3 references per task. If the user just asks "show me my servers", don't load the entire catalog — call `list_servers` directly.
+**Load only what's needed.** Maximum 2-3 references per task. If the user just asks "show me my servers", don't load the entire catalog — call `server_list` directly.
 
 ---
 
@@ -41,13 +41,13 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 
 2. **Write operations require explicit confirmation.** Before every call to a tool that belongs to the Write category (see list below), present to the user: **the account**, the tool name, the target server/application (ID + name), the parameters, the expected impact. Wait for a confirmation response before executing. Don't assume that confirming one operation grants confirmation for further operations — nor that confirmation on one account applies to another.
 
-3. **Backup before a significant change.** Before `restore_app`, `rollback_app_restore`, `reset_app_file_permissions`, `manage_server_varnish`, or any configuration change — check with the user whether a recent backup exists. If not, offer to run `backup_app` / `backup_server` first.
+3. **Backup before a significant change.** Before `app_restore`, `app_delete`, `varnish_manage`, `varnish_app_manage`, or any configuration change — check with the user whether a recent backup exists. If not, offer to run `app_backup` / `server_backup` first.
 
-4. **Multiple services = multiplied risk.** Cloudways usually hosts **several applications on the same server**. `stop_server` or `restart_server` affects **all** the applications. Always make sure the user is aware of the list of applications on the server before a server-level operation.
+4. **Multiple services = multiplied risk.** Cloudways usually hosts **several applications on the same server**. `server_stop`, `server_restart`, or `server_delete` affects **all** the applications. Always make sure the user is aware of the list of applications on the server before a server-level operation.
 
-5. **`revoke_letsencrypt` and `delete_app_cname` = immediate destruction in production.** Requires double confirmation: of both the operation and the specific domain/application.
+5. **`server_delete`, `app_delete`, and `app_cname_delete` = immediate destruction in production.** Requires double confirmation (W!): of both the operation and the specific domain/application/server.
 
-6. **Credentials.** Each account has its own API key + email, exposed through headers in the MCP. Don't print them in responses. Don't mix credentials between accounts. If the user asks to see them, refer them to Cloudways Platform → Account → API.
+6. **Credentials.** Each account has its own API key + email, passed through case-sensitive HTTP headers (`X-CW-Email`, `X-CW-Api-Key`). Don't print them in responses. Don't mix credentials between accounts. If the user asks to see them, refer them to platform.cloudways.com → API Integration.
 
 7. **Read-only by default.** If the user just asks "show me / check / monitor" — always choose the appropriate read-only tool. Don't suggest a destructive operation unless the user explicitly asked for it.
 
@@ -58,29 +58,26 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 For each of the following operations, **explicit confirmation is mandatory before execution**:
 
 **Server level (affects all applications on the server):**
-- `start_server`, `stop_server`, `restart_server`
-- `backup_server`
-- `optimize_server_disk`
-- `change_service_state` (Apache/Nginx/Memcached/MySQL/Varnish)
-- `manage_server_varnish`
+- `server_start`, `server_stop`, `server_restart`
+- `server_delete` ⚠️⚠️ (W! — immediate destruction)
+- `server_backup`
+- `service_start`, `service_stop`, `service_restart` (Apache/Nginx/Memcached/MySQL/Varnish)
+- `varnish_manage`
 
 **App level:**
-- `clone_app` (creates a new copy — consumes resources)
-- `backup_app`, `restore_app`, `rollback_app_restore`
-- `reset_app_file_permissions`
-- `enforce_app_https`
-- `update_app_cname`, `delete_app_cname` ⚠️ (can break production)
-- `clear_app_cache`, `manage_app_varnish`
+- `app_create`, `app_clone`, `app_clone_to_server` (create new copies — consume resources)
+- `app_backup`, `app_restore`
+- `app_delete` ⚠️⚠️ (W! — immediate destruction)
+- `app_enforce_https_update`
+- `app_cname_update`, `app_cname_delete` ⚠️ (can break production)
+- `app_purge_cache`, `varnish_app_manage`
 
-**Security & SSL:**
-- `install_ssl_certificate`, `remove_ssl_certificate` ⚠️
-- `install_letsencrypt`, `renew_letsencrypt`, `set_letsencrypt_auto_renewal`
-- `revoke_letsencrypt` ⚠️⚠️ (immediate destruction)
-- `update_whitelisted_ips`, `allow_ip_siab`, `allow_ip_adminer`
+> **SSL / Let's Encrypt and IP whitelisting (SSH/MySQL) are NOT MCP tools.** The official Cloudways MCP exposes no SSL, Let's Encrypt, or IP-whitelist tools. Do these in the Cloudways Platform UI or via the [direct Cloudways API](https://developers.cloudways.com/).
 
 **Git deployment:**
+
 - `git_clone`, `git_pull` (can break production if there's a conflict)
-- `generate_git_ssh_key`
+- `git_generate_key`
 
 ---
 
@@ -91,7 +88,7 @@ Before execution, present a block like this:
 ```
 🔒 Confirm operation execution?
    Account: clientA (mcp__cloudways-clientA)
-   Tool: stop_server
+   Tool: server_stop
    Server: production-shop-il (ID: 1234567)
    Applications affected: woocommerce-prod, staging-clone, admin-tools
    Impact: all 3 applications will be offline until a manual restart
@@ -104,9 +101,15 @@ Wait for an explicit response. A literal "yes" only = confirmation. Implied cons
 
 ## Authentication — quick overview
 
-Each account authenticates with its **Cloudways email + API key**, generated in Cloudways Platform → **Account → API**. The API key grants every action the account can perform in the UI — treat it like a password and never print it in responses.
+The official MCP is hosted at `https://mcp.cloudways.com/mcp/` and authenticates via three **case-sensitive** HTTP headers:
 
-How the credentials are passed depends on the connection method (follow the official article). For the full connection and multi-account setup, see `references/installation.md`.
+- `X-CW-Email` — the Cloudways account email
+- `X-CW-Api-Key` — the API key from platform.cloudways.com → **API Integration**
+- `X-Mcp-Host` — the client identifier, value `claude-code` or `claude-desktop`
+
+The API key has **full account access** — it grants every action the account can perform in the UI. There is **no granular / per-tool permission at the MCP layer**: any connected client can call any tool. Treat the key like a password and **never print it in responses**. If the user asks to see it, refer them to platform.cloudways.com → API Integration.
+
+For the full connection and multi-account setup, see `references/installation.md`.
 
 ---
 
@@ -115,9 +118,9 @@ How the credentials are passed depends on the connection method (follow the offi
 There are usually **multiple Cloudways accounts** (different clients / different environments). Each account is connected as a **separate** MCP connection with its own credentials, and therefore appears in Claude with **its own prefix**:
 
 ```
-mcp__cloudways-clientA__list_servers
-mcp__cloudways-clientB__list_servers
-mcp__cloudways-internal__list_servers
+mcp__cloudways-clientA__server_list
+mcp__cloudways-clientB__server_list
+mcp__cloudways-internal__server_list
 ```
 
 > The configuration (how multiple accounts are connected — one connection per account, each with its own credentials) is documented in `references/installation.md` section **Multi-account configuration**. The runtime rules are here.
@@ -158,26 +161,28 @@ Example tagging in the response:
 
 ### Quick snapshot of an account
 ```
-1. list_servers              → list of all servers
-2. get_alerts                → active alerts
-3. customer_info             → account details + plan status
+1. server_list               → list of all servers
+2. copilot_insights_list     → active insights/alerts
 ```
+
+(No account/whoami tool exists — infer the account from the connection prefix + `server_list`.)
 
 ### Health check before a weekend (production client)
 ```
-1. get_server_details        → CPU/RAM/disk
-2. get_server_monitoring_detail → metrics
-3. get_app_monitoring_summary   → for each application
-4. get_alerts                → open alerts
-5. get_server_disk_usage     → if disk > 80% — red flag
+1. server_get                   → CPU/RAM/disk
+2. monitoring_server_graph      → metrics (CPU/mem/etc.)
+3. monitoring_app_summary       → for each application
+4. copilot_insights_list        → open insights/alerts
+5. monitoring_server_summary    → disk/bandwidth; if disk > 80% — red flag
 ```
 
-### Renewing SSL before expiry
+### Checking an app's details
 ```
-1. get_app_details           → what's the correct FQDN
-2. renew_letsencrypt          ← write — requires confirmation
-3. get_app_details (again)    → verify the SSL was updated
+1. app_list                  → find the app
+2. app_get                   → details, FQDN, config
 ```
+
+(SSL / Let's Encrypt is **not an MCP tool** — manage and renew certificates in the Cloudways UI or via the direct Cloudways API.)
 
 For more detailed patterns, load the relevant workflows.
 
@@ -185,5 +190,6 @@ For more detailed patterns, load the relevant workflows.
 
 ## Versioning and source of truth
 
-- **The live MCP is the source of truth — always.** The tool names and categories in the catalog here were compiled from an earlier community MCP implementation and are **not verified** against Cloudways' official MCP, which may expose different names/capabilities. Before you declare that a tool exists/doesn't exist — **check the live list of tools** connected in Claude (`mcp__cloudways*__*`), and update the catalog accordingly.
-- **read-only vs. write — uncertain, so proceed with caution.** Sources conflict: some documented read-only-only (write "planned"), while this catalog assumed write operations exist. **Don't assume** — check against the live server which tools are available. In any case, every tool that makes a change **must** go through the confirmation pattern; this rule is safe even if in practice there's no write tool (in which case it simply isn't triggered).
+- **Tool names match the official article.** The tool names and categories in this catalog are **verified** against the official Cloudways support article. They are the official MCP tool names.
+- **The live MCP remains the source of truth if Cloudways changes them.** If a tool name or capability differs from what's documented here, the live list of tools connected in Claude (`mcp__cloudways*__*`) wins — check it and update the catalog accordingly.
+- **Every write tool still goes through the confirmation pattern.** W = single confirmation, W! = double-confirmation (destructive — e.g. `server_delete`, `app_delete`, `app_restore`, `app_cname_delete`), per `references/tools-catalog.md`. This discipline is **more** important now that the official destructive tools are confirmed to exist.

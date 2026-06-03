@@ -171,7 +171,7 @@ In automation via `claude -p` (headless mode), the MCP server keeps working as u
 # Here Claude calls the MCP tools itself and generates a summary
 claude -p "
 Generate today's Cloudways health summary.
-Check all servers (list_servers), get alerts, and identify:
+Check all servers (server_list), get alerts (copilot_insights_list), and identify:
 1. Any server not in Running status
 2. Any disk > 80%
 3. Any SSL expiring within 30 days
@@ -244,7 +244,7 @@ For automations that generate a lot of data (audit results, alerts log, deployme
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": "*Server:* prod-shop-il (1234567)\n*Issue:* SSL expired 2 hours ago\n*Affected apps:* shop.example.co.il, admin.example.co.il\n*Action:* renew_letsencrypt — pending human approval"
+        "text": "*Server:* prod-shop-il (1234567)\n*Issue:* SSL expired 2 hours ago\n*Affected apps:* shop.example.co.il, admin.example.co.il\n*Action:* renew SSL in the Cloudways Platform UI (no official MCP SSL tool) — pending human approval"
       }
     },
     {
@@ -291,11 +291,11 @@ Claude will see each of them as a separate MCP with its own prefix.
 
 ## 8. Rate limiting considerations
 
-The MCP enforces a per-account rate limit (check the current budget with `rate_limit_status`). In automation — be mindful:
+The MCP is a proxy in front of the Cloudways API, so it inherits whatever rate limits the underlying Cloudways API enforces. There is no documented, fixed per-minute MCP request budget, and there is no `rate_limit_status` tool — don't assume a specific number. In automation, be mindful:
 
-- **Daily summary** of 50 servers + 200 apps = ~250 reads. Under normal conditions — OK.
-- **Bulk audit** of a massive account — can exceed the budget quickly. Use `rate_limit_status` to check.
-- **Direct Cloudways API** has its own, separate rate limit. If the MCP rate limit gets in the way of massive automation — switch to the direct API.
+- **Daily summary** of 50 servers + 200 apps = ~250 reads. Under normal conditions — fine.
+- **Bulk audit** of a massive account — large bursts of requests can run into the upstream Cloudways API limits. Spread work out, batch sensibly, and add backoff/retry on errors rather than hammering.
+- **For very high-volume automation, prefer the direct Cloudways API** (`https://developers.cloudways.com/`). It's the supported path for heavy programmatic use and avoids the extra hop through the MCP.
 
 ---
 
