@@ -1,6 +1,6 @@
 # cloudways-mcp
 
-An operational [Claude Code Agent Skill](https://docs.claude.com/en/docs/claude-code/skills) for managing [Cloudways](https://www.cloudways.com/) infrastructure through the **official Cloudways (Remote) MCP server** — an MCP hosted by Cloudways (Q2 2026) that you connect to directly. The connection source of truth is the [official article](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management).
+An operational [Claude Code Agent Skill](https://docs.claude.com/en/docs/claude-code/skills) for managing [Cloudways](https://www.cloudways.com/) infrastructure through the **official Cloudways (Remote) MCP server** — a Cloudways-hosted MCP you connect to directly (listed as "Cloudways Remote MCP", Q2 2026, on the [Cloudways roadmap](https://www.cloudways.com/en/roadmap.php)). The connection source of truth is the [official article](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management).
 
 The skill is built for day-to-day infrastructure management: monitoring, maintenance, client onboarding/audit, and automations — with **support for multiple Cloudways accounts** and safety rules for write operations.
 

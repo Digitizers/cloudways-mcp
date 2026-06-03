@@ -1,6 +1,6 @@
 # Installation — Cloudways MCP Server
 
-This skill targets the **official Cloudways (Remote) MCP** — an MCP hosted by Cloudways (shipped Q2 2026) that you connect to directly, without self-hosting.
+This skill targets the **official Cloudways (Remote) MCP** — a Cloudways-hosted MCP you connect to directly, without self-hosting (listed as "Cloudways Remote MCP", Q2 2026, on the Cloudways roadmap; the connection details are per the official article below, not assumed here).
 
 > **The source of truth for connecting is the official article:**
 > https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management
