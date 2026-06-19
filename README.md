@@ -7,7 +7,7 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)
 ![Version](https://img.shields.io/badge/version-1.2.1-blue)
 
-A production-grade **Claude Code & OpenClaw skill** for managing [Cloudways](https://www.cloudways.com/) infrastructure through the official **Cloudways (Remote) MCP** — connect directly to the hosted server, run one or many accounts, with a safety rule on every write.
+A production-grade **Claude Code & OpenClaw skill** for managing [Cloudways](https://digitizer.li/cloudways) infrastructure through the official **Cloudways (Remote) MCP** — connect directly to the hosted server, run one or many accounts, with a safety rule on every write.
 
 This is not just a tool reference. It is an operational playbook for running Cloudways infrastructure responsibly: server and app monitoring, routine maintenance, client onboarding/audit, and automation — with write-confirmation guardrails on anything that changes state. The connection source of truth is the [official Cloudways article](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management).
 
