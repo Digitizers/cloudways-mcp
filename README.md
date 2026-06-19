@@ -60,6 +60,7 @@ The official hosted MCP is at `https://mcp.cloudways.com/mcp/`. Authenticate wit
 - **OpenClaw:** https://openclaw.ai
 - **Cloudways MCP article:** https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management
 - **Digitizer:** https://www.digitizer.studio
+- **Getting started with Cloudways:** https://www.digitizer.studio/cloudways-beginners-guide
 
 ## License
 
