@@ -69,4 +69,3 @@ MIT
 ---
 
 Built with ❤️ for OpenClaw by [Digitizer](https://www.digitizer.studio)
-</content>
