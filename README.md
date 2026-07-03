@@ -11,6 +11,18 @@ A production-grade **Claude Code & OpenClaw skill** for managing [Cloudways](htt
 
 This is not just a tool reference. It is an operational playbook for running Cloudways infrastructure responsibly: server and app monitoring, routine maintenance, client onboarding/audit, and automation — with write-confirmation guardrails on anything that changes state. The connection source of truth is the [official Cloudways article](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management).
 
+## Part of the Aura Design Engine
+
+These are the free skills behind [**Aura**](https://my-aura.app) — one AI web-agency lifecycle you can run standalone or orchestrate across a whole client fleet from a single dashboard.
+
+| Stage | Skill | Role |
+| --- | --- | --- |
+| 🎨 Build | [claude-elementor-pro](https://github.com/Digitizers/claude-elementor-pro) | Design & build sites inside Elementor |
+| 🔎 Audit + Content | [wordpress-api-pro](https://github.com/Digitizers/wordpress-api-pro) | REST content ops, SEO & site audits |
+| 🖥 Host | [**cloudways-mcp** ← you are here](https://github.com/Digitizers/cloudways-mcp) · [hostinger-mcp](https://github.com/Digitizers/hostinger-mcp) | Provision & operate the infrastructure |
+
+**→ Orchestrate all of it across your client fleet with [Aura](https://my-aura.app)** — governed agent ops with approvals and a full audit trail on top of these skills.
+
 ## Features
 
 - ✅ **Official Cloudways (Remote) MCP** — connect directly to the hosted server at `mcp.cloudways.com`; no self-hosting, no proxy to maintain.
