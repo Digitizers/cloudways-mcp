@@ -11,6 +11,32 @@ A production-grade **Claude Code & OpenClaw skill** for managing [Cloudways](htt
 
 This is not just a tool reference. It is an operational playbook for running Cloudways infrastructure responsibly: server and app monitoring, routine maintenance, client onboarding/audit, and automation — with write-confirmation guardrails on anything that changes state. The connection source of truth is the [official Cloudways article](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management).
 
+## Part of the Aura Design Engine
+
+These are the free skills behind [**Aura**](https://my-aura.app) — one AI web-agency lifecycle you can run standalone or orchestrate across a whole client fleet from a single dashboard.
+
+| Stage | Skill | Role |
+| --- | --- | --- |
+| 🎨 Build | [claude-elementor-pro](https://github.com/Digitizers/claude-elementor-pro) | Design & build sites inside Elementor |
+| 🔎 Audit + Content | [wordpress-api-pro](https://github.com/Digitizers/wordpress-api-pro) | REST content ops, SEO & site audits |
+| 🖥 Host | [**cloudways-mcp** ← you are here](https://github.com/Digitizers/cloudways-mcp) · [hostinger-mcp](https://github.com/Digitizers/hostinger-mcp) | Provision & operate the infrastructure |
+
+**→ Orchestrate all of it across your client fleet with [Aura](https://my-aura.app)** — governed agent ops with approvals and a full audit trail on top of these skills.
+
+## Solo, or with Aura
+
+This skill works standalone — point it at your own Cloudways account and run it from Claude Code. That's the **solo path**: you drive one account, and the write-confirmation guardrail on every state change keeps you safe.
+
+The **Aura path** is the same skill orchestrated across a whole client fleet — [Aura](https://my-aura.app) proxies these provider ops through its governed MCP gateway, adds queued human approvals and a full audit trail, and runs them across every server and app you manage from one dashboard, no per-account token juggling.
+
+| | Solo (this skill) | With Aura |
+| --- | --- | --- |
+| Scope | one account you hold keys for | every client account in your org |
+| Approvals | your own write-confirmation | queued admin approval + audit trail |
+| Best for | your own infra, quick ops | agencies operating many clients |
+
+Use it solo for your own boxes; reach for Aura when you operate a fleet on clients' behalf.
+
 ## Features
 
 - ✅ **Official Cloudways (Remote) MCP** — connect directly to the hosted server at `mcp.cloudways.com`; no self-hosting, no proxy to maintain.
