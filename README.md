@@ -23,6 +23,20 @@ These are the free skills behind [**Aura**](https://my-aura.app) — one AI web-
 
 **→ Orchestrate all of it across your client fleet with [Aura](https://my-aura.app)** — governed agent ops with approvals and a full audit trail on top of these skills.
 
+## Solo, or with Aura
+
+This skill works standalone — point it at your own Cloudways account and run it from Claude Code. That's the **solo path**: you drive one account, and the write-confirmation guardrail on every state change keeps you safe.
+
+The **Aura path** is the same skill orchestrated across a whole client fleet — [Aura](https://my-aura.app) proxies these provider ops through its governed MCP gateway, adds queued human approvals and a full audit trail, and runs them across every server and app you manage from one dashboard, no per-account token juggling.
+
+| | Solo (this skill) | With Aura |
+| --- | --- | --- |
+| Scope | one account you hold keys for | every client account in your org |
+| Approvals | your own write-confirmation | queued admin approval + audit trail |
+| Best for | your own infra, quick ops | agencies operating many clients |
+
+Use it solo for your own boxes; reach for Aura when you operate a fleet on clients' behalf.
+
 ## Features
 
 - ✅ **Official Cloudways (Remote) MCP** — connect directly to the hosted server at `mcp.cloudways.com`; no self-hosting, no proxy to maintain.
