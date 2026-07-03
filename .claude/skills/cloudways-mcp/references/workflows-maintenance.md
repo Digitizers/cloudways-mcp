@@ -115,9 +115,9 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 5. **CONFIRM step 2:** Type the app name to confirm restore
 6. **CONFIRM:** `app_restore` (W!) — full overwrite of the current state
 7. Check that the site works
-8. If there's a problem: roll back via the Cloudways UI within the limited time window (there is no MCP rollback tool)
+8. If the restore itself made things worse: **CONFIRM (W!):** `app_restore_rollback` — returns the app to its pre-restore files + database. This is available only within the limited rollback window (see below); after that, fall back to restoring an earlier backup or the Cloudways UI.
 
-> **Limited rollback window.** After a few hours / a day, rollback is no longer possible. Make sure the site works **on the same day** as the restore.
+> **Limited rollback window.** `app_restore_rollback` only works for a short time after the restore (a few hours / a day) — after that the pre-restore local snapshot is gone and rollback is no longer possible. Make sure the site works **on the same day** as the restore. (Note: `app_local_backup_delete` deletes that pre-restore snapshot immediately, which also forecloses the rollback.)
 
 ---
 
