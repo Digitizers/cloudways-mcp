@@ -4,7 +4,9 @@ The official tool catalog for the **Cloudways (Remote) MCP** (`https://mcp.cloud
 
 Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = destructive / irreversible (requires double confirmation).
 
-> The **live server is the source of truth.** Names below match the article, but always check the actual `mcp__cloudways*__*` tools connected in Claude — capabilities evolve. You do **not** need to memorize tool names to use the MCP (it resolves natural language), but knowing them sharpens prompts and lets you confirm an action maps to the tool you expect.
+> The **live server is the source of truth.** This catalog has been **reconciled against the live MCP** (enumerated via `list_available_toolsets` + `get_toolset_tools`): entries the live server does not expose have been removed (e.g. `server_packages`, which has no MCP tool — package discovery is raw-API only). Still, always check the actual `mcp__cloudways*__*` tools connected in Claude — capabilities evolve. You do **not** need to memorize tool names to use the MCP (it resolves natural language), but knowing them sharpens prompts and lets you confirm an action maps to the tool you expect.
+>
+> **Most tools are grouped into on-demand toolsets.** Only a subset appears in your default tool list; the rest live inside toolsets (`apps`, `servers`, `git`, `ssh_keys`, `projects`, `staging_management`, `dns_made_easy`, `cloudflare`, …) and are invoked through the `execute_tool` proxy. A tool being absent from the default list does **not** mean it is absent from the MCP — `git_*`, `project_*`, `ssh_key_*`, `app_restore_rollback`, `app_db_password_update`, `server_local_backup_delete`, and `staging_app_clone*` are all live via their toolsets.
 
 > ⚠️ **Not exposed by the official MCP** (per the article): **SSL / Let's Encrypt**, **SSH/MySQL IP whitelisting**, and **team-member management** have **no MCP tool**. Do those in the Cloudways Platform UI or via the [direct Cloudways API](https://developers.cloudways.com/). There is also no `ping` / `customer_info` / `rate_limit_status` tool — verify connectivity with `server_list` and identify the account by the connection prefix.
 
@@ -30,11 +32,10 @@ Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = de
 | `server_snapshot_frequency_update` | W | Configure snapshot frequency (AWS/GCE); empty disables. |
 | `server_backup_settings_update` | W | Update backup settings (frequency, retention, off-server/local). |
 | `server_local_backup_delete` | W! | Delete local backups stored on the server. |
-| `server_package_update` | W | Install/uninstall/upgrade packages (PHP, MySQL/MariaDB…). |
-| `server_packages` | R | Discover available packages for a server. |
+| `server_package_update` | W! | Install/uninstall/upgrade packages (PHP, MySQL/MariaDB…). Tagged W! because the **uninstall** action removes package data (destructive — double-confirm); install/upgrade are ordinary writes. Discover installable versions via Cloudways' raw `/packages` API endpoint — there is no MCP tool for package discovery. |
 | `server_maintenance_window_get` | R | Retrieve maintenance-window settings. |
 | `server_maintenance_window_update` | W | Set maintenance window (days + time slot). |
-| `server_master_username_update` | W | Update master username (SSH/SFTP). |
+| `server_master_username_update` | W! | Update master username (SSH/SFTP) — the old username stops working immediately. |
 | `server_master_password_update` | W! | Update master password (SSH/SFTP). |
 | `server_storage_attach` | W | Attach Block Storage volume (DigitalOcean only). |
 | `server_storage_scale` | W | Resize Block Storage volume (DigitalOcean only). |
@@ -59,17 +60,17 @@ Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = de
 | `app_local_backup_delete` | W! | Delete the local backup made during a restore. |
 | `app_credentials` | R | Get SSH/SFTP credentials for an app. |
 | `app_credentials_create` | W | Create an additional SSH/SFTP credential. |
-| `app_credentials_update` | W | Rename / change password of a credential. |
+| `app_credentials_update` | W! | Rename / change password of a credential — the old username/password stop working immediately. |
 | `app_credentials_delete` | W! | Delete an access credential. |
 | `app_purge_cache` | W | Clear all cache layers (app, Varnish, object). |
 | `app_update_label` | W | Rename an application. |
 | `app_vulnerabilities_list` | R | List WordPress vulnerabilities with severity scores. |
 | `app_vulnerabilities_refresh` | W | Trigger a new vulnerability scan. |
 | `app_cname_update` | W | Update the app's primary domain (CNAME). |
-| `app_cname_delete` | W | Delete the CNAME (revert to default Cloudways URL). |
+| `app_cname_delete` | W! | Delete the CNAME (revert to default Cloudways URL) — removes a customer-facing domain; can break production. |
 | `app_aliases_update` | W | Update secondary domains (aliases). |
 | `app_cron_list_get` | R | List scheduled cron jobs for an app. |
-| `app_cron_list_update` | W | Update the app's cron jobs. |
+| `app_cron_list_update` | W | Update the app's cron jobs. **Deprecated on the live MCP** — the underlying `/app/manageCronList` endpoint returns HTTP 500; use `app_cron_optimizer_update` for WP-Cron, or edit the crontab over SSH. |
 | `app_cron_optimizer_update` | W | Toggle Cron Optimizer (system cron vs WP-Cron). |
 | `app_db_password_update` | W! | Update the app's MySQL/MariaDB password. |
 | `app_symlink_update` | W | Change where `public_html` points. |
@@ -186,7 +187,7 @@ Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = de
 
 | Tool | Flag | What it does |
 |------|------|--------------|
-| `git_generate_key` | W | Generate a fresh SSH deploy key for an app. |
+| `git_generate_key` | W! | Generate a fresh SSH deploy key for an app — overwrites the previous deploy key, which stops working until the new public half is re-registered on the Git host. |
 | `git_key_get` | R | Retrieve the public deploy key (paste into GitHub/GitLab/Bitbucket). |
 | `git_branches_get` | R | Refresh/list branches in the linked repo. |
 | `git_clone` | W | Clone a repo/branch into the web root (initial link). |

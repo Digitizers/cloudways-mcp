@@ -1,6 +1,6 @@
 ---
 name: cloudways-mcp
-version: 1.2.1
+version: 1.2.2
 license: MIT
 description: |
   Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the official Cloudways MCP server (Cloudways' hosted MCP / Remote MCP, per their support docs).
@@ -52,33 +52,50 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 
 7. **Read-only by default.** If the user just asks "show me / check / monitor" — always choose the appropriate read-only tool. Don't suggest a destructive operation unless the user explicitly asked for it.
 
+8. **`execute_tool` / toolset-proxy calls inherit their target tool's R/W/W! risk.** Most tools live in on-demand toolsets and are invoked through the `execute_tool` proxy (or surfaced via `get_toolset_tools`). Calling a write/destructive tool through the proxy is exactly as consequential as calling it directly — apply the **same** confirmation (and double-confirmation for W!) as you would for the named tool.
+
 ---
 
-## Write operations — full list by category
+## Write operations require confirmation — the catalog is authoritative
 
-For each of the following operations, **explicit confirmation is mandatory before execution**:
+**The authoritative list is `references/tools-catalog.md`: every tool flagged `W` or `W!` there requires explicit confirmation before execution, and every `W!` requires the double-confirmation pattern.** The grouping below is **illustrative, not exhaustive** — the live MCP exposes ~150 tools across on-demand toolsets, most of which are not in your default tool list. If a tool is not named here but is flagged `W`/`W!` in the catalog (or its live schema describes a destructive/irreversible action), it needs the **same** confirmation. Never treat "it's not in this list" as "it's safe to run without confirmation."
 
 **Server level (affects all applications on the server):**
 - `server_start`, `server_stop`, `server_restart`
 - `server_delete` ⚠️⚠️ (W! — immediate destruction)
-- `server_backup`
+- `server_scale` ⚠️ (W! — resize CPU/RAM with brief downtime for every app on the server)
+- `server_backup`, `server_backup_settings_update`, `server_snapshot_frequency_update`
+- `server_local_backup_delete` ⚠️ (W! — permanently deletes local backup snapshots)
+- `server_package_update` (W! for the uninstall variant — removes a package + its data)
+- `server_master_username_update`, `server_master_password_update` ⚠️ (W! — old SSH/SFTP creds stop working immediately)
 - `service_start`, `service_stop`, `service_restart` (Apache/Nginx/Memcached/MySQL/Varnish)
 - `varnish_manage`
 
 **App level:**
-- `app_create`, `app_clone`, `app_clone_to_server` (create new copies — consume resources)
-- `app_backup`, `app_restore`
+- `app_create`, `app_clone`, `app_clone_to_server`, `staging_app_clone`, `staging_app_clone_to_server` (create new copies — consume resources)
+- `app_backup`, `app_restore` ⚠️⚠️ (W! — full overwrite of current state)
+- `app_restore_rollback` ⚠️ (W! — overwrites current state with the pre-restore copy; only within the rollback window)
+- `app_local_backup_delete` ⚠️ (W! — permanently deletes the local pre-restore snapshot)
 - `app_delete` ⚠️⚠️ (W! — immediate destruction)
-- `app_enforce_https_update`
-- `app_cname_update`, `app_cname_delete` ⚠️ (can break production)
+- `app_db_password_update`, `app_admin_password_update`, `app_credentials_update`, `app_credentials_delete` ⚠️ (W! — old credentials stop working immediately)
+- `app_enforce_https_update`, `app_stack_update`, `app_reset_permissions`, `app_wp_multisite_update`
+- `app_cname_update`, `app_cname_delete` ⚠️ (W! — can break production)
 - `app_purge_cache`, `varnish_app_manage`
+
+**DNS / Projects / SSH keys (live via their toolsets):**
+- `dns_made_easy_delete_domains`, `dns_made_easy_delete_records` ⚠️ (W! — DNS records/domains gone; can break mail + site resolution)
+- `project_delete` ⚠️ (W! — ungroups the project)
+- `ssh_key_delete` ⚠️ (W! — revokes SSH/SFTP access immediately)
+
+**Add-ons:**
+- `addon_activate`, `addon_activate_on_server`, `addon_deactivate`, `addon_deactivate_on_server` (W — can change the account subscription / incur cost)
 
 > **SSL / Let's Encrypt and IP whitelisting (SSH/MySQL) are NOT MCP tools.** The official Cloudways MCP exposes no SSL, Let's Encrypt, or IP-whitelist tools. Do these in the Cloudways Platform UI or via the [direct Cloudways API](https://developers.cloudways.com/).
 
 **Git deployment:**
 
 - `git_clone`, `git_pull` (can break production if there's a conflict)
-- `git_generate_key`
+- `git_generate_key` ⚠️ (W! — overwrites the app's existing deploy key; the old key stops working)
 
 ---
 

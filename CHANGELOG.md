@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.2 - 2026-07-03
+Codex review + live-MCP reconciliation:
+- Reframed SKILL.md write-ops list as illustrative; every W/W! tool in the catalog requires confirmation. Added missing live destructive tools (`server_scale`, `app_restore_rollback`, `app_local_backup_delete`, `server_local_backup_delete`, `app_db_password_update`, `app_admin_password_update`, `app_credentials_delete`, `server_master_password_update`, `dns_made_easy_delete_domains`/`_records`, `project_delete`, `ssh_key_delete`, add-on activation); removed catalog entries the live MCP does not expose (`server_packages`).
+- Reconciled the restore/rollback guidance with the live tool set: `app_restore_rollback` (W!) IS live, so the maintenance workflow now uses it within the rollback window instead of claiming "no MCP rollback tool."
+- SKILL.md now states `execute_tool`/toolset-proxy calls inherit their target's confirmation risk.
+- Marked `app_cron_list_update` deprecated (endpoint returns HTTP 500) in the catalog.
+
 ## 1.2.1 - 2026-06-04
 - Added three tools observed on the live server but missing from the catalog: `varnish_app_status` (R) and the toolset meta-tools `list_available_toolsets` / `get_toolset_tools` / `execute_tool`.
 - Publish workflow now sets the ClawHub display name to **Cloudways MCP** (`--name`) and pins the slug (`--slug cloudways-mcp`), so the listing reads "Cloudways MCP" instead of an auto-title-cased "Cloudways Mcp".
