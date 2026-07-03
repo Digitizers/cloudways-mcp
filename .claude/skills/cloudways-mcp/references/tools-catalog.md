@@ -32,7 +32,7 @@ Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = de
 | `server_snapshot_frequency_update` | W | Configure snapshot frequency (AWS/GCE); empty disables. |
 | `server_backup_settings_update` | W | Update backup settings (frequency, retention, off-server/local). |
 | `server_local_backup_delete` | W! | Delete local backups stored on the server. |
-| `server_package_update` | W | Install/uninstall/upgrade packages (PHP, MySQL/MariaDB…). Discover installable versions via Cloudways' raw `/packages` API endpoint — there is no MCP tool for package discovery. |
+| `server_package_update` | W! | Install/uninstall/upgrade packages (PHP, MySQL/MariaDB…). Tagged W! because the **uninstall** action removes package data (destructive — double-confirm); install/upgrade are ordinary writes. Discover installable versions via Cloudways' raw `/packages` API endpoint — there is no MCP tool for package discovery. |
 | `server_maintenance_window_get` | R | Retrieve maintenance-window settings. |
 | `server_maintenance_window_update` | W | Set maintenance window (days + time slot). |
 | `server_master_username_update` | W! | Update master username (SSH/SFTP) — the old username stops working immediately. |
