@@ -25,8 +25,10 @@ The MCP saves time in an interactive context. In automation — overhead.
 
 ### Authentication flow
 
+> **The `email` + `api_key` OAuth exchange below is the legacy flow — the API key stops working on October 15, 2026.** Cloudways is moving direct-API auth to **Access Tokens** (generated in the platform's API section, with READ / LIMITED / FULL ACCESS roles; see [API v2](https://www.cloudways.com/blog/introducing-cloudways-api-v2/) and the [Access Tokens article](https://support.cloudways.com/en/articles/5136065)). New automations should use an Access Token; migrate existing ones before the EOL date.
+
 ```bash
-# Step 1: get access token
+# LEGACY (works until 2026-10-15): exchange email+api_key for a short-lived token
 TOKEN=$(curl -sX POST "https://api.cloudways.com/api/v1/oauth/access_token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "email=$CLOUDWAYS_EMAIL&api_key=$CLOUDWAYS_API_KEY" \
@@ -37,7 +39,7 @@ curl -sH "Authorization: Bearer $TOKEN" \
      "https://api.cloudways.com/api/v1/server"
 ```
 
-The token is valid for a limited time (about an hour). In long-running automation, regenerate it.
+The short-lived token is valid for about an hour. In long-running automation, regenerate it.
 
 ### Common endpoints
 
@@ -133,7 +135,7 @@ A dedicated Make.com Custom App (if built) can wrap the API in more convenient m
 [HTTP — Make a request]
   URL: https://api.cloudways.com/api/v1/oauth/access_token
   Method: POST
-  Body: email=...&api_key=...
+  Body: email=...&api_key=...   ← legacy flow; API key EOL 2026-10-15 — switch to an Access Token
   → extract access_token
 
 [HTTP — Make a request]
@@ -244,7 +246,7 @@ For automations that generate a lot of data (audit results, alerts log, deployme
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": "*Server:* prod-shop-il (1234567)\n*Issue:* SSL expired 2 hours ago\n*Affected apps:* shop.example.co.il, admin.example.co.il\n*Action:* renew SSL in the Cloudways Platform UI (no official MCP SSL tool) — pending human approval"
+        "text": "*Server:* prod-shop-il (1234567)\n*Issue:* SSL expired 2 hours ago\n*Affected apps:* shop.example.co.il, admin.example.co.il\n*Action:* renew via `security_lets_encrypt_renew` (W) or the Cloudways UI — pending human approval"
       }
     },
     {
@@ -303,9 +305,9 @@ The MCP is a proxy in front of the Cloudways API, so it inherits whatever rate l
 
 ❌ **Auto-execute write operations** without human-in-the-loop. Even if it looks safe, don't.
 
-❌ **Logging credentials.** Make sure the n8n / Make logs don't display the API key. Use the internal credential store.
+❌ **Logging credentials.** Make sure the n8n / Make logs don't display the Access Token (or legacy API key). Use the internal credential store.
 
-❌ **Credentials in shared or committed config.** Keep each account's API key in a secrets manager / local git-ignored config — never in a workflow body or a committed file.
+❌ **Credentials in shared or committed config.** Keep each account's Access Token in a secrets manager / local git-ignored config — never in a workflow body or a committed file. Scope automation tokens to the minimum role (READ for reporting loops).
 
 ❌ **Use MCP for monitoring loops.** For continuous monitoring (every 30 seconds), switch to the direct API. The MCP overhead isn't worth it.
 

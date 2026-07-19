@@ -10,8 +10,8 @@ Core scenario: a new client arrives with a site on Cloudways, and you need to bu
 
 Confirm with the client:
 - [ ] API access approved on their side
-- [ ] New API key (don't share with their old team)
-- [ ] If there are old team members who don't need access — add this at this point (not via MCP — UI only)
+- [ ] A **new Access Token** generated for this engagement (READ role for the audit phase; don't reuse tokens their old team held — old tokens should be revoked)
+- [ ] If there are old team members who don't need access — plan the removal now; as of MCP v1.2 the roster is auditable via `team_member_list` (R) and removal is `team_member_delete` (W! — double-confirm, do it only after the audit)
 
 ---
 
@@ -23,7 +23,7 @@ Confirm with the client:
 3. copilot_insights_list       → insights, alerts, and recommendations currently open
 ```
 
-> **No MCP tool for:** account/plan/billing status (`customer_info`), team-member roster (`list_team_members`), or SSH-key listing. Plan/billing and the team roster are checked in the Cloudways Platform UI; SSH keys are managed via `ssh_key_create` / `ssh_key_update` / `ssh_key_delete` but there is no read/list tool — confirm SSH access in the UI or via the direct Cloudways API (<https://developers.cloudways.com/>).
+> **No MCP tool for:** account/plan/billing status (`customer_info`) or SSH-key listing. Plan/billing is checked in the Cloudways Platform UI; SSH keys are managed via `ssh_key_create` / `ssh_key_update` / `ssh_key_delete` but there is no read/list tool — confirm SSH access in the UI or via the direct Cloudways API (<https://developers.cloudways.com/>). The **team-member roster IS available** as of MCP v1.2: `team_member_list` (R) returns sub-users with roles and server/app access.
 
 **Deliverables you record:**
 
@@ -34,7 +34,7 @@ Confirm with the client:
 | Providers in use | (DO/AWS/GCP/Vultr) |
 | Regions | |
 | Total monthly $ Cloudways (estimate) | |
-| Team members + permissions | (UI only) |
+| Team members + permissions | (`team_member_list`) |
 | SSH keys (don't publish — only a count) | (UI / direct API) |
 | Open insights/alerts | (copilot_insights_list) |
 
@@ -109,23 +109,27 @@ For each application (per the app list from the previous stage):
 ## Stage 4 — Security audit
 
 ```
-1. app_settings_get            → per-app security flags (XML-RPC enabled? password protection?)
-2. app_vulnerabilities_list    → (WordPress) open plugin/theme/core vulnerabilities
-3. copilot_insights_list       → security-related insights/recommendations Cloudways has surfaced
+1. app_settings_get                    → per-app security flags (XML-RPC enabled? password protection?)
+2. app_vulnerabilities_list            → (WordPress) open plugin/theme/core vulnerabilities
+3. copilot_insights_list               → security-related insights/recommendations Cloudways has surfaced
+4. security_get_whitelisted_ips        → (v1.2) SSH/SFTP IP whitelist per server
+5. security_get_whitelisted_ips_mysql  → (v1.2) MySQL IP whitelist per server
+6. team_member_list                    → (v1.2) who still has access, with which role
+7. security_suite_app_status_get       → (v1.2, if Security Suite is active) protection status per app
+8. security_suite_server_incidents_list→ (v1.2) open security incidents on each server
 ```
 
-> **No MCP tools for IP whitelisting or SSH-key listing.** The SSH IP whitelist, MySQL IP whitelist, and the stored-SSH-key roster are **not** exposed by the official Cloudways MCP. Audit these in the Cloudways Platform UI (Server → Security) or via the direct Cloudways API (<https://developers.cloudways.com/>). The same goes for the team-member roster (who still has access) — UI / API only.
+> **Still no MCP tool for SSH-key listing.** SSH keys are managed via `ssh_key_create` / `ssh_key_update` / `ssh_key_delete` but there is no read/list tool — audit the stored-key roster in the Cloudways Platform UI (Server → Security) or via the direct Cloudways API (<https://developers.cloudways.com/>).
 
-**Red flags (check in the UI / API):**
+**Red flags (now readable via MCP; SSH-key roster still UI/API):**
 - [ ] SSH whitelist empty = open to the world (critical)
 - [ ] MySQL whitelist empty = open to the world (security disaster)
-- [ ] Old SSH keys whose owners are unclear
-- [ ] The old team member still has access
+- [ ] Old SSH keys whose owners are unclear (UI/API)
+- [ ] The old team member still has access (`team_member_list`)
 - [ ] Access not only for client employees but also for employees who have left
-
-**Red flags (from MCP):**
 - [ ] XML-RPC left enabled on WordPress (`app_settings_get`) = brute-force/DDoS vector
 - [ ] Open vulnerabilities reported by `app_vulnerabilities_list`
+- [ ] Open Security Suite incidents / infected domains (`security_suite_server_incidents_list`, `security_suite_server_infected_domains_list`)
 
 ---
 

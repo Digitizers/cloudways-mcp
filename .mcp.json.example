@@ -1,12 +1,11 @@
 {
-  "_comment": "Copy to .mcp.json (gitignored) and fill in real credentials; never commit them. One connection per Cloudways account, named cloudways-<client>. Endpoint and headers follow the official support article (https://support.cloudways.com/en/articles/14654372): the hosted MCP is at https://mcp.cloudways.com/mcp/, authenticated via case-sensitive headers X-CW-Email, X-CW-Api-Key, and X-Mcp-Host. Get the API key at platform.cloudways.com -> API Integration.",
+  "_comment": "Copy to .mcp.json (gitignored) and fill in real credentials; never commit them. One connection per Cloudways account, named cloudways-<client>. Endpoint and headers follow the official support article (https://support.cloudways.com/en/articles/14654372): the hosted MCP is at https://mcp.cloudways.com/mcp/, authenticated via the case-sensitive headers X-Access-Token and X-Mcp-Host. Generate an Access Token at platform.cloudways.com (API section) with the minimum role the connection needs: READ for monitoring-only, LIMITED for specific workflows, FULL ACCESS only when changes are required. Legacy X-CW-Email/X-CW-Api-Key headers are deprecated; the old API key stops working on October 15, 2026.",
   "mcpServers": {
     "cloudways-clientA": {
       "type": "http",
       "url": "https://mcp.cloudways.com/mcp/",
       "headers": {
-        "X-CW-Email": "clientA@example.com",
-        "X-CW-Api-Key": "CLIENT_A_API_KEY",
+        "X-Access-Token": "CLIENT_A_ACCESS_TOKEN",
         "X-Mcp-Host": "claude-code"
       }
     },
@@ -14,8 +13,7 @@
       "type": "http",
       "url": "https://mcp.cloudways.com/mcp/",
       "headers": {
-        "X-CW-Email": "clientB@example.com",
-        "X-CW-Api-Key": "CLIENT_B_API_KEY",
+        "X-Access-Token": "CLIENT_B_ACCESS_TOKEN",
         "X-Mcp-Host": "claude-code"
       }
     }

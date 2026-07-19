@@ -49,14 +49,14 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **When:** SSL is approaching expiry and there is no auto-renewal / auto-renewal failed
 
-> **GAP — not available via the MCP.** The official Cloudways MCP exposes **no SSL/Let's Encrypt tools** (no install, renew, revoke, or auto-renewal toggle). Perform SSL operations in the **Cloudways Platform UI** (Application → SSL Certificate) or via the **direct Cloudways API** (https://developers.cloudways.com/). The MCP can still help you *diagnose* and *verify* around the manual SSL step.
+> **Covered by the MCP as of v1.2** via the security toolset: `security_lets_encrypt_install` (W), `security_lets_encrypt_renew` (W), `security_lets_encrypt_auto_renewal` (W), `security_lets_encrypt_revoke` (W!). For wildcard certs: `security_create_dns` + `security_verify_dns` handle the DNS-01 challenge.
 
 **Sequence:**
 
 1. `app_get` — check the domain and read what you can about the app's current state
 2. Check that the DNS still points to the server (critical for LE validation)
-3. **Do the renewal in the Cloudways UI** (Application → SSL Certificate → Renew) or via the direct API. There is no MCP tool for this.
-4. **Enable auto-renewal in the UI** if it wasn't active — there is no MCP tool for this either.
+3. **CONFIRM:** `security_lets_encrypt_renew` (W) — or `security_lets_encrypt_install` (W) if no cert was issued yet. For a wildcard domain, run `security_create_dns`, publish the returned TXT record at the DNS host, then `security_verify_dns`.
+4. **CONFIRM:** `security_lets_encrypt_auto_renewal` (W) — turn auto-renewal on if it wasn't active.
 5. `app_get` — re-read and verify the app looks healthy; confirm the cert in the browser
 
 **If renewal fails:**
@@ -70,15 +70,16 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **When:** The client purchased a cert from another CA (DigiCert, Sectigo, etc.), not Let's Encrypt
 
-> **GAP — not available via the MCP.** The official MCP has **no tool to install or remove a custom SSL certificate**. Do this in the **Cloudways Platform UI** (Application → SSL Certificate → Custom SSL) or via the **direct Cloudways API** (https://developers.cloudways.com/).
+> **Partially covered by the MCP as of v1.2:** `security_csr_create` (W) / `security_csr_get` (R) generate and retrieve the CSR, and `security_remove_own_ssl` (W!) removes an installed custom cert. The **install/paste step itself** is still done in the **Cloudways Platform UI** (Application → SSL Certificate → Custom SSL) or via the [direct API](https://developers.cloudways.com/) — verify against the live MCP, and prefer the UI if no install tool is exposed.
 
 **Sequence:**
 
-1. Collect from the client: certificate, private key, ca bundle
-2. `app_get` — confirm target
-3. **Install the custom cert in the Cloudways UI** (paste cert + key) or via the direct API. There is no MCP tool for this.
-4. Check SSL from the browser (SSL Labs grade A+ preferred)
-5. If Let's Encrypt was active — decide: keep as backup or revoke (also a UI/API action)
+1. **CONFIRM:** `security_csr_create` (W) if the CA needs a CSR from the server; retrieve with `security_csr_get`
+2. Collect from the client: certificate, private key, ca bundle
+3. `app_get` — confirm target
+4. **Install the custom cert in the Cloudways UI** (paste cert + key) — check the live MCP first; if no install tool is exposed, this step stays manual.
+5. Check SSL from the browser (SSL Labs grade A+ preferred)
+6. If Let's Encrypt was active — decide: keep as backup or revoke (`security_lets_encrypt_revoke`, W! — double-confirm)
 
 > Warning: Installing a custom cert **cancels** the Let's Encrypt cert if one was active. Make sure you have the custom cert in hand **before** you start.
 
@@ -145,16 +146,16 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **When:** Adding a key for a team member, or removing access for an old IP
 
-> **GAP — not available via the MCP.** The official MCP has **no IP-whitelisting tools** (no read or update of SSH/MySQL whitelisted IPs). Manage the whitelist in the **Cloudways Platform UI** (Server → Security → Application/Server IP Whitelisting) or via the **direct Cloudways API** (https://developers.cloudways.com/). The discipline below still applies — just execute the change in the UI/API, not via a tool.
+> **Covered by the MCP as of v1.2** via the security toolset: `security_get_whitelisted_ips` (R, SSH/SFTP), `security_get_whitelisted_ips_mysql` (R), and `security_update_whitelisted_ips` (W! — **replaces** the whole list, not an append). Web-SSH / Adminer access: `security_whitelist_ip_siab` / `security_whitelist_ip_adminer` (W).
 
 **Sequence:**
 
-1. **Read the current whitelist in the Cloudways UI** — what's there now (no MCP tool for this)
-2. Plan the new list — **including your own IP**
+1. `security_get_whitelisted_ips` (or `_mysql`) — read what's there **now**
+2. Plan the new list — **including your own IP** (the update **replaces** the list; anything you omit is removed)
 3. **CONFIRM:** Show the user: "The new list is: [...]. Does your IP X.X.X.X stay on the list? yes/no"
 4. If the user is missing from the list — **stop and clarify**
-5. **Apply the change in the Cloudways UI** or via the direct API. There is no MCP tool for this.
-6. **VERIFY:** Try SSH immediately (if it doesn't work — Cloudways support to restore)
+5. **Double CONFIRM (W!):** `security_update_whitelisted_ips` with the complete new list
+6. **VERIFY:** re-read the list, then try SSH immediately (if it doesn't work — Cloudways support to restore)
 
 > **Nightmare scenario to avoid:** updating the whitelist + removing your own IP + no alternative SSH. The only way out — the Cloudways UI (panic) or a support ticket (time). Be careful.
 
@@ -183,7 +184,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 **Sequence:**
 
 1. `app_get` — check that a valid SSL is installed
-2. If there's no SSL: install one first **in the Cloudways UI** (Application → SSL Certificate) or via the direct Cloudways API — there is **no MCP SSL tool** (see sections 2 and 3). Enforcing HTTPS without a valid cert will break the site.
+2. If there's no SSL: install one first — `security_lets_encrypt_install` (W, see sections 2 and 3). Enforcing HTTPS without a valid cert will break the site.
 3. **CONFIRM:** `app_enforce_https_update` (W) — toggles the HTTP→HTTPS redirect (this is separate from installing the cert)
 4. Check that the redirect works: `curl -I http://example.com` → 301 to HTTPS
 

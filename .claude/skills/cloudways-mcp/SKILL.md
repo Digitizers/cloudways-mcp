@@ -1,11 +1,11 @@
 ---
 name: cloudways-mcp
-version: 1.2.2
+version: 1.3.0
 license: MIT
 description: |
   Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the official Cloudways MCP server (Cloudways' hosted MCP / Remote MCP, per their support docs).
-  Use whenever the user mentions Cloudways, a Cloudways server or app, server monitoring, app monitoring, bandwidth, disk usage, PHP/MySQL/traffic analytics, Varnish cache, app cloning, backups/restore on Cloudways, Git deployments on Cloudways, or running an audit/onboarding on a Cloudways-hosted client site. (SSL/Let's Encrypt and SSH/MySQL IP whitelisting are not MCP tools — do those in the Cloudways UI or direct API.)
-  Any write operation (start/stop/restart server, backup, restore, update CNAME, purge cache, change service state, git pull, delete server/app) requires explicit confirmation of target server/app and intended action before execution.
+  Use whenever the user mentions Cloudways, a Cloudways server or app, server monitoring, app monitoring, bandwidth, disk usage, PHP/MySQL/traffic analytics, Varnish cache, app cloning, backups/restore on Cloudways, Git deployments on Cloudways, SSL/Let's Encrypt on Cloudways, malware scans / Security Suite, staging sync, team members, client billing/AgencyOS, or running an audit/onboarding on a Cloudways-hosted client site.
+  Any write operation (start/stop/restart server, backup, restore, update CNAME, purge cache, change service state, git pull, SSL install/revoke, IP whitelist update, staging sync, team/billing changes, delete server/app) requires explicit confirmation of target server/app and intended action before execution.
 ---
 
 # Cloudways MCP — Operational Skill
@@ -14,7 +14,7 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 
 > **Connection:** This skill targets the **official Cloudways (Remote) MCP** — an MCP hosted by Cloudways at `https://mcp.cloudways.com/mcp/` that you connect to directly. The source of truth for connecting is the **official article**: `support.cloudways.com/en/articles/14654372`. See `references/installation.md`.
 >
-> **Tool names match the official article.** The tool catalog and workflows in this skill use the official Cloudways MCP tool names (verified against the support article). Always treat the live `mcp__cloudways*__*` tools as the source of truth if Cloudways changes them (see "Versioning and source of truth" below).
+> **Tool names match the official articles.** The tool catalog and workflows in this skill use the official Cloudways MCP tool names (verified against the setup article and the dedicated [tools article](https://support.cloudways.com/en/articles/15798823-cloudways-mcp-server-tools)). Always treat the live `mcp__cloudways*__*` tools as the source of truth if Cloudways changes them (see "Versioning and source of truth" below).
 
 > **Context:** The skill is built for day-to-day work managing clients/environments on Cloudways — monitoring, routine maintenance, onboarding/audit for new clients, and automations. All monetary values reported by the API are in $ (USD), not ₪.
 
@@ -48,7 +48,7 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 
 5. **`server_delete`, `app_delete`, and `app_cname_delete` = immediate destruction in production.** Requires double confirmation (W!): of both the operation and the specific domain/application/server.
 
-6. **Credentials.** Each account has its own API key + email, passed through case-sensitive HTTP headers (`X-CW-Email`, `X-CW-Api-Key`). Don't print them in responses. Don't mix credentials between accounts. If the user asks to see them, refer them to platform.cloudways.com → API Integration.
+6. **Credentials.** Each account authenticates with its own **Access Token**, passed through the case-sensitive HTTP header `X-Access-Token` (the legacy `X-CW-Email` + `X-CW-Api-Key` API-key headers are deprecated — the API key stops working **October 15, 2026**). Don't print tokens in responses. Don't mix credentials between accounts. If the user asks to see them, refer them to platform.cloudways.com → API section (where Access Tokens are generated).
 
 7. **Read-only by default.** If the user just asks "show me / check / monitor" — always choose the appropriate read-only tool. Don't suggest a destructive operation unless the user explicitly asked for it.
 
@@ -58,7 +58,7 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 
 ## Write operations require confirmation — the catalog is authoritative
 
-**The authoritative list is `references/tools-catalog.md`: every tool flagged `W` or `W!` there requires explicit confirmation before execution, and every `W!` requires the double-confirmation pattern.** The grouping below is **illustrative, not exhaustive** — the live MCP exposes ~150 tools across on-demand toolsets, most of which are not in your default tool list. If a tool is not named here but is flagged `W`/`W!` in the catalog (or its live schema describes a destructive/irreversible action), it needs the **same** confirmation. Never treat "it's not in this list" as "it's safe to run without confirmation."
+**The authoritative list is `references/tools-catalog.md`: every tool flagged `W` or `W!` there requires explicit confirmation before execution, and every `W!` requires the double-confirmation pattern.** The grouping below is **illustrative, not exhaustive** — the live MCP (v1.2) exposes ~244 tools across on-demand toolsets, most of which are not in your default tool list. If a tool is not named here but is flagged `W`/`W!` in the catalog (or its live schema describes a destructive/irreversible action), it needs the **same** confirmation. Never treat "it's not in this list" as "it's safe to run without confirmation."
 
 **Server level (affects all applications on the server):**
 - `server_start`, `server_stop`, `server_restart`
@@ -90,7 +90,20 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 **Add-ons:**
 - `addon_activate`, `addon_activate_on_server`, `addon_deactivate`, `addon_deactivate_on_server` (W — can change the account subscription / incur cost)
 
-> **SSL / Let's Encrypt and IP whitelisting (SSH/MySQL) are NOT MCP tools.** The official Cloudways MCP exposes no SSL, Let's Encrypt, or IP-whitelist tools. Do these in the Cloudways Platform UI or via the [direct Cloudways API](https://developers.cloudways.com/).
+**Security — SSL & IP access (new in MCP v1.2):**
+- `security_lets_encrypt_install`, `security_lets_encrypt_renew`, `security_lets_encrypt_auto_renewal`
+- `security_lets_encrypt_revoke`, `security_remove_own_ssl` ⚠️ (W! — HTTPS breaks until a new cert is installed)
+- `security_update_whitelisted_ips` ⚠️ (W! — **replaces** the SSH/SFTP or MySQL whitelist; a wrong list locks people out — always read the current list first)
+- `security_whitelist_ip_siab`, `security_whitelist_ip_adminer`
+
+**Security Suite / staging / team / transfer (new in MCP v1.2):**
+- `security_suite_app_files_restore` ⚠️ (W! — restoring quarantined files can put malware back on the live site)
+- `security_suite_server_countries_blacklist_update` ⚠️ (W! — blocks all traffic from entire countries)
+- `staging_sync_tables`, `staging_sync_code` ⚠️ (W! — overwrite data/code on the target; confirm **direction** — a push to live overwrites production)
+- `team_member_update`, `team_member_delete` ⚠️ (W! — changes/revokes a person's access)
+- `server_transfer_request` ⚠️ (W! — hands server **ownership** to another Cloudways account)
+- `billing_*` / `agency_os_*` create/update/delete (W — client-facing financial records; `billing_invoice_reminder_send` emails the client)
+- `copilot_subscribe`, `copilot_plan_change`, `addon_upgrade` (W — change the account's subscription cost)
 
 **Git deployment:**
 
@@ -119,13 +132,22 @@ Wait for an explicit response. A literal "yes" only = confirmation. Implied cons
 
 ## Authentication — quick overview
 
-The official MCP is hosted at `https://mcp.cloudways.com/mcp/` and authenticates via three **case-sensitive** HTTP headers:
+The official MCP is hosted at `https://mcp.cloudways.com/mcp/` and authenticates via two **case-sensitive** HTTP headers:
 
-- `X-CW-Email` — the Cloudways account email
-- `X-CW-Api-Key` — the API key from platform.cloudways.com → **API Integration**
-- `X-Mcp-Host` — the client identifier, value `claude-code` or `claude-desktop`
+- `X-Access-Token` — a Cloudways **Access Token** generated in the platform (same place the old API key lived)
+- `X-Mcp-Host` — the client identifier; official values: `claude-code`, `claude-desktop`, `cursor`, `windsurf`, `vs-code`, `gemini-cli`, `codex`, `codex-cli`
 
-The API key has **full account access** — it grants every action the account can perform in the UI. There is **no granular / per-tool permission at the MCP layer**: any connected client can call any tool. Treat the key like a password and **never print it in responses**. If the user asks to see it, refer them to platform.cloudways.com → API Integration.
+**Access Tokens are role-based (RBAC).** Three scopes exist:
+
+- **READ** — look-ups only (status, config, monitoring); no changes possible. Ideal for monitoring-only connections.
+- **LIMITED** — only the endpoint groups you select.
+- **FULL ACCESS** — everything the account can do, including destructive actions.
+
+Start every new integration with a **READ** token; move to LIMITED for specific workflows; reserve FULL ACCESS for connections that genuinely need to make changes. This platform-level control **complements** (does not replace) this skill's write-confirmation discipline.
+
+> **Legacy:** the old `X-CW-Email` + `X-CW-Api-Key` API-key headers are deprecated — the API key stops working on **October 15, 2026**. Migrate every connection to an Access Token before then.
+
+Treat tokens like passwords and **never print them in responses**. If the user asks to see one, refer them to platform.cloudways.com.
 
 For the full connection and multi-account setup, see `references/installation.md`.
 
@@ -155,7 +177,7 @@ mcp__cloudways-internal__server_list
 
 - **IDs don't cross accounts.** A server_id / app_id you received from `mcp__cloudways-clientA` is valid **only** against clientA. Never take an ID from one account's response and pass it to a tool of another connection.
 - **Per-account confirmation.** A write confirmation on one account does not apply to another. Every write operation on a new account = a new confirmation block (including the account line).
-- **Credentials don't mix.** Each connection has its own email + API key. Don't assume the same credentials work on another account.
+- **Credentials don't mix.** Each connection has its own Access Token. Don't assume the same credentials work on another account.
 
 ### Cross-account search (read only)
 
@@ -200,7 +222,7 @@ Example tagging in the response:
 2. app_get                   → details, FQDN, config
 ```
 
-(SSL / Let's Encrypt is **not an MCP tool** — manage and renew certificates in the Cloudways UI or via the direct Cloudways API.)
+(SSL / Let's Encrypt **is** an MCP tool as of v1.2 — `security_lets_encrypt_install` / `_renew` / `_auto_renewal` / `_revoke`, via the security toolset. Install/renew are W; revoke is W!.)
 
 For more detailed patterns, load the relevant workflows.
 
@@ -208,6 +230,6 @@ For more detailed patterns, load the relevant workflows.
 
 ## Versioning and source of truth
 
-- **Tool names match the official article.** The tool names and categories in this catalog are **verified** against the official Cloudways support article. They are the official MCP tool names.
+- **Tool names match the official articles.** The tool names and categories in this catalog are **verified** against the official Cloudways support articles (setup + tools reference, MCP v1.2). They are the official MCP tool names. The v1.2 additions have not yet been re-enumerated against the live server — see the note in `references/tools-catalog.md`.
 - **The live MCP remains the source of truth if Cloudways changes them.** If a tool name or capability differs from what's documented here, the live list of tools connected in Claude (`mcp__cloudways*__*`) wins — check it and update the catalog accordingly.
 - **Every write tool still goes through the confirmation pattern.** W = single confirmation, W! = double-confirmation (destructive — e.g. `server_delete`, `app_delete`, `app_restore`, `app_cname_delete`), per `references/tools-catalog.md`. This discipline is **more** important now that the official destructive tools are confirmed to exist.
