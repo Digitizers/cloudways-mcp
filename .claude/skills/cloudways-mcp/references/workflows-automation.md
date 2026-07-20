@@ -23,23 +23,23 @@ The MCP saves time in an interactive context. In automation — overhead.
 
 ## 1. Cloudways API direct (for automation)
 
-### Authentication flow
+### Authentication flow (current — Access Token, API v2)
+
+Generate an **Access Token** at platform.cloudways.com → **API Integration** → Create Access Token (name + expiration + scope; use **Read-Only** for reporting loops, **Limited** for specific write workflows). Only the **primary account owner** can create/manage tokens — team-member accounts have no API Integration section. There is **no token-exchange step**: send the Access Token directly on every request.
 
 ```bash
-# Step 1: get access token
-TOKEN=$(curl -sX POST "https://api.cloudways.com/api/v1/oauth/access_token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "email=$CLOUDWAYS_EMAIL&api_key=$CLOUDWAYS_API_KEY" \
-  | jq -r '.access_token')
-
-# Step 2: use it
-curl -sH "Authorization: Bearer $TOKEN" \
-     "https://api.cloudways.com/api/v1/server"
+# Current flow: one header, no exchange
+curl -sH "Authorization: Bearer $CLOUDWAYS_ACCESS_TOKEN" \
+     "https://api.cloudways.com/api/v2/server"
 ```
 
-The token is valid for a limited time (about an hour). In long-running automation, regenerate it.
+- **API v2 is the current API** ([announcement](https://www.cloudways.com/blog/introducing-cloudways-api-v2/)); the official migration rule is "replace `v1` with `v2` in the API call URL structure". v1 is deprecated (its docs remain up until **March 2026**).
+- Rate limit: 100 requests/minute (per the [access-tokens article](https://support.cloudways.com/en/articles/5136065)).
+- The token is long-lived per its configured expiration (1 day → never) — no hourly regeneration; rotate per your security policy, and revoke it the moment the integration is retired.
 
 ### Common endpoints
+
+Paths are relative to `https://api.cloudways.com/api/v2` (same structure as v1 during the transition):
 
 | Endpoint | Method | What it is |
 |----------|--------|--------|
@@ -51,7 +51,22 @@ The token is valid for a limited time (about an hour). In long-running automatio
 | `/app/analytics/visitor` | GET | traffic |
 | `/app/manage/cache` | POST | clear cache |
 
-Full documentation: `https://developers.cloudways.com/docs/`.
+Full documentation: `https://developers.cloudways.com/docs/` (Redocly portal + API Playground; the Playground runs against your **real** account — prefer a test server).
+
+### Legacy authentication (works until 2026-10-15 only)
+
+> The `email` + `api_key` OAuth exchange authenticates existing, unmigrated automations. **The API key stops working on October 15, 2026** — migrate to an Access Token before then. Do not build anything new on this flow.
+
+```bash
+# LEGACY: exchange email+api_key for a short-lived (~1h) bearer token
+TOKEN=$(curl -sX POST "https://api.cloudways.com/api/v1/oauth/access_token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "email=$CLOUDWAYS_EMAIL&api_key=$CLOUDWAYS_API_KEY" \
+  | jq -r '.access_token')
+
+curl -sH "Authorization: Bearer $TOKEN" \
+     "https://api.cloudways.com/api/v1/server"
+```
 
 ---
 
@@ -63,8 +78,7 @@ Full documentation: `https://developers.cloudways.com/docs/`.
 
 ```
 ┌─ Cron (08:00 Asia/Jerusalem)
-├─ HTTP: POST /oauth/access_token  → get TOKEN
-├─ HTTP: GET /server                → list of servers
+├─ HTTP: GET /api/v2/server  (Authorization: Bearer <access-token>)  → list of servers
 ├─ Loop over servers:
 │   ├─ HTTP: GET /server/{id}      → details
 │   ├─ HTTP: GET /alerts           → alerts
@@ -82,8 +96,7 @@ Full documentation: `https://developers.cloudways.com/docs/`.
 
 ```
 ┌─ Cron (Sunday 09:00)
-├─ HTTP: get TOKEN
-├─ HTTP: GET /server                 → all servers
+├─ HTTP: GET /api/v2/server  (Authorization: Bearer <access-token>)  → all servers
 ├─ Loop servers → Loop apps:
 │   ├─ HTTP: GET /app/{id}           → including SSL info
 │   ├─ Function: parse SSL expiry date
@@ -99,8 +112,7 @@ Full documentation: `https://developers.cloudways.com/docs/`.
 
 ```
 ┌─ Cron (every 4h)
-├─ HTTP: get TOKEN
-├─ HTTP: GET /server
+├─ HTTP: GET /api/v2/server  (Authorization: Bearer <access-token>)
 ├─ Loop servers:
 │   ├─ HTTP: GET /server/{id}/disk_usage
 │   ├─ IF usage > 85%:
@@ -114,8 +126,7 @@ Full documentation: `https://developers.cloudways.com/docs/`.
 
 ```
 ┌─ Webhook IN (with: app_id, deployment_sha)
-├─ HTTP: get TOKEN
-├─ HTTP: POST /app/manage/backup    → trigger backup
+├─ HTTP: POST /api/v2/app/manage/backup  (Authorization: Bearer <access-token>)  → trigger backup
 ├─ Poll: get backup status until complete
 ├─ Save: backup_id, timestamp → Airtable / DB
 └─ Webhook OUT → continue deployment
@@ -131,16 +142,12 @@ A dedicated Make.com Custom App (if built) can wrap the API in more convenient m
 
 ```
 [HTTP — Make a request]
-  URL: https://api.cloudways.com/api/v1/oauth/access_token
-  Method: POST
-  Body: email=...&api_key=...
-  → extract access_token
-
-[HTTP — Make a request]
-  URL: https://api.cloudways.com/api/v1/server
+  URL: https://api.cloudways.com/api/v2/server
   Method: GET
-  Headers: Authorization: Bearer {{1.access_token}}
+  Headers: Authorization: Bearer <access-token from Make's credential store>
   → iterate
+  (no token-exchange step — the Access Token is sent directly; the legacy
+   email+api_key exchange works only until 2026-10-15, see §1)
 
 [Iterator]
   → for each server:
@@ -244,7 +251,7 @@ For automations that generate a lot of data (audit results, alerts log, deployme
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": "*Server:* prod-shop-il (1234567)\n*Issue:* SSL expired 2 hours ago\n*Affected apps:* shop.example.co.il, admin.example.co.il\n*Action:* renew SSL in the Cloudways Platform UI (no official MCP SSL tool) — pending human approval"
+        "text": "*Server:* prod-shop-il (1234567)\n*Issue:* SSL expired 2 hours ago\n*Affected apps:* shop.example.co.il, admin.example.co.il\n*Action:* renew via `security_lets_encrypt_renew` (W) or the Cloudways UI — pending human approval"
       }
     },
     {
@@ -303,9 +310,9 @@ The MCP is a proxy in front of the Cloudways API, so it inherits whatever rate l
 
 ❌ **Auto-execute write operations** without human-in-the-loop. Even if it looks safe, don't.
 
-❌ **Logging credentials.** Make sure the n8n / Make logs don't display the API key. Use the internal credential store.
+❌ **Logging credentials.** Make sure the n8n / Make logs don't display the Access Token (or legacy API key). Use the internal credential store.
 
-❌ **Credentials in shared or committed config.** Keep each account's API key in a secrets manager / local git-ignored config — never in a workflow body or a committed file.
+❌ **Credentials in shared or committed config.** Keep each account's Access Token in a secrets manager / local git-ignored config — never in a workflow body or a committed file. Scope automation tokens to the minimum role (READ for reporting loops).
 
 ❌ **Use MCP for monitoring loops.** For continuous monitoring (every 30 seconds), switch to the direct API. The MCP overhead isn't worth it.
 

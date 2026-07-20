@@ -1,6 +1,6 @@
 # Workflows — Monitoring (read-only)
 
-Monitoring scenarios only. None of the actions here require confirmation — they are all read.
+Monitoring scenarios only. Almost everything here is read-only and needs no confirmation. One exception: `server_disk_usage_fetch` is classified **W** (it triggers a fresh disk-usage calculation), so per the skill's rule it **still requires a quick confirmation** before running — no local carve-outs from the every-W-confirms invariant. Default to the cached values `monitoring_server_summary` already returns; confirm-and-fetch only when the user needs fresh numbers (and note the fetch may be blocked on a READ token — fall back to cached data if so).
 
 > **Basic rule:** Before reporting to the user that something is wrong, gather enough data to be sure. A report with a single data point is noise — a report with 3-4 data points that all point to the same thing is a signal.
 
@@ -108,9 +108,9 @@ Next action requires confirmation: app_purge_cache (W)
 2. For each server: `server_get` → list of apps
 3. For each app: `app_get` → inspect the SSL/expiry detail returned for the app
 4. Filter: SSL expiring within the next 30 days → flag for renewal
-5. For each flagged app: confirm whether Let's Encrypt auto-renewal is enabled. SSL status and auto-renewal are not exposed as MCP tools — verify (and renew/configure) in the Cloudways Platform UI or via the direct Cloudways API (https://developers.cloudways.com/). If auto-renewal is off — double flag.
+5. For each flagged app: confirm whether Let's Encrypt auto-renewal is enabled. **There is no MCP read tool for auto-renewal status** — check it in the Cloudways Platform UI (Application → SSL Certificate) or via the direct API; `security_lets_encrypt_auto_renewal` is a W **toggle**, never call it just to inspect the setting. If auto-renewal is off — double flag and report it; the fix (enable auto-renewal / renew) is a write — hand it to `workflows-maintenance.md` §2 (`security_lets_encrypt_auto_renewal` / `security_lets_encrypt_renew`, both W with confirmation), don't execute it from this read-only playbook.
 
-> If Let's Encrypt auto-renewal is active, Cloudways renews 30 days before expiry. If it fails to renew (DNS issue) — you'll get an alert. It's still worth reviewing manually once every two weeks. Note: SSL install/renew/revoke and auto-renewal are not MCP tools — handle them in the Cloudways UI or the direct API.
+> If Let's Encrypt auto-renewal is active, Cloudways renews 30 days before expiry. If it fails to renew (DNS issue) — you'll get an alert. It's still worth reviewing manually once every two weeks.
 
 ---
 

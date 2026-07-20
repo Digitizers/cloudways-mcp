@@ -5,7 +5,7 @@
 ![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-Skill-purple)
 ![Cloudways](https://img.shields.io/badge/Cloudways-MCP-2b6cb0)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)
-![Version](https://img.shields.io/badge/version-1.2.1-blue)
+![Version](https://img.shields.io/badge/version-1.3.0-blue)
 
 A production-grade **Claude Code & OpenClaw skill** for managing [Cloudways](https://digitizer.li/cloudways) infrastructure through the official **Cloudways (Remote) MCP** — connect directly to the hosted server, run one or many accounts, with a safety rule on every write.
 
@@ -40,11 +40,12 @@ Use it solo for your own boxes; reach for Aura when you operate a fleet on clien
 ## Features
 
 - ✅ **Official Cloudways (Remote) MCP** — connect directly to the hosted server at `mcp.cloudways.com`; no self-hosting, no proxy to maintain.
-- ✅ **Complete tool catalog** — the full official toolset across servers, apps, services, DNS, CDN, Git, SSH keys, and analytics, tagged R / W / W!.
+- ✅ **Complete tool catalog (MCP v1.2, ~244 tools)** — servers, apps, services, DNS, CDN, Git, SSH keys, analytics, **SSL / Let's Encrypt, IP whitelisting, Security Suite (malware/WAF), staging sync, team members, client billing / AgencyOS**, all tagged R / W / W!.
+- ✅ **Role-based Access Tokens** — the skill guides token scoping (READ / LIMITED / FULL ACCESS) per connection, on top of its own write-confirmation discipline.
 - ✅ **Write-confirmation safety** — every state-changing operation requires explicit target + action confirmation; destructive operations double-confirm.
 - ✅ **Multi-account** — one connection per Cloudways account, each with its own prefix; no cross-account ID or credential mixing.
 - ✅ **Operational playbooks** — monitoring, maintenance, client onboarding/audit, and n8n / Make / headless automation.
-- ✅ **Honest gaps** — SSL, IP-whitelisting, and team management are flagged as Cloudways UI / direct-API (not MCP tools), never faked.
+- ✅ **Honest gaps** — what the MCP still doesn't expose (SSH-key listing, backup listing, `customer_info`) is flagged as Cloudways UI / direct-API, never faked.
 
 ## Structure
 
@@ -70,15 +71,17 @@ Use it solo for your own boxes; reach for Aura when you operate a fleet on clien
 
 The skill activates automatically when Cloudways is discussed, as long as the skill is available and the MCP server is connected (the tools appear as `mcp__cloudways*__*`). For setup and connection — see [`installation.md`](.claude/skills/cloudways-mcp/references/installation.md) and [`.mcp.json.example`](.mcp.json.example).
 
-The official hosted MCP is at `https://mcp.cloudways.com/mcp/`. Authenticate with per-account request headers: `X-CW-Email`, `X-CW-Api-Key`, and `X-Mcp-Host` (the client name, e.g. `claude-code`). Generate the API key at [platform.cloudways.com](https://platform.cloudways.com/) → API Integration. One connection per account, named `cloudways-<client>`.
+The official hosted MCP is at `https://mcp.cloudways.com/mcp/`. Authenticate with per-account request headers: `X-Access-Token` (a role-based **Access Token** — READ / LIMITED / FULL ACCESS) and `X-Mcp-Host` (the client name, e.g. `claude-code`). Generate the token at [platform.cloudways.com](https://platform.cloudways.com/) → API section. One connection per account, named `cloudways-<client>`. (The legacy `X-CW-Email`/`X-CW-Api-Key` API-key flow is deprecated — the API key stops working on **October 15, 2026**.)
 
 ## Sources
 
 - [How to Use Cloudways MCP Server for AI-Based Server Management](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management) (official — the source of truth for the connection)
-- [Cloudways Roadmap](https://www.cloudways.com/en/roadmap.php) (lists "Cloudways Remote MCP", Q2 2026)
+- [Cloudways MCP Server Tools](https://support.cloudways.com/en/articles/15798823-cloudways-mcp-server-tools) (official — the source of truth for the tool catalog)
+- [Cloudways MCP v1.2 announcement](https://www.cloudways.com/blog/cloudways-mcp-v1-2-112-new-tools-role-based-access-tokens-and-full-cloudways-api-coverage/) (112 new tools, role-based Access Tokens)
+- [How to Create and Manage Cloudways API Access Tokens](https://support.cloudways.com/en/articles/5136065) (token generation + roles)
 - [Cloudways API reference](https://developers.cloudways.com/)
 
-> The tool catalog is verified against the official support article. If it ever conflicts with what the live `mcp__cloudways*__*` tools return, the live MCP is authoritative.
+> The tool catalog is verified against the official support articles (MCP v1.2, checked 2026-07-19); the v1.2 additions are pending re-enumeration against the live server, and their R/W/W! tags are this skill's operational assessment, not Cloudways labels. If the catalog ever conflicts with what the live `mcp__cloudways*__*` tools return, the live MCP is authoritative.
 
 ## Links
 

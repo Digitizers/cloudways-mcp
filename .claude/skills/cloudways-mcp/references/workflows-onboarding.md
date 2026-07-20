@@ -10,8 +10,8 @@ Core scenario: a new client arrives with a site on Cloudways, and you need to bu
 
 Confirm with the client:
 - [ ] API access approved on their side
-- [ ] New API key (don't share with their old team)
-- [ ] If there are old team members who don't need access — add this at this point (not via MCP — UI only)
+- [ ] A **new Access Token** generated for this engagement (READ role for the audit phase; don't reuse tokens their old team held — old tokens should be revoked). One exception: `server_disk_usage_fetch` (Stage 2) is classified W and may be blocked on a READ token — either rely on the cached `monitoring_server_summary`, or scope a LIMITED token that includes it.
+- [ ] If there are old team members who don't need access — plan the removal now; as of MCP v1.2 the roster is auditable via `team_member_list` (R) and removal is `team_member_delete` (W! — double-confirm, do it only after the audit)
 
 ---
 
@@ -23,7 +23,7 @@ Confirm with the client:
 3. copilot_insights_list       → insights, alerts, and recommendations currently open
 ```
 
-> **No MCP tool for:** account/plan/billing status (`customer_info`), team-member roster (`list_team_members`), or SSH-key listing. Plan/billing and the team roster are checked in the Cloudways Platform UI; SSH keys are managed via `ssh_key_create` / `ssh_key_update` / `ssh_key_delete` but there is no read/list tool — confirm SSH access in the UI or via the direct Cloudways API (<https://developers.cloudways.com/>).
+> **No MCP tool for:** account/plan/billing status (`customer_info`) or SSH-key listing. Plan/billing is checked in the Cloudways Platform UI; SSH keys are managed via `ssh_key_create` / `ssh_key_update` / `ssh_key_delete` but there is no read/list tool — confirm SSH access in the UI or via the direct Cloudways API (<https://developers.cloudways.com/>). The **team-member roster IS available** as of MCP v1.2: `team_member_list` (R) returns sub-users with roles and server/app access.
 
 **Deliverables you record:**
 
@@ -34,7 +34,7 @@ Confirm with the client:
 | Providers in use | (DO/AWS/GCP/Vultr) |
 | Regions | |
 | Total monthly $ Cloudways (estimate) | |
-| Team members + permissions | (UI only) |
+| Team members + permissions | (`team_member_list`) |
 | SSH keys (don't publish — only a count) | (UI / direct API) |
 | Open insights/alerts | (copilot_insights_list) |
 
@@ -48,8 +48,8 @@ For each server in the list:
 1. server_get                  → label, size, IP, master credentials, app list
 2. server_settings_get         → PHP timeout, memory, upload limit, custom PHP
 3. service_status              → what's running (Apache/Nginx/MySQL/Memcached/Varnish/Redis)
-4. server_disk_usage_fetch     → trigger a fresh disk-usage calculation (init), then:
-5. monitoring_server_summary   → current disk + bandwidth usage (read)
+4. server_disk_usage_fetch     → optional: trigger a fresh disk-usage calculation (W — benign refresh, but may be blocked on a READ token; skip and use the cached data if so), then:
+5. monitoring_server_summary   → current disk + bandwidth usage (read; cached values if step 4 was skipped)
 6. monitoring_server_graph     → CPU/RAM trends last 24h
 ```
 
@@ -109,23 +109,27 @@ For each application (per the app list from the previous stage):
 ## Stage 4 — Security audit
 
 ```
-1. app_settings_get            → per-app security flags (XML-RPC enabled? password protection?)
-2. app_vulnerabilities_list    → (WordPress) open plugin/theme/core vulnerabilities
-3. copilot_insights_list       → security-related insights/recommendations Cloudways has surfaced
+1. app_settings_get                    → per-app security flags (XML-RPC enabled? password protection?)
+2. app_vulnerabilities_list            → (WordPress) open plugin/theme/core vulnerabilities
+3. copilot_insights_list               → security-related insights/recommendations Cloudways has surfaced
+4. security_get_whitelisted_ips        → (v1.2) SSH/SFTP IP whitelist per server
+5. security_get_whitelisted_ips_mysql  → (v1.2) MySQL IP whitelist per server
+6. team_member_list                    → (v1.2) who still has access, with which role
+7. security_suite_app_status_get       → (v1.2, if Security Suite is active) protection status per app
+8. security_suite_server_incidents_list→ (v1.2) open security incidents on each server
 ```
 
-> **No MCP tools for IP whitelisting or SSH-key listing.** The SSH IP whitelist, MySQL IP whitelist, and the stored-SSH-key roster are **not** exposed by the official Cloudways MCP. Audit these in the Cloudways Platform UI (Server → Security) or via the direct Cloudways API (<https://developers.cloudways.com/>). The same goes for the team-member roster (who still has access) — UI / API only.
+> **Still no MCP tool for SSH-key listing.** SSH keys are managed via `ssh_key_create` / `ssh_key_update` / `ssh_key_delete` but there is no read/list tool — audit the stored-key roster in the Cloudways Platform UI (Server → Security) or via the direct Cloudways API (<https://developers.cloudways.com/>).
 
-**Red flags (check in the UI / API):**
+**Red flags (now readable via MCP; SSH-key roster still UI/API):**
 - [ ] SSH whitelist empty = open to the world (critical)
 - [ ] MySQL whitelist empty = open to the world (security disaster)
-- [ ] Old SSH keys whose owners are unclear
-- [ ] The old team member still has access
+- [ ] Old SSH keys whose owners are unclear (UI/API)
+- [ ] The old team member still has access (`team_member_list`)
 - [ ] Access not only for client employees but also for employees who have left
-
-**Red flags (from MCP):**
 - [ ] XML-RPC left enabled on WordPress (`app_settings_get`) = brute-force/DDoS vector
 - [ ] Open vulnerabilities reported by `app_vulnerabilities_list`
+- [ ] Open Security Suite incidents / infected domains (`security_suite_server_incidents_list`, `security_suite_server_infected_domains_list`)
 
 ---
 
@@ -217,9 +221,9 @@ Auditor: [your name]
 
 ## Quick reference — Audit checklist (printable)
 
-- [ ] **Account:** server_list / project_list / copilot_insights_list  (plan/billing + team roster = UI only)
-- [ ] **Per server:** server_get / server_settings_get / service_status / server_disk_usage_fetch + monitoring_server_summary / monitoring_server_graph
+- [ ] **Account:** server_list / project_list / copilot_insights_list / team_member_list  (plan/billing = UI only)
+- [ ] **Per server:** server_get / server_settings_get / service_status / monitoring_server_summary / monitoring_server_graph (optionally server_disk_usage_fetch first for fresh disk data — W, needs a token role that allows it)
 - [ ] **Per app:** app_get / app_settings_get / monitoring_app_summary / analytics_app_traffic / analytics_app_php / analytics_app_mysql / app_varnish_settings_get / app_vulnerabilities_list (WP)
-- [ ] **Security:** app_settings_get (XML-RPC etc.) / app_vulnerabilities_list / copilot_insights_list  (IP whitelists + SSH-key roster = UI / API only)
-- [ ] **Manual (UI):** Backup schedule + retention / SSL provider + expiry / IP whitelists / SSH-key roster / team members / Cloudflare integration (if any) / WP version (if WP) / Active plugins (if WP)
+- [ ] **Security:** app_settings_get (XML-RPC etc.) / app_vulnerabilities_list / copilot_insights_list / security_get_whitelisted_ips + security_get_whitelisted_ips_mysql / security_suite_server_incidents_list (if suite active)  (SSH-key roster = UI / API only)
+- [ ] **Manual (UI):** Backup schedule + retention / SSL provider + expiry (no MCP read tool — UI or direct API) / SSH-key roster / Cloudflare integration (if any) / WP version (if WP) / Active plugins (if WP)
 - [ ] **Document:** Red flags / Recommendations / Quote / SLA
