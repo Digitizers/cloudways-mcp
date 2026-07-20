@@ -96,8 +96,7 @@ curl -sH "Authorization: Bearer $TOKEN" \
 
 ```
 ┌─ Cron (Sunday 09:00)
-├─ HTTP: get TOKEN
-├─ HTTP: GET /server                 → all servers
+├─ HTTP: GET /api/v2/server  (Authorization: Bearer <access-token>)  → all servers
 ├─ Loop servers → Loop apps:
 │   ├─ HTTP: GET /app/{id}           → including SSL info
 │   ├─ Function: parse SSL expiry date
@@ -113,8 +112,7 @@ curl -sH "Authorization: Bearer $TOKEN" \
 
 ```
 ┌─ Cron (every 4h)
-├─ HTTP: get TOKEN
-├─ HTTP: GET /server
+├─ HTTP: GET /api/v2/server  (Authorization: Bearer <access-token>)
 ├─ Loop servers:
 │   ├─ HTTP: GET /server/{id}/disk_usage
 │   ├─ IF usage > 85%:
@@ -128,8 +126,7 @@ curl -sH "Authorization: Bearer $TOKEN" \
 
 ```
 ┌─ Webhook IN (with: app_id, deployment_sha)
-├─ HTTP: get TOKEN
-├─ HTTP: POST /app/manage/backup    → trigger backup
+├─ HTTP: POST /api/v2/app/manage/backup  (Authorization: Bearer <access-token>)  → trigger backup
 ├─ Poll: get backup status until complete
 ├─ Save: backup_id, timestamp → Airtable / DB
 └─ Webhook OUT → continue deployment
