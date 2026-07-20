@@ -43,7 +43,8 @@ jobs:
         run: |
           # The shipped skill payload (.claude/) must stay studio-neutral and
           # generic — no studio framing or personal names inside the skill itself.
-          if grep -rniE "digitizer|דיגיטייזר|Ben/Avi" .claude/; then
+          # "digitizer-skills" is the public marketplace name — allowed; anything else (digitizer-os, bare digitizer, Hebrew, names) still fails.
+          if grep -rniE "digitizer|דיגיטייזר|Ben/Avi" .claude/ | grep -viE "digitizer-skills"; then
             echo "::error::studio framing / personal names found in the skill payload — keep .claude/ generic"; exit 1
           fi
           # The repo-level README may carry the studio brand footer (Digitizer),
