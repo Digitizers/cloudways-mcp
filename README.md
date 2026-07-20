@@ -5,7 +5,7 @@
 ![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-Skill-purple)
 ![Cloudways](https://img.shields.io/badge/Cloudways-MCP-2b6cb0)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)
-![Version](https://img.shields.io/badge/version-1.3.0-blue)
+![Version](https://img.shields.io/badge/version-1.3.1-blue)
 
 A production-grade **Claude Code & OpenClaw skill** for managing [Cloudways](https://digitizer.li/cloudways) infrastructure through the official **Cloudways (Remote) MCP** — connect directly to the hosted server, run one or many accounts, with a safety rule on every write.
 
