@@ -133,7 +133,7 @@ curl -X POST "https://api.cloudways.com/api/v1/oauth/access_token" \
   -d "email=YOUR_EMAIL&api_key=YOUR_API_KEY"
 ```
 
-API reference: <https://developers.cloudways.com/> (the MCP also exposes an `oauth_access_token_generate` tool (W) for direct-API tokens — usable only once the MCP connection itself works).
+API reference: <https://developers.cloudways.com/> — note the tools article's `oauth_access_token_generate` tool does **not** exist on the live MCP (verified 2026-07-20); mint direct-API tokens through the Cloudways platform instead.
 
 ---
 
@@ -146,7 +146,7 @@ MCP clients **cache the tool list** on first connect. If new tools don't show up
 
 Then re-test with "Show me all my Cloudways projects" (`project_list`).
 
-> Note the intentional design: even when correctly connected, the client sees only **65 tools** (62 direct + 3 meta-tools). The rest of the ~244 tools are discovered on demand via `list_available_toolsets` / `get_toolset_tools` / `execute_tool` — their absence from the visible list is **not** a caching problem.
+> Note the intentional design: even when correctly connected, the client sees only **65 tools** (62 direct + 3 meta-tools). The rest of the 244 tools (241 across 22 toolsets + the 3 meta-tools, live-verified 2026-07-20) are discovered on demand via `list_available_toolsets` / `get_toolset_tools` / `execute_tool` — their absence from the visible list is **not** a caching problem.
 
 ---
 

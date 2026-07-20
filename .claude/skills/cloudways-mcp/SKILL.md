@@ -1,6 +1,6 @@
 ---
 name: cloudways-mcp
-version: 1.3.0
+version: 1.3.1
 license: MIT
 description: |
   Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the official Cloudways MCP server (Cloudways' hosted MCP / Remote MCP, per their support docs).
@@ -58,7 +58,7 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 
 ## Write operations require confirmation — the catalog is authoritative
 
-**The authoritative list is `references/tools-catalog.md`: every tool flagged `W` or `W!` there requires explicit confirmation before execution, and every `W!` requires the double-confirmation pattern.** The grouping below is **illustrative, not exhaustive** — the live MCP (v1.2) exposes ~244 tools across on-demand toolsets, most of which are not in your default tool list. If a tool is not named here but is flagged `W`/`W!` in the catalog (or its live schema describes a destructive/irreversible action), it needs the **same** confirmation. Never treat "it's not in this list" as "it's safe to run without confirmation."
+**The authoritative list is `references/tools-catalog.md`: every tool flagged `W` or `W!` there requires explicit confirmation before execution, and every `W!` requires the double-confirmation pattern.** The grouping below is **illustrative, not exhaustive** — the live MCP (v1.2) exposes 244 tools — 241 across 22 on-demand toolsets plus 3 meta-tools, most of which are not in your default tool list. If a tool is not named here but is flagged `W`/`W!` in the catalog (or its live schema describes a destructive/irreversible action), it needs the **same** confirmation. Never treat "it's not in this list" as "it's safe to run without confirmation."
 
 **Server level (affects all applications on the server):**
 - `server_start`, `server_stop`, `server_restart`
@@ -102,8 +102,8 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 - `staging_sync_tables`, `staging_sync_code` ⚠️ (W! — overwrite data/code on the target; confirm **direction** — a push to live overwrites production)
 - `team_member_update`, `team_member_delete` ⚠️ (W! — changes/revokes a person's access)
 - `server_transfer_request` ⚠️ (W! — hands server **ownership** to another Cloudways account)
-- `billing_*` / `agency_os_*` create/update (W — client-facing financial records; `billing_invoice_reminder_send` emails the client)
-- `billing_client_delete`, `billing_service_delete`, `billing_plan_delete`, `agency_os_client_delete` ⚠️ (W! — deletes client-facing financial records; `agency_os_client_delete` archives the client's services + invoice history)
+- `agency_os_*` create/update (W — client-facing financial records: clients, services, plan prices, tax rates, invoices)
+- `agency_os_client_delete` ⚠️ (W! — deletes a client-facing financial record, archiving their services + invoice history)
 - `copilot_subscribe`, `copilot_plan_change`, `addon_upgrade` (W — change the account's subscription cost)
 
 **Git deployment:**
