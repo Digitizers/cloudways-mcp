@@ -16,7 +16,7 @@ This skill targets the **official Cloudways (Remote) MCP** — a Cloudways-hoste
 
 1. Log in to [platform.cloudways.com](https://platform.cloudways.com).
 2. Open the **API** section (bottom-left of the platform — the same place the legacy API key lived).
-3. Generate an **Access Token**. Give it a name, an expiration period, and a **role**:
+3. Generate an **Access Token** (Access Token Details → Create Access Token). Note: only the **primary account owner** can create/manage API credentials — team-member accounts have no API Integration section. Give the token a name, an expiration period (1 day → never; shortest that works), and a **role**:
    - **READ** — look-ups only (status, config, monitoring). Recommended starting point for every new integration, and for monitoring-only connections.
    - **LIMITED** — only the endpoint groups you select.
    - **FULL ACCESS** — everything the account can do, including destructive actions. Only for connections that genuinely need to make changes.
@@ -121,9 +121,13 @@ In Claude, ask: **"Show me all my Cloudways servers"** → calls `server_list` a
 | Timeout | transient network | retry after a moment |
 | `mcp-remote not found` (Desktop) | Node missing | install Node.js v24+, ensure `npx` is on PATH |
 
-To test credentials directly against the public Cloudways API, independent of the MCP layer (useful to isolate "bad credentials" from "MCP connection problem"; legacy flow — works until the API-key EOL, 2026-10-15):
+To test credentials directly against the public Cloudways API, independent of the MCP layer (useful to isolate "bad credentials" from "MCP connection problem"):
 
 ```bash
+# Access Token (current):
+curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" "https://api.cloudways.com/api/v2/server"
+
+# Legacy API key (works until the EOL, 2026-10-15):
 curl -X POST "https://api.cloudways.com/api/v1/oauth/access_token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "email=YOUR_EMAIL&api_key=YOUR_API_KEY"
