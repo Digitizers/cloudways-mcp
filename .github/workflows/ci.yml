@@ -41,6 +41,7 @@ jobs:
 
       - name: No-leak guard
         run: |
+          set -euo pipefail
           # The shipped skill payload (.claude/) must stay studio-neutral and
           # generic — no studio framing or personal names inside the skill itself.
           # "digitizer-skills" (public marketplace) and the "Digitizers/" org prefix are
