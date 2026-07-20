@@ -2,7 +2,9 @@
 
 The official tool catalog for the **Cloudways (Remote) MCP** (`https://mcp.cloudways.com/mcp/`), taken from the official support articles: [Cloudways MCP Server Tools](https://support.cloudways.com/en/articles/15798823-cloudways-mcp-server-tools) (the dedicated tool reference) and [How to Use Cloudways MCP Server](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management) (setup). Tools appear in Claude as `mcp__cloudways__<tool>` (or `mcp__cloudways-<client>__<tool>` per account).
 
-**MCP v1.2 scale:** ~244 tools total (per the [v1.2 announcement](https://www.cloudways.com/blog/cloudways-mcp-v1-2-112-new-tools-role-based-access-tokens-and-full-cloudways-api-coverage/) — 112 added in v1.2, covering essentially the full Cloudways API). Your client initially sees only **65 tools** (62 high-frequency direct tools + the 3 meta-tools below); everything else is discovered and invoked on demand through the meta-tools.
+**MCP v1.2 scale:** ~244 tools total per the [v1.2 announcement](https://www.cloudways.com/blog/cloudways-mcp-v1-2-112-new-tools-role-based-access-tokens-and-full-cloudways-api-coverage/) (112 added in v1.2, covering essentially the full Cloudways API). Your client initially sees only **65 tools** (62 high-frequency direct tools + the 3 meta-tools below); everything else is discovered and invoked on demand through the meta-tools.
+
+> **Count caveat:** this catalog's tables enumerate ~296 identifiers — more than the announced ~244 — because the official tools article itself lists some operations under two names (endpoint-style aliases for the Security and Service categories, noted below) and may include article-only entries. Both numbers are approximate; **never use them to validate live enumeration** — the live `mcp__cloudways*__*` tool list is the only exact count, and some catalog entries may resolve to the same live tool (or not exist) until the pending re-enumeration.
 
 Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = destructive / irreversible (requires double confirmation).
 

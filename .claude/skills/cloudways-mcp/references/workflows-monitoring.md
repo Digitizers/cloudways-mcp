@@ -1,6 +1,6 @@
 # Workflows — Monitoring (read-only)
 
-Monitoring scenarios only. None of the actions here require confirmation — they are all read, with one technical exception: `server_disk_usage_fetch` is classified W (it triggers a fresh disk-usage calculation — benign, no configuration change, no confirmation needed) and may be blocked on a READ token; when it fails, fall back to the cached values `monitoring_server_summary` already returns.
+Monitoring scenarios only. Almost everything here is read-only and needs no confirmation. One exception: `server_disk_usage_fetch` is classified **W** (it triggers a fresh disk-usage calculation), so per the skill's rule it **still requires a quick confirmation** before running — no local carve-outs from the every-W-confirms invariant. Default to the cached values `monitoring_server_summary` already returns; confirm-and-fetch only when the user needs fresh numbers (and note the fetch may be blocked on a READ token — fall back to cached data if so).
 
 > **Basic rule:** Before reporting to the user that something is wrong, gather enough data to be sure. A report with a single data point is noise — a report with 3-4 data points that all point to the same thing is a signal.
 
