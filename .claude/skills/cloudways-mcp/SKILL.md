@@ -58,7 +58,7 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 
 ## Write operations require confirmation — the catalog is authoritative
 
-**The authoritative list is `references/tools-catalog.md`: every tool flagged `W` or `W!` there requires explicit confirmation before execution, and every `W!` requires the double-confirmation pattern.** The grouping below is **illustrative, not exhaustive** — the live MCP (v1.2) exposes 244 tools — 241 across 22 on-demand toolsets plus 3 meta-tools, most of which are not in your default tool list. If a tool is not named here but is flagged `W`/`W!` in the catalog (or its live schema describes a destructive/irreversible action), it needs the **same** confirmation. Never treat "it's not in this list" as "it's safe to run without confirmation."
+**The authoritative list is `references/tools-catalog.md`: every tool flagged `W` or `W!` there requires explicit confirmation before execution, and every `W!` requires the double-confirmation pattern.** The grouping below is **illustrative, not exhaustive** — the live MCP (v1.2) exposes 244 tools — 241 across 22 toolsets plus 3 meta-tools — and 179 of them are **not** in your default tool list. If a tool is not named here but is flagged `W`/`W!` in the catalog (or its live schema describes a destructive/irreversible action), it needs the **same** confirmation. Never treat "it's not in this list" as "it's safe to run without confirmation."
 
 **Server level (affects all applications on the server):**
 - `server_start`, `server_stop`, `server_restart`

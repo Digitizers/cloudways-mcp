@@ -146,7 +146,7 @@ MCP clients **cache the tool list** on first connect. If new tools don't show up
 
 Then re-test with "Show me all my Cloudways projects" (`project_list`).
 
-> Note the intentional design: even when correctly connected, the client sees only **65 tools** (62 direct + 3 meta-tools). The rest of the 244 tools (241 across 22 toolsets + the 3 meta-tools, live-verified 2026-07-20) are discovered on demand via `list_available_toolsets` / `get_toolset_tools` / `execute_tool` — their absence from the visible list is **not** a caching problem.
+> Note the intentional design: even when correctly connected, the client sees only **65 tools** (62 direct + 3 meta-tools). The 62 direct tools are **members of the toolsets**, not a separate tier — so of the 244 total (241 toolset members + 3 meta-tools, live-verified 2026-07-20) the hidden remainder is **179**, discovered on demand via `list_available_toolsets` / `get_toolset_tools` / `execute_tool`. Their absence from the visible list is **not** a caching problem.
 
 ---
 

@@ -2,7 +2,7 @@
 
 The official tool catalog for the **Cloudways (Remote) MCP** (`https://mcp.cloudways.com/mcp/`), taken from the official support articles: [Cloudways MCP Server Tools](https://support.cloudways.com/en/articles/15798823-cloudways-mcp-server-tools) (the dedicated tool reference) and [How to Use Cloudways MCP Server](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management) (setup). Tools appear in Claude as `mcp__cloudways__<tool>` (or `mcp__cloudways-<client>__<tool>` per account).
 
-**MCP v1.2 scale:** **244 tools** — 241 spread across 22 toolsets plus the 3 meta-tools, live-verified 2026-07-20 (see the toolset table below). This matches the [v1.2 announcement](https://www.cloudways.com/blog/cloudways-mcp-v1-2-112-new-tools-role-based-access-tokens-and-full-cloudways-api-coverage/) exactly (112 added in v1.2, covering essentially the full Cloudways API). Your client initially sees only **65 tools** (62 high-frequency direct tools + the 3 meta-tools below); everything else is discovered and invoked on demand through the meta-tools.
+**MCP v1.2 scale:** **244 tools** — 241 spread across 22 toolsets plus the 3 meta-tools, live-verified 2026-07-20 (see the toolset table below). This matches the [v1.2 announcement](https://www.cloudways.com/blog/cloudways-mcp-v1-2-112-new-tools-role-based-access-tokens-and-full-cloudways-api-coverage/) exactly (112 added in v1.2, covering essentially the full Cloudways API). Your client initially sees only **65 tools** (62 high-frequency direct tools + the 3 meta-tools below). Those 62 are **members of the toolsets**, not a separate tier, so the hidden remainder is **179** (241 − 62) — discovered and invoked on demand through the meta-tools.
 
 > **The official tools article over-lists.** It documents endpoint-style aliases for the Security and Service categories (`security_dns_create`, `service_state_update`, …) plus whole categories — Bot Protection, Client Billing, CloudwaysCDN legacy, a "Lists API", `oauth_access_token_generate` — that **have no live counterpart**. Live re-enumeration on 2026-07-20 found 64 such phantom identifiers and **zero** real alias mismatches: every name in the tables below matches the live `tool_name` exactly. They have been removed from this catalog; if you see them in Cloudways' docs, don't build automation on them.
 
@@ -34,7 +34,7 @@ Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = de
 | `app_vulnerability` | 2 | `transfer_server` | 3 |
 | `operation` | 1 | `safe_update` | **0** |
 
-**241 toolset tools + 3 meta-tools = 244.** `safe_update` is declared by the server but **empty in the current build** — its description states it is "declared but not yet populated", and `execute_tool` returns *"tool not found in toolset"* for anything in it. SafeUpdate (managed WordPress core/plugin/theme updates with visual-regression checks and auto-rollback) is therefore **UI-only** for now; re-check this toolset after future MCP releases.
+**241 toolset tools + 3 meta-tools = 244**, of which 62 toolset members are surfaced directly and the other 179 are on-demand only. `safe_update` is declared by the server but **empty in the current build** — its description states it is "declared but not yet populated", and `execute_tool` returns *"tool not found in toolset"* for anything in it. SafeUpdate (managed WordPress core/plugin/theme updates with visual-regression checks and auto-rollback) is therefore **UI-only** for now; re-check this toolset after future MCP releases.
 
 ---
 
