@@ -74,7 +74,18 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. Collect from the client: certificate, private key, ca bundle. (If the CA still needs a CSR, generate it outside Cloudways — `openssl req -new` — since the MCP exposes no CSR tool.)
+1. Collect from the client: certificate, private key, ca bundle. If the CA still needs a CSR, generate it outside Cloudways (the MCP exposes no CSR tool) — and **name the key explicitly**, because the cert is only installable with the exact key that signed the CSR:
+
+   ```bash
+   # Signing with the key you already have:
+   openssl req -new -key privkey.pem -out request.csr
+
+   # Or generating a new key + CSR together (-nodes leaves the key
+   # unencrypted, which the Cloudways UI requires):
+   openssl req -new -newkey rsa:2048 -nodes -keyout privkey.pem -out request.csr
+   ```
+
+   Keep `privkey.pem` — a bare `openssl req -new` writes an encrypted key to whatever path the local OpenSSL config picks, and losing it makes the issued certificate unusable.
 2. `app_get` — confirm target
 3. **Install the custom cert in the Cloudways UI** (paste cert + key) — manual by necessity; no MCP tool covers this step.
 4. Check SSL from the browser (SSL Labs grade A+ preferred)
