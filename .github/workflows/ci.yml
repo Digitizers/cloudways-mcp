@@ -41,9 +41,14 @@ jobs:
 
       - name: No-leak guard
         run: |
+          set -euo pipefail
           # The shipped skill payload (.claude/) must stay studio-neutral and
           # generic — no studio framing or personal names inside the skill itself.
-          if grep -rniE "digitizer|דיגיטייזר|Ben/Avi" .claude/; then
+          # "digitizer-skills" (public marketplace) and the "Digitizers/" org prefix are
+          # allowed. Strip those exact tokens, then re-scan the residue — so a line like
+          # "Digitizers/digitizer-os" still fails on its remaining "digitizer-os" part,
+          # unlike a line-level grep -v exemption which would wave the whole line through.
+          if grep -rniE "digitizer|דיגיטייזר|Ben/Avi" .claude/ | perl -pe 's/(?<![A-Za-z0-9-])digitizer-skills(?![A-Za-z0-9-])//g; s/(?<![A-Za-z0-9-])Digitizers\///g' | grep -iE "digitizer|דיגיטייזר|Ben/Avi"; then
             echo "::error::studio framing / personal names found in the skill payload — keep .claude/ generic"; exit 1
           fi
           # The repo-level README may carry the studio brand footer (Digitizer),
