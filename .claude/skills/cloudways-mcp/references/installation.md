@@ -8,7 +8,7 @@ This skill targets the **official Cloudways (Remote) MCP** — a Cloudways-hoste
 
 - A valid Cloudways account with API access.
 - A Cloudways **Access Token** (see Step 1).
-- **Node.js v24+** (only for the Claude Desktop path, which uses the `mcp-remote` bridge). Claude Code connects over native HTTP and does not need it.
+- **Node.js v24.14.1+** (only for the Claude Desktop path, which uses the `mcp-remote` bridge). Claude Code connects over native HTTP and does not need it.
 
 ---
 
@@ -24,7 +24,7 @@ This skill targets the **official Cloudways (Remote) MCP** — a Cloudways-hoste
 
 > Treat the token like a password — never commit it or print it in responses. Prefer one token **per integration** (per MCP connection), each with the minimum role it needs, so tokens can be revoked individually.
 
-> **Legacy API key — deprecated.** The old flow (API key + `X-CW-Email`/`X-CW-Api-Key` headers) still works but the API key **stops working on October 15, 2026**. If you have an existing connection using the old headers, regenerate as an Access Token and update the connection before then.
+> **Legacy API key — deprecated.** The old flow (API key + `X-CW-Email`/`X-CW-Api-Key` headers) still works but the API key **stops working on October 15, 2026**. If you have an existing connection using the old headers, regenerate as an Access Token and update the connection before then. Until migrated, a legacy connection retains **unrestricted full-account access** — the RBAC roles apply only to Access Tokens. And note there is still **no per-tool permission control at the MCP layer** beyond the token's role: a FULL ACCESS token can call every tool.
 
 **Required headers** (every request; header names are case-sensitive):
 
@@ -78,7 +78,7 @@ Claude Desktop does not natively support remote HTTP MCP servers, so it uses the
 
 ### Other clients (Cursor, Windsurf, VS Code Copilot, Gemini CLI, Codex)
 
-The official article documents per-client configs for **Cursor** (one-click install or `~/.cursor/mcp.json`), **Windsurf** (`~/.codeium/windsurf/mcp_config.json`, uses `serverUrl`), **VS Code / GitHub Copilot** (`mcp.json`, uses `servers` + `"type": "http"` — not `mcpServers`), **Gemini CLI** (`~/.gemini/settings.json`, uses `httpUrl`), and **Codex / Codex CLI** (`~/.codex/config.toml`, `[mcp_servers.cloudways]` + `[mcp_servers.cloudways.http_headers]`). Same endpoint and headers everywhere; only the config-file shape and the `X-Mcp-Host` value differ. See the [official article](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management) for the exact snippets.
+Same endpoint and headers everywhere; only the config-file shape and the `X-Mcp-Host` value differ per client. The [official article](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management) has the exact snippet for each client.
 
 ---
 
@@ -121,7 +121,15 @@ In Claude, ask: **"Show me all my Cloudways servers"** → calls `server_list` a
 | Timeout | transient network | retry after a moment |
 | `mcp-remote not found` (Desktop) | Node missing | install Node.js v24+, ensure `npx` is on PATH |
 
-API reference: <https://developers.cloudways.com/> (the MCP also exposes an `oauth_access_token_generate` tool for direct-API tokens).
+To test credentials directly against the public Cloudways API, independent of the MCP layer (useful to isolate "bad credentials" from "MCP connection problem"; legacy flow — works until the API-key EOL, 2026-10-15):
+
+```bash
+curl -X POST "https://api.cloudways.com/api/v1/oauth/access_token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "email=YOUR_EMAIL&api_key=YOUR_API_KEY"
+```
+
+API reference: <https://developers.cloudways.com/> (the MCP also exposes an `oauth_access_token_generate` tool (W) for direct-API tokens — usable only once the MCP connection itself works).
 
 ---
 

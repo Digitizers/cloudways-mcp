@@ -108,9 +108,9 @@ Next action requires confirmation: app_purge_cache (W)
 2. For each server: `server_get` → list of apps
 3. For each app: `app_get` → inspect the SSL/expiry detail returned for the app
 4. Filter: SSL expiring within the next 30 days → flag for renewal
-5. For each flagged app: confirm whether Let's Encrypt auto-renewal is enabled. SSL status and auto-renewal are not exposed as MCP tools — verify (and renew/configure) in the Cloudways Platform UI or via the direct Cloudways API (https://developers.cloudways.com/). If auto-renewal is off — double flag.
+5. For each flagged app: confirm whether Let's Encrypt auto-renewal is enabled. If auto-renewal is off — double flag and report it. The fix (enable auto-renewal / renew) is a **write** — hand it to `workflows-maintenance.md` §2 (`security_lets_encrypt_auto_renewal` / `security_lets_encrypt_renew`, both W with confirmation); don't execute it from this read-only playbook.
 
-> If Let's Encrypt auto-renewal is active, Cloudways renews 30 days before expiry. If it fails to renew (DNS issue) — you'll get an alert. It's still worth reviewing manually once every two weeks. Note: SSL install/renew/revoke and auto-renewal are MCP tools as of v1.2 (`security_lets_encrypt_*`, via the security toolset) — see `workflows-maintenance.md` §2.
+> If Let's Encrypt auto-renewal is active, Cloudways renews 30 days before expiry. If it fails to renew (DNS issue) — you'll get an alert. It's still worth reviewing manually once every two weeks.
 
 ---
 

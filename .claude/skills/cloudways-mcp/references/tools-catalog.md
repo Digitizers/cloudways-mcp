@@ -8,9 +8,11 @@ Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = de
 
 > The **live server is the source of truth.** Sections up to and including "Toolset meta-tools" were reconciled against the live MCP (v1.1 era, via `list_available_toolsets` + `get_toolset_tools`); the "New in MCP v1.2" sections below are taken from the official tools article and **not yet re-enumerated against the live server** — verify names via `get_toolset_tools` before relying on them in automation. You do **not** need to memorize tool names to use the MCP (it resolves natural language), but knowing them sharpens prompts and lets you confirm an action maps to the tool you expect.
 >
-> **Most tools are grouped into on-demand toolsets.** Only a subset appears in your default tool list; the rest live inside toolsets and are invoked through the `execute_tool` proxy. A tool being absent from the default list does **not** mean it is absent from the MCP.
+> **Most tools are grouped into on-demand toolsets.** Only a subset appears in your default tool list; the rest live inside toolsets (`apps`, `servers`, `git`, `ssh_keys`, `projects`, `staging_management`, `dns_made_easy`, `cloudflare`, and the v1.2 additions) and are invoked through the `execute_tool` proxy. A tool being absent from the default list does **not** mean it is absent from the MCP — `git_*`, `project_*`, `ssh_key_*`, `app_restore_rollback`, `app_db_password_update`, `server_local_backup_delete`, and `staging_app_clone*` are all live via their toolsets (live-verified in v1.1).
+>
+> There is no `ping` / `customer_info` / `rate_limit_status` tool — verify connectivity with `server_list` and identify the account by the connection prefix.
 
-> **Last verified:** 2026-07-19 against the official support articles (v1.2). Categories marked "New in MCP v1.2" pending live-MCP re-enumeration.
+> **Last verified:** 2026-07-19 against the official support articles (v1.2). Categories under "New in MCP v1.2" pending live-MCP re-enumeration. **Note:** three categories are split across the two halves of this file — Cloudflare CDN, Add-on Management, and Copilot each have a pre-v1.2 table above and an "expanded in v1.2" table below; check both.
 
 ---
 
@@ -34,7 +36,7 @@ Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = de
 | `server_snapshot_frequency_update` | W | Configure snapshot frequency (AWS/GCE); empty disables. |
 | `server_backup_settings_update` | W | Update backup settings (frequency, retention, off-server/local). |
 | `server_local_backup_delete` | W! | Delete local backups stored on the server. |
-| `server_package_update` | W! | Install/uninstall/upgrade packages (PHP, MySQL/MariaDB…). Tagged W! because the **uninstall** action removes package data (destructive — double-confirm); install/upgrade are ordinary writes. Discover installable versions via the `packages_list` tool (Lists API, new in v1.2). |
+| `server_package_update` | W! | Install/uninstall/upgrade packages (PHP, MySQL/MariaDB…). Tagged W! because the **uninstall** action removes package data (destructive — double-confirm); install/upgrade are ordinary writes. Discover installable versions via the `packages_list` tool (Lists API, new in v1.2 — pending live verification); fallback: Cloudways' raw `/packages` API endpoint. |
 | `server_maintenance_window_get` | R | Retrieve maintenance-window settings. |
 | `server_maintenance_window_update` | W | Set maintenance window (days + time slot). |
 | `server_master_username_update` | W! | Update master username (SSH/SFTP) — the old username stops working immediately. |
@@ -463,12 +465,14 @@ All read-only; predefined values used across other calls.
 
 | Tool | Flag | What it does |
 |------|------|--------------|
-| `oauth_access_token_generate` | R | Generate an OAuth access token for direct Cloudways API calls. **Returns a secret — never print the token in responses.** |
+| `oauth_access_token_generate` | W | Generate an OAuth access token for direct Cloudways API calls. Tagged W (not R) because it **mints a live credential** — never call it as part of a "just check things" flow, and **never print the token in responses.** |
 
 > The tools article also lists Service API aliases (`service_state_update`, `service_varnish_manage`, `service_app_varnish_get`) alongside the named `service_start`/`service_stop`/`service_restart`/`varnish_manage`/`varnish_app_manage`/`varnish_app_status` tools above — same operations, endpoint-style naming. Prefer whichever the live MCP exposes.
 
 ---
 
-## Formerly "not available" — now covered (v1.2)
+## Still not exposed (use UI or direct API)
 
-Earlier versions of this catalog correctly flagged SSL / Let's Encrypt, SSH/MySQL IP whitelisting, and team-member management as **not** exposed by the MCP. **As of MCP v1.2 all three are covered** (Security, Security Suite, and Team Members sections above). There is still no `ping` / `customer_info` / `rate_limit_status` tool — verify connectivity with `server_list` and identify the account by the connection prefix.
+- **SSH-key listing** — keys are managed via `ssh_key_create`/`ssh_key_update`/`ssh_key_delete`, but there is no read/list tool; audit the stored-key roster in the Cloudways UI.
+- **Backup listing** — `app_backup_status_get` reports only an in-progress backup; available restore points are visible in the UI.
+- **Account/plan info** — no `customer_info` tool; plan/billing status of the Cloudways account itself is UI-only.

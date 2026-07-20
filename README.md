@@ -81,7 +81,7 @@ The official hosted MCP is at `https://mcp.cloudways.com/mcp/`. Authenticate wit
 - [How to Create and Manage Cloudways API Access Tokens](https://support.cloudways.com/en/articles/5136065) (token generation + roles)
 - [Cloudways API reference](https://developers.cloudways.com/)
 
-> The tool catalog is verified against the official support articles (MCP v1.2, checked 2026-07-19). If it ever conflicts with what the live `mcp__cloudways*__*` tools return, the live MCP is authoritative.
+> The tool catalog is verified against the official support articles (MCP v1.2, checked 2026-07-19); the v1.2 additions are pending re-enumeration against the live server, and their R/W/W! tags are this skill's operational assessment, not Cloudways labels. If the catalog ever conflicts with what the live `mcp__cloudways*__*` tools return, the live MCP is authoritative.
 
 ## Links
 

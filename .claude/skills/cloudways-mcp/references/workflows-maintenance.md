@@ -55,7 +55,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 1. `app_get` — check the domain and read what you can about the app's current state
 2. Check that the DNS still points to the server (critical for LE validation)
-3. **CONFIRM:** `security_lets_encrypt_renew` (W) — or `security_lets_encrypt_install` (W) if no cert was issued yet. For a wildcard domain, run `security_create_dns`, publish the returned TXT record at the DNS host, then `security_verify_dns`.
+3. **CONFIRM:** `security_lets_encrypt_renew` (W) — or `security_lets_encrypt_install` (W) if no cert was issued yet. For a wildcard domain: **CONFIRM** `security_create_dns` (W), publish the returned TXT record at the DNS host, then **CONFIRM** `security_verify_dns` (W).
 4. **CONFIRM:** `security_lets_encrypt_auto_renewal` (W) — turn auto-renewal on if it wasn't active.
 5. `app_get` — re-read and verify the app looks healthy; confirm the cert in the browser
 
@@ -74,12 +74,11 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. **CONFIRM:** `security_csr_create` (W) if the CA needs a CSR from the server; retrieve with `security_csr_get`
-2. Collect from the client: certificate, private key, ca bundle
-3. `app_get` — confirm target
-4. **Install the custom cert in the Cloudways UI** (paste cert + key) — check the live MCP first; if no install tool is exposed, this step stays manual.
-5. Check SSL from the browser (SSL Labs grade A+ preferred)
-6. If Let's Encrypt was active — decide: keep as backup or revoke (`security_lets_encrypt_revoke`, W! — double-confirm)
+1. Collect from the client: certificate, private key, ca bundle. (Only if the CA still needs a CSR from the server: **CONFIRM** `security_csr_create` (W), retrieve with `security_csr_get`.)
+2. `app_get` — confirm target
+3. **Install the custom cert in the Cloudways UI** (paste cert + key) — check the live MCP first; if no install tool is exposed, this step stays manual.
+4. Check SSL from the browser (SSL Labs grade A+ preferred)
+5. If Let's Encrypt was active — decide: keep as backup or revoke (`security_lets_encrypt_revoke`, W! — double-confirm)
 
 > Warning: Installing a custom cert **cancels** the Let's Encrypt cert if one was active. Make sure you have the custom cert in hand **before** you start.
 

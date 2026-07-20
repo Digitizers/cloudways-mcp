@@ -48,7 +48,7 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 
 5. **`server_delete`, `app_delete`, and `app_cname_delete` = immediate destruction in production.** Requires double confirmation (W!): of both the operation and the specific domain/application/server.
 
-6. **Credentials.** Each account authenticates with its own **Access Token**, passed through the case-sensitive HTTP header `X-Access-Token` (the legacy `X-CW-Email` + `X-CW-Api-Key` API-key headers are deprecated — the API key stops working **October 15, 2026**). Don't print tokens in responses. Don't mix credentials between accounts. If the user asks to see them, refer them to platform.cloudways.com → API section (where Access Tokens are generated).
+6. **Credentials.** Each account authenticates with its own **Access Token** (case-sensitive `X-Access-Token` header; roles + legacy-key migration in the Authentication section below). Don't print tokens in responses. Don't mix credentials between accounts. If the user asks to see them, refer them to platform.cloudways.com → API section.
 
 7. **Read-only by default.** If the user just asks "show me / check / monitor" — always choose the appropriate read-only tool. Don't suggest a destructive operation unless the user explicitly asked for it.
 
@@ -102,7 +102,8 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 - `staging_sync_tables`, `staging_sync_code` ⚠️ (W! — overwrite data/code on the target; confirm **direction** — a push to live overwrites production)
 - `team_member_update`, `team_member_delete` ⚠️ (W! — changes/revokes a person's access)
 - `server_transfer_request` ⚠️ (W! — hands server **ownership** to another Cloudways account)
-- `billing_*` / `agency_os_*` create/update/delete (W — client-facing financial records; `billing_invoice_reminder_send` emails the client)
+- `billing_*` / `agency_os_*` create/update (W — client-facing financial records; `billing_invoice_reminder_send` emails the client)
+- `billing_client_delete`, `billing_service_delete`, `billing_plan_delete`, `agency_os_client_delete` ⚠️ (W! — deletes client-facing financial records; `agency_os_client_delete` archives the client's services + invoice history)
 - `copilot_subscribe`, `copilot_plan_change`, `addon_upgrade` (W — change the account's subscription cost)
 
 **Git deployment:**
@@ -134,22 +135,16 @@ Wait for an explicit response. A literal "yes" only = confirmation. Implied cons
 
 The official MCP is hosted at `https://mcp.cloudways.com/mcp/` and authenticates via two **case-sensitive** HTTP headers:
 
-- `X-Access-Token` — a Cloudways **Access Token** generated in the platform (same place the old API key lived)
-- `X-Mcp-Host` — the client identifier; official values: `claude-code`, `claude-desktop`, `cursor`, `windsurf`, `vs-code`, `gemini-cli`, `codex`, `codex-cli`
+- `X-Access-Token` — a Cloudways **Access Token** generated in the platform
+- `X-Mcp-Host` — the client identifier (`claude-code` / `claude-desktop`; full list of official values in `references/installation.md`)
 
-**Access Tokens are role-based (RBAC).** Three scopes exist:
+Tokens are **role-based (RBAC)**: **READ** (look-ups only), **LIMITED** (selected endpoint groups), **FULL ACCESS** (everything, including destructive actions). Start new integrations with READ and escalate only when a connection must write. This platform-level control **complements** (does not replace) this skill's write-confirmation discipline — even FULL ACCESS has no per-tool gating at the MCP layer.
 
-- **READ** — look-ups only (status, config, monitoring); no changes possible. Ideal for monitoring-only connections.
-- **LIMITED** — only the endpoint groups you select.
-- **FULL ACCESS** — everything the account can do, including destructive actions.
-
-Start every new integration with a **READ** token; move to LIMITED for specific workflows; reserve FULL ACCESS for connections that genuinely need to make changes. This platform-level control **complements** (does not replace) this skill's write-confirmation discipline.
-
-> **Legacy:** the old `X-CW-Email` + `X-CW-Api-Key` API-key headers are deprecated — the API key stops working on **October 15, 2026**. Migrate every connection to an Access Token before then.
+> **Legacy:** the old `X-CW-Email` + `X-CW-Api-Key` API-key headers are deprecated — the API key stops working on **October 15, 2026** — and until migrated such connections retain unrestricted full-account access. Migration: `references/installation.md`.
 
 Treat tokens like passwords and **never print them in responses**. If the user asks to see one, refer them to platform.cloudways.com.
 
-For the full connection and multi-account setup, see `references/installation.md`.
+For the full connection, role guidance, and multi-account setup, see `references/installation.md`.
 
 ---
 

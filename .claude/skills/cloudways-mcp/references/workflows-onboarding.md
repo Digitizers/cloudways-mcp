@@ -221,9 +221,9 @@ Auditor: [your name]
 
 ## Quick reference — Audit checklist (printable)
 
-- [ ] **Account:** server_list / project_list / copilot_insights_list  (plan/billing + team roster = UI only)
+- [ ] **Account:** server_list / project_list / copilot_insights_list / team_member_list  (plan/billing = UI only)
 - [ ] **Per server:** server_get / server_settings_get / service_status / server_disk_usage_fetch + monitoring_server_summary / monitoring_server_graph
 - [ ] **Per app:** app_get / app_settings_get / monitoring_app_summary / analytics_app_traffic / analytics_app_php / analytics_app_mysql / app_varnish_settings_get / app_vulnerabilities_list (WP)
-- [ ] **Security:** app_settings_get (XML-RPC etc.) / app_vulnerabilities_list / copilot_insights_list  (IP whitelists + SSH-key roster = UI / API only)
-- [ ] **Manual (UI):** Backup schedule + retention / SSL provider + expiry / IP whitelists / SSH-key roster / team members / Cloudflare integration (if any) / WP version (if WP) / Active plugins (if WP)
+- [ ] **Security:** app_settings_get (XML-RPC etc.) / app_vulnerabilities_list / copilot_insights_list / security_get_whitelisted_ips + security_get_whitelisted_ips_mysql / security_suite_server_incidents_list (if suite active)  (SSH-key roster = UI / API only)
+- [ ] **Manual (UI):** Backup schedule + retention / SSH-key roster / Cloudflare integration (if any) / WP version (if WP) / Active plugins (if WP)
 - [ ] **Document:** Red flags / Recommendations / Quote / SLA
