@@ -2,8 +2,5 @@
   "name": "cloudways-mcp",
   "displayName": "Cloudways MCP",
   "description": "Operational guide for managing Cloudways servers and applications via the official Cloudways hosted MCP server — monitoring, analytics, Varnish, backups, cloning, staging, SSL, and safe write-gating.",
-  "author": {
-    "name": "Ben Kalsky",
-    "email": "benkalsky@gmail.com"
-  }
+  "author": { "name": "Digitizer" }
 }
