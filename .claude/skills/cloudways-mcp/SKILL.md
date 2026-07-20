@@ -4,7 +4,7 @@ version: 1.3.1
 license: MIT
 description: |
   Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the official Cloudways MCP server (Cloudways' hosted MCP / Remote MCP, per their support docs).
-  Use whenever the user mentions Cloudways, a Cloudways server or app, server monitoring, app monitoring, bandwidth, disk usage, PHP/MySQL/traffic analytics, Varnish cache, app cloning, backups/restore on Cloudways, Git deployments on Cloudways, SSL/Let's Encrypt on Cloudways, malware scans / Security Suite, staging sync, team members, client billing/AgencyOS, or running an audit/onboarding on a Cloudways-hosted client site.
+  Use whenever the user mentions Cloudways, a Cloudways server or app, server monitoring, app monitoring, bandwidth, disk usage, PHP/MySQL/traffic analytics, Varnish cache, app cloning, backups/restore on Cloudways, Git deployments on Cloudways, SSL/Let's Encrypt on Cloudways, malware scans / Security Suite, staging sync, team members, AgencyOS client billing, or running an audit/onboarding on a Cloudways-hosted client site.
   Any write operation (start/stop/restart server, backup, restore, update CNAME, purge cache, change service state, git pull, SSL install/revoke, IP whitelist update, staging sync, team/billing changes, delete server/app) requires explicit confirmation of target server/app and intended action before execution.
 ---
 

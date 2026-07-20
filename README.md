@@ -40,7 +40,7 @@ Use it solo for your own boxes; reach for Aura when you operate a fleet on clien
 ## Features
 
 - ✅ **Official Cloudways (Remote) MCP** — connect directly to the hosted server at `mcp.cloudways.com`; no self-hosting, no proxy to maintain.
-- ✅ **Complete tool catalog (MCP v1.2, ~244 tools)** — servers, apps, services, DNS, CDN, Git, SSH keys, analytics, **SSL / Let's Encrypt, IP whitelisting, Security Suite (malware/WAF), staging sync, team members, client billing / AgencyOS**, all tagged R / W / W!.
+- ✅ **Complete tool catalog (MCP v1.2, 244 tools)** — servers, apps, services, DNS, CDN, Git, SSH keys, analytics, **SSL / Let's Encrypt, IP whitelisting, Security Suite (malware/WAF), staging sync, team members, AgencyOS client billing (clients, services, plan prices, invoices, tax rates)**, all tagged R / W / W!. Billing runs through the live `agency_os_*` tools — there is no separate Client Billing toolset.
 - ✅ **Role-based Access Tokens** — the skill guides token scoping (READ / LIMITED / FULL ACCESS) per connection, on top of its own write-confirmation discipline.
 - ✅ **Write-confirmation safety** — every state-changing operation requires explicit target + action confirmation; destructive operations double-confirm.
 - ✅ **Multi-account** — one connection per Cloudways account, each with its own prefix; no cross-account ID or credential mixing.
@@ -81,7 +81,7 @@ The official hosted MCP is at `https://mcp.cloudways.com/mcp/`. Authenticate wit
 - [How to Create and Manage Cloudways API Access Tokens](https://support.cloudways.com/en/articles/5136065) (token generation + roles)
 - [Cloudways API reference](https://developers.cloudways.com/)
 
-> The tool catalog is verified against the official support articles (MCP v1.2, checked 2026-07-19); the v1.2 additions are pending re-enumeration against the live server, and their R/W/W! tags are this skill's operational assessment, not Cloudways labels. If the catalog ever conflicts with what the live `mcp__cloudways*__*` tools return, the live MCP is authoritative.
+> The tool catalog is **verified against the live MCP** (all 22 toolsets enumerated on a connected account, 2026-07-20); content is sourced from the official MCP v1.2 support articles (2026-07-19). The article documents categories the live server does not expose — Bot Protection, Client Billing, CloudwaysCDN legacy, a "Lists API" — and those have been removed from the catalog. R/W/W! tags are this skill's operational assessment, not Cloudways labels. If the catalog ever conflicts with what the live `mcp__cloudways*__*` tools return, the live MCP is authoritative.
 
 ## Links
 
