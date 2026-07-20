@@ -47,7 +47,7 @@ jobs:
           # allowed. Strip those exact tokens, then re-scan the residue — so a line like
           # "Digitizers/digitizer-os" still fails on its remaining "digitizer-os" part,
           # unlike a line-level grep -v exemption which would wave the whole line through.
-          if grep -rniE "digitizer|דיגיטייזר|Ben/Avi" .claude/ | sed -E 's/digitizer-skills//g; s/Digitizers\///g' | grep -iE "digitizer|דיגיטייזר|Ben/Avi"; then
+          if grep -rniE "digitizer|דיגיטייזר|Ben/Avi" .claude/ | sed -E 's/(^|[^A-Za-z0-9-])digitizer-skills([^A-Za-z0-9-]|$)/\1\2/g; s/(^|[^A-Za-z0-9])Digitizers\//\1/g' | grep -iE "digitizer|דיגיטייזר|Ben/Avi"; then
             echo "::error::studio framing / personal names found in the skill payload — keep .claude/ generic"; exit 1
           fi
           # The repo-level README may carry the studio brand footer (Digitizer),
