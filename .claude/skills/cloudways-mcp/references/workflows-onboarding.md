@@ -10,7 +10,7 @@ Core scenario: a new client arrives with a site on Cloudways, and you need to bu
 
 Confirm with the client:
 - [ ] API access approved on their side
-- [ ] A **new Access Token** generated for this engagement (READ role for the audit phase; don't reuse tokens their old team held — old tokens should be revoked)
+- [ ] A **new Access Token** generated for this engagement (READ role for the audit phase; don't reuse tokens their old team held — old tokens should be revoked). One exception: `server_disk_usage_fetch` (Stage 2) is classified W and may be blocked on a READ token — either rely on the cached `monitoring_server_summary`, or scope a LIMITED token that includes it.
 - [ ] If there are old team members who don't need access — plan the removal now; as of MCP v1.2 the roster is auditable via `team_member_list` (R) and removal is `team_member_delete` (W! — double-confirm, do it only after the audit)
 
 ---
@@ -48,8 +48,8 @@ For each server in the list:
 1. server_get                  → label, size, IP, master credentials, app list
 2. server_settings_get         → PHP timeout, memory, upload limit, custom PHP
 3. service_status              → what's running (Apache/Nginx/MySQL/Memcached/Varnish/Redis)
-4. server_disk_usage_fetch     → trigger a fresh disk-usage calculation (init), then:
-5. monitoring_server_summary   → current disk + bandwidth usage (read)
+4. server_disk_usage_fetch     → optional: trigger a fresh disk-usage calculation (W — benign refresh, but may be blocked on a READ token; skip and use the cached data if so), then:
+5. monitoring_server_summary   → current disk + bandwidth usage (read; cached values if step 4 was skipped)
 6. monitoring_server_graph     → CPU/RAM trends last 24h
 ```
 
@@ -222,7 +222,7 @@ Auditor: [your name]
 ## Quick reference — Audit checklist (printable)
 
 - [ ] **Account:** server_list / project_list / copilot_insights_list / team_member_list  (plan/billing = UI only)
-- [ ] **Per server:** server_get / server_settings_get / service_status / server_disk_usage_fetch + monitoring_server_summary / monitoring_server_graph
+- [ ] **Per server:** server_get / server_settings_get / service_status / monitoring_server_summary / monitoring_server_graph (optionally server_disk_usage_fetch first for fresh disk data — W, needs a token role that allows it)
 - [ ] **Per app:** app_get / app_settings_get / monitoring_app_summary / analytics_app_traffic / analytics_app_php / analytics_app_mysql / app_varnish_settings_get / app_vulnerabilities_list (WP)
 - [ ] **Security:** app_settings_get (XML-RPC etc.) / app_vulnerabilities_list / copilot_insights_list / security_get_whitelisted_ips + security_get_whitelisted_ips_mysql / security_suite_server_incidents_list (if suite active)  (SSH-key roster = UI / API only)
 - [ ] **Manual (UI):** Backup schedule + retention / SSH-key roster / Cloudflare integration (if any) / WP version (if WP) / Active plugins (if WP)
