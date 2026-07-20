@@ -2,19 +2,39 @@
 
 The official tool catalog for the **Cloudways (Remote) MCP** (`https://mcp.cloudways.com/mcp/`), taken from the official support articles: [Cloudways MCP Server Tools](https://support.cloudways.com/en/articles/15798823-cloudways-mcp-server-tools) (the dedicated tool reference) and [How to Use Cloudways MCP Server](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management) (setup). Tools appear in Claude as `mcp__cloudways__<tool>` (or `mcp__cloudways-<client>__<tool>` per account).
 
-**MCP v1.2 scale:** ~244 tools total per the [v1.2 announcement](https://www.cloudways.com/blog/cloudways-mcp-v1-2-112-new-tools-role-based-access-tokens-and-full-cloudways-api-coverage/) (112 added in v1.2, covering essentially the full Cloudways API). Your client initially sees only **65 tools** (62 high-frequency direct tools + the 3 meta-tools below); everything else is discovered and invoked on demand through the meta-tools.
+**MCP v1.2 scale:** **244 tools** — 241 spread across 22 toolsets plus the 3 meta-tools, live-verified 2026-07-20 (see the toolset table below). This matches the [v1.2 announcement](https://www.cloudways.com/blog/cloudways-mcp-v1-2-112-new-tools-role-based-access-tokens-and-full-cloudways-api-coverage/) exactly (112 added in v1.2, covering essentially the full Cloudways API). Your client initially sees only **65 tools** (62 high-frequency direct tools + the 3 meta-tools below). Those 62 are **members of the toolsets**, not a separate tier, so the hidden remainder is **179** (241 − 62) — discovered and invoked on demand through the meta-tools.
 
-> **Count caveat:** this catalog's tables enumerate ~296 identifiers — more than the announced ~244 — because the official tools article itself lists some operations under two names (endpoint-style aliases for the Security and Service categories, noted below) and may include article-only entries. Both numbers are approximate; **never use them to validate live enumeration** — the live `mcp__cloudways*__*` tool list is the only exact count, and some catalog entries may resolve to the same live tool (or not exist) until the pending re-enumeration.
+> **The official tools article over-lists.** It documents endpoint-style aliases for the Security and Service categories (`security_dns_create`, `service_state_update`, …) plus whole categories — Bot Protection, Client Billing, CloudwaysCDN legacy, a "Lists API", `oauth_access_token_generate` — that **have no live counterpart**. Live re-enumeration on 2026-07-20 found 64 such phantom identifiers and **zero** real alias mismatches: every name in the tables below matches the live `tool_name` exactly. They have been removed from this catalog; if you see them in Cloudways' docs, don't build automation on them.
 
 Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = destructive / irreversible (requires double confirmation).
 
-> The **live server is the source of truth.** Sections up to and including "Toolset meta-tools" were reconciled against the live MCP (v1.1 era, via `list_available_toolsets` + `get_toolset_tools`); the "New in MCP v1.2" sections below are taken from the official tools article and **not yet re-enumerated against the live server** — verify names via `get_toolset_tools` before relying on them in automation. You do **not** need to memorize tool names to use the MCP (it resolves natural language), but knowing them sharpens prompts and lets you confirm an action maps to the tool you expect.
+> The **live server is the source of truth.** Every section of this file — including the "New in MCP v1.2" half — was reconciled against the live MCP on 2026-07-20 via `list_available_toolsets` + `get_toolset_tools` on a connected account: all 22 toolsets enumerated, every tool name verified byte-for-byte, phantom entries removed. You do **not** need to memorize tool names to use the MCP (it resolves natural language), but knowing them sharpens prompts and lets you confirm an action maps to the tool you expect.
 >
-> **Most tools are grouped into on-demand toolsets.** Only a subset appears in your default tool list; the rest live inside toolsets (`apps`, `servers`, `git`, `ssh_keys`, `projects`, `staging_management`, `dns_made_easy`, `cloudflare`, and the v1.2 additions) and are invoked through the `execute_tool` proxy. A tool being absent from the default list does **not** mean it is absent from the MCP — `git_*`, `project_*`, `ssh_key_*`, `app_restore_rollback`, `app_db_password_update`, `server_local_backup_delete`, and `staging_app_clone*` are all live via their toolsets (live-verified in v1.1).
+> **Most tools are grouped into on-demand toolsets.** Only a subset appears in your default tool list; the rest live inside toolsets (`apps`, `servers`, `git`, `ssh_keys`, `projects`, `staging_management`, `dns_made_easy`, `cloudflare`, and the v1.2 additions) and are invoked through the `execute_tool` proxy. A tool being absent from the default list does **not** mean it is absent from the MCP — `git_*`, `project_*`, `ssh_key_*`, `app_restore_rollback`, `app_db_password_update`, `server_local_backup_delete`, and `staging_app_clone*` are all live via their toolsets (live-verified). Note that `staging_app_clone*` lives in the `apps` toolset, not `staging_management`.
+>
+> **Toolset descriptions overstate their own contents.** `list_available_toolsets` is reliable for *routing* but not as a capability contract — several descriptions advertise operations that have no tool: `staging_management` (delete latest staging backup — actually `app_local_backup_delete` in `apps`), `security` (install custom SSL — only the *remove* counterpart exists), `cloudways_bot` (list/paginate alerts — only the mark-read tools exist), `copilot` (severity summary, alert-by-id — only `copilot_insights_list`), `agency_os` (disconnect agency, subscribe client to plan, attach/cancel client service, client+service summary, mark invoice paid, reminders — none of the 7 exist). Confirm with `get_toolset_tools` before promising a capability.
 >
 > There is no `ping` / `customer_info` / `rate_limit_status` tool — verify connectivity with `server_list` and identify the account by the connection prefix.
+>
+> **Last verified:** 2026-07-20 against the **live MCP** (all 22 toolsets enumerated on a connected account); content sourced from the official v1.2 support articles 2026-07-19. **Note:** three categories are split across the two halves of this file — Cloudflare CDN, Add-on Management, and Copilot each have a pre-v1.2 table above and an "expanded in v1.2" table below; check both.
 
-> **Last verified:** 2026-07-19 against the official support articles (v1.2). Categories under "New in MCP v1.2" pending live-MCP re-enumeration. **Note:** three categories are split across the two halves of this file — Cloudflare CDN, Add-on Management, and Copilot each have a pre-v1.2 table above and an "expanded in v1.2" table below; check both.
+## Live toolset counts (2026-07-20)
+
+| Toolset | Tools | Toolset | Tools |
+|---------|-------|---------|-------|
+| `apps` | 52 | `addons` | 10 |
+| `servers` | 28 | `dns_made_easy` | 9 |
+| `security_suite` | 26 | `monitoring` | 9 |
+| `agency_os` | 23 | `copilot` | 9 |
+| `cloudflare` | 15 | `cloudways_bot` | 7 |
+| `security` | 13 | `services` | 7 |
+| `git` | 6 | `projects` | 4 |
+| `staging_management` | 5 | `team_member` | 4 |
+| `supervisord` | 5 | `ssh_keys` | 3 |
+| `app_vulnerability` | 2 | `transfer_server` | 3 |
+| `operation` | 1 | `safe_update` | **0** |
+
+**241 toolset tools + 3 meta-tools = 244**, of which 62 toolset members are surfaced directly and the other 179 are on-demand only. `safe_update` is declared by the server but **empty in the current build** — its description states it is "declared but not yet populated", and `execute_tool` returns *"tool not found in toolset"* for anything in it. SafeUpdate (managed WordPress core/plugin/theme updates with visual-regression checks and auto-rollback) is therefore **UI-only** for now; re-check this toolset after future MCP releases.
 
 ---
 
@@ -38,7 +58,7 @@ Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = de
 | `server_snapshot_frequency_update` | W | Configure snapshot frequency (AWS/GCE); empty disables. |
 | `server_backup_settings_update` | W | Update backup settings (frequency, retention, off-server/local). |
 | `server_local_backup_delete` | W! | Delete local backups stored on the server. |
-| `server_package_update` | W! | Install/uninstall/upgrade packages (PHP, MySQL/MariaDB…). Tagged W! because the **uninstall** action removes package data (destructive — double-confirm); install/upgrade are ordinary writes. Discover installable versions via the `packages_list` tool (Lists API, new in v1.2 — pending live verification); fallback: Cloudways' raw `/packages` API endpoint. |
+| `server_package_update` | W! | Install/uninstall/upgrade packages (PHP, MySQL/MariaDB…). Tagged W! because the **uninstall** action removes package data (destructive — double-confirm); install/upgrade are ordinary writes. Discover installable versions via Cloudways' raw `/packages` API endpoint — there is **no** `packages_list` MCP tool (the article's "Lists API" does not exist on the live server). |
 | `server_maintenance_window_get` | R | Retrieve maintenance-window settings. |
 | `server_maintenance_window_update` | W | Set maintenance window (days + time slot). |
 | `server_master_username_update` | W! | Update master username (SSH/SFTP) — the old username stops working immediately. |
@@ -117,6 +137,8 @@ Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = de
 | `varnish_manage` | W | Enable/disable/purge Varnish at server level. |
 | `varnish_app_manage` | W | Enable/disable Varnish per application. |
 | `varnish_app_status` | R | Current Varnish status for an application. |
+
+> All 7 are live-verified. The tools article's endpoint-style aliases (`service_state_update`, `service_varnish_manage`, `service_app_varnish_get`) **do not exist** — use the names above.
 
 ## Add-on Management
 
@@ -233,8 +255,6 @@ Everything below was added in Cloudways MCP v1.2 and is documented in the [offic
 | `security_lets_encrypt_revoke` | W! | Revoke a Let's Encrypt cert — HTTPS falls back to no SSL (breaks production HTTPS). |
 | `security_lets_encrypt_auto_renewal` | W | Toggle Let's Encrypt auto-renewal on/off for an app. |
 | `security_remove_own_ssl` | W! | Remove a previously-installed custom (own) SSL cert from an app. |
-| `security_csr_create` | W | Create a CSR for a custom SSL certificate. |
-| `security_csr_get` | R | Retrieve a CSR certificate. |
 | `security_create_dns` | W | Create the DNS challenge (TXT) record required to issue a wildcard SSL cert. |
 | `security_verify_dns` | W | Verify the published DNS challenge record so the wildcard cert can be issued. |
 | `security_get_whitelisted_ips` | R | List IPs whitelisted for SSH/SFTP access on a server. |
@@ -244,7 +264,9 @@ Everything below was added in Cloudways MCP v1.2 and is documented in the [offic
 | `security_whitelist_ip_siab` | W | Whitelist an IP for Shell-in-a-Box (browser Web SSH). |
 | `security_whitelist_ip_adminer` | W | Whitelist an IP for Adminer (browser DB manager). |
 
-> The tools article also lists API-endpoint-style aliases for some of these (`security_dns_create`, `security_dns_verify`, `security_lets_encrypt_auto_renewal_update`, `security_mysql_whitelisted_ips_get`, `security_ssh_sftp_whitelisted_ips_get`, `security_whitelisted_ips_update`, `security_ip_blacklist_check`, `security_adminer_allow`, `security_siab_allow`). If a name above isn't found on the live MCP, check the alias via `get_toolset_tools`.
+> **13 tools, all live-verified.** The tools article lists endpoint-style aliases for several of these (`security_dns_create`, `security_dns_verify`, `security_lets_encrypt_auto_renewal_update`, `security_mysql_whitelisted_ips_get`, `security_ssh_sftp_whitelisted_ips_get`, `security_whitelisted_ips_update`, `security_ip_blacklist_check`, `security_adminer_allow`, `security_siab_allow`) plus CSR tools (`security_csr_create` / `security_csr_get`) — **none of them exist on the live server.** The names in the table are the real ones.
+>
+> There is **no tool to install a custom SSL cert** (only `security_remove_own_ssl` to remove one), despite the toolset description claiming otherwise — the install/paste step is UI or direct-API only.
 
 ## Security Suite — Anti-Malware / WAF (new in v1.2)
 
@@ -276,23 +298,6 @@ Everything below was added in Cloudways MCP v1.2 and is documented in the [offic
 | `security_suite_server_infected_domains_sync` | W | Force a re-sync of the infected-domains list. |
 | `security_suite_server_firewall_settings_get` | R | Current firewall config (rule sets, thresholds, geo-blocking). |
 | `security_suite_server_firewall_settings_update` | W | Update firewall config (rule sets, thresholds, geo-blocking). |
-
-## Bot Protection (new in v1.2)
-
-| Tool | Flag | What it does |
-|------|------|--------------|
-| `bot_protection_status` | R | Whether Bot Protection is active for an app. |
-| `bot_protection_traffic` | R | Bot Protection traffic data. |
-| `bot_protection_traffic_summary` | R | Summarized bot traffic data. |
-| `bot_protection_login_traffic` | R | Login-related bot traffic. |
-| `bot_protection_login_traffic_summary` | R | Summarized login-protection traffic. |
-| `bot_protection_bad_bots_list` | R | Detected bad bots. |
-| `bot_protection_whitelisted_ips` | R | IPs excluded from bot blocking. |
-| `bot_protection_whitelisted_bots` | R | Bots allowed through. |
-| `bot_protection_activate` | W | Enable Bot Protection for an app. |
-| `bot_protection_deactivate` | W | Disable Bot Protection for an app. |
-| `bot_protection_ip_whitelist_update` | W | Add/update IPs in the bot-protection whitelist. |
-| `bot_protection_bad_bots_whitelist_update` | W | Whitelist selected bots. |
 
 ## CloudwaysBot — Alerts & Integrations (new in v1.2)
 
@@ -358,27 +363,6 @@ Everything below was added in Cloudways MCP v1.2 and is documented in the [offic
 | `copilot_server_settings_get` | R | Per-server Copilot settings (lists only servers where Copilot was disabled). |
 | `copilot_server_settings_update` | W | Toggle Copilot per server / adjust thresholds. |
 
-## Client Billing & Reporting (new in v1.2)
-
-Agency-facing billing. All create/update/delete operations touch **client-facing financial records** — confirm carefully.
-
-| Tool | Flag | What it does |
-|------|------|--------------|
-| `billing_clients_list` / `billing_client_get` | R | List clients / client details. |
-| `billing_client_create` / `billing_client_update` | W | Create / update a client record. |
-| `billing_client_delete` | W! | Delete a client record. |
-| `billing_services_list` | R | List billing services. |
-| `billing_service_create` / `billing_service_update` | W | Create / update a billing service. |
-| `billing_service_delete` | W! | Delete a billing service. |
-| `billing_plans_list` | R | List billing plans. |
-| `billing_plan_create` / `billing_plan_update` | W | Create / update a billing plan. |
-| `billing_plan_delete` | W! | Delete a billing plan. |
-| `billing_invoices_list` / `billing_invoice_get` | R | List invoices / invoice details. |
-| `billing_invoice_reminder_send` | W | **Sends an email to the client** — outward-facing; confirm recipient + invoice. |
-| `billing_taxes_list` / `billing_tax_countries_list` | R | Tax rules / country tax specs. |
-| `billing_tax_create` | W | Create a tax rule/rate. |
-| `billing_reports_get` | R | Billing / client reports. |
-
 ## AgencyOS (new in v1.2)
 
 | Tool | Flag | What it does |
@@ -420,20 +404,6 @@ The three tools above (`cloudflare_add_domain`, `cloudflare_get_details`, `cloud
 | `cloudflare_get_logpush_analytics` | R | Raw Logpush request-log analytics. |
 | `cloudflare_get_logpush_security` | R | Raw Logpush security-event data. |
 
-## CloudwaysCDN (legacy) (new in v1.2)
-
-Legacy CDN product — distinct from the Cloudflare integration above.
-
-| Tool | Flag | What it does |
-|------|------|--------------|
-| `cloudwayscdn_details_get` | R | CloudwaysCDN details for an app. |
-| `cloudwayscdn_bandwidth_get` | R | CDN bandwidth usage. |
-| `cloudwayscdn_setup` | W | Set up CloudwaysCDN for an app. |
-| `cloudwayscdn_activate` | W | Activate CloudwaysCDN. |
-| `cloudwayscdn_purge_assets` | W | Purge CDN assets. |
-| `cloudwayscdn_website_url_update` | W | Update the site URL used by the CDN. |
-| `cloudwayscdn_subscription_remove` | W! | Remove the CloudwaysCDN subscription. |
-
 ## Add-on Management — expanded in v1.2
 
 In addition to the five `addon_*` tools above:
@@ -446,35 +416,13 @@ In addition to the five `addon_*` tools above:
 | `addon_elastic_verify_domain` | W | Verify a sender domain's DNS in Elastic Email. |
 | `addon_elastic_delete_domain` | W! | Delete a sender domain from Elastic Email — mail from that domain stops sending. |
 
-## Lists API — reference data (new in v1.2)
-
-All read-only; predefined values used across other calls.
-
-| Tool | Flag | What it does |
-|------|------|--------------|
-| `apps_list` | R | Supported application types. |
-| `providers_list` | R | Supported cloud providers. |
-| `regions_list` | R | Available provider regions. |
-| `server_sizes_list` | R | Available server sizes. |
-| `packages_list` | R | Available packages (PHP/MySQL versions, …). |
-| `backup_frequencies_list` | R | Supported backup frequencies. |
-| `countries_list` | R | Supported countries. |
-| `monitor_durations_list` | R | Monitoring duration options. |
-| `monitor_targets_list` | R | Monitoring target options. |
-| `settings_list` | R | Supported settings options. |
-
-## Authentication API (new in v1.2)
-
-| Tool | Flag | What it does |
-|------|------|--------------|
-| `oauth_access_token_generate` | W | Generate an OAuth access token for direct Cloudways API calls. Tagged W (not R) because it **mints a live credential** — never call it as part of a "just check things" flow, and **never print the token in responses.** |
-
-> The tools article also lists Service API aliases (`service_state_update`, `service_varnish_manage`, `service_app_varnish_get`) alongside the named `service_start`/`service_stop`/`service_restart`/`varnish_manage`/`varnish_app_manage`/`varnish_app_status` tools above — same operations, endpoint-style naming. Prefer whichever the live MCP exposes.
-
 ---
 
 ## Still not exposed (use UI or direct API)
 
-- **SSH-key listing** — keys are managed via `ssh_key_create`/`ssh_key_update`/`ssh_key_delete`, but there is no read/list tool; audit the stored-key roster in the Cloudways UI.
+- **SSH-key listing** — keys are managed via `ssh_key_create`/`ssh_key_update`/`ssh_key_delete`, but there is no dedicated read/list tool. Key metadata **does** come back inside the `server_get` payload, so audit from there (or the Cloudways UI) rather than assuming the roster is unreadable.
+- **SafeUpdate (managed WordPress updates)** — the `safe_update` toolset is declared but empty in the current build (0 tools); scheduling, run-now, history, and auto-rollback are UI-only.
+- **Custom SSL install** — `security_remove_own_ssl` removes a custom cert, but there is no install counterpart; paste the cert in the UI or use the direct API.
+- **Bot Protection, Client Billing, CloudwaysCDN (legacy), reference-data "Lists API", OAuth token minting** — documented in Cloudways' tools article but **absent from the live MCP**; UI or direct API only.
 - **Backup listing** — `app_backup_status_get` reports only an in-progress backup; available restore points are visible in the UI.
 - **Account/plan info** — no `customer_info` tool; plan/billing status of the Cloudways account itself is UI-only.

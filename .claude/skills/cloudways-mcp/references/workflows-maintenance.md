@@ -70,13 +70,24 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **When:** The client purchased a cert from another CA (DigiCert, Sectigo, etc.), not Let's Encrypt
 
-> **Partially covered by the MCP as of v1.2:** `security_csr_create` (W) / `security_csr_get` (R) generate and retrieve the CSR, and `security_remove_own_ssl` (W!) removes an installed custom cert. The **install/paste step itself** is still done in the **Cloudways Platform UI** (Application → SSL Certificate → Custom SSL) or via the [direct API](https://developers.cloudways.com/) — verify against the live MCP, and prefer the UI if no install tool is exposed.
+> **Barely covered by the MCP** (live-verified 2026-07-20): the only custom-SSL tool is `security_remove_own_ssl` (W!), which *removes* an installed cert. There is **no install tool and no CSR tool** — the article's `security_csr_create` / `security_csr_get` do not exist on the live server, and the `security` toolset description claiming a custom-cert install is wrong. Generate the CSR on the CA's side (or via `openssl`), then paste cert + key in the **Cloudways Platform UI** (Application → SSL Certificate → Custom SSL) or use the [direct API](https://developers.cloudways.com/).
 
 **Sequence:**
 
-1. Collect from the client: certificate, private key, ca bundle. (Only if the CA still needs a CSR from the server: **CONFIRM** `security_csr_create` (W), retrieve with `security_csr_get`.)
+1. Collect from the client: certificate, private key, ca bundle. If the CA still needs a CSR, generate it outside Cloudways (the MCP exposes no CSR tool) — and **name the key explicitly**, because the cert is only installable with the exact key that signed the CSR:
+
+   ```bash
+   # Signing with the key you already have:
+   openssl req -new -key privkey.pem -out request.csr
+
+   # Or generating a new key + CSR together (-nodes leaves the key
+   # unencrypted, which the Cloudways UI requires):
+   openssl req -new -newkey rsa:2048 -nodes -keyout privkey.pem -out request.csr
+   ```
+
+   Keep `privkey.pem` — a bare `openssl req -new` writes an encrypted key to whatever path the local OpenSSL config picks, and losing it makes the issued certificate unusable.
 2. `app_get` — confirm target
-3. **Install the custom cert in the Cloudways UI** (paste cert + key) — check the live MCP first; if no install tool is exposed, this step stays manual.
+3. **Install the custom cert in the Cloudways UI** (paste cert + key) — manual by necessity; no MCP tool covers this step.
 4. Check SSL from the browser (SSL Labs grade A+ preferred)
 5. If Let's Encrypt was active — decide: keep as backup or revoke (`security_lets_encrypt_revoke`, W! — double-confirm)
 
