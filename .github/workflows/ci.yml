@@ -56,8 +56,9 @@ jobs:
           if grep -rniE "Ben/Avi|benkalsky" README.md; then
             echo "::error::personal name found in README — use the studio brand, not personal names"; exit 1
           fi
-          # Secret-shaped strings must never appear in the payload.
-          if grep -rniE "(api[_-]?key|bearer|secret|password)[\"'[:space:]=:]+[A-Za-z0-9/_-]{24,}" .claude/ \
+          # Secret-shaped strings must never appear in the payload — nor in the
+          # tracked MCP configs, which are placeholder-only by policy.
+          if grep -rniE "(api[_-]?key|bearer|secret|password|access[_-]?token)[\"'[:space:]=:]+[A-Za-z0-9/_-]{24,}" .claude/ .mcp.json .mcp.json.example \
              | grep -viE "your-|YOUR_|CLIENT_[AB]|example|<|\$\{|placeholder"; then
             echo "::error::possible real secret found"; exit 1
           fi

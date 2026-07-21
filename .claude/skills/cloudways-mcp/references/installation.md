@@ -39,12 +39,17 @@ This skill targets the **official Cloudways (Remote) MCP** — a Cloudways-hoste
 
 ### Env var (zero-config — devices and cloud sessions)
 
-The repo commits a placeholder-only `.mcp.json` whose `X-Access-Token` header reads
-`${CLOUDWAYS_ACCESS_TOKEN}`. Set that variable — in your shell profile on a device, or in
-the claude.ai cloud environment's environment variables for web/phone sessions — and the
-`cloudways` connection starts automatically. Unset, the server is skipped silently. Never
-put a real token in `.mcp.json` itself; it is tracked in git. Cloud environments with a
-restricted network policy must allow `mcp.cloudways.com`.
+The repo commits a `.mcp.json` whose `X-Access-Token` header reads
+`${CLOUDWAYS_ACCESS_TOKEN:-}` — a placeholder, never a real token. Set that variable — in
+your shell profile on a device, or in the claude.ai cloud environment's environment
+variables for web/phone sessions — and the connection (named `cloudways-env`) authenticates
+automatically. While the variable is unset the config still parses (the `:-` default), but
+the connection can't authenticate and shows as unavailable in `/mcp` — expected until you
+provide the token. The `cloudways-env` name is deliberate: project scope beats user scope on
+name collisions, so it never shadows a `cloudways` or `cloudways-<client>` connection you
+add with `claude mcp add -s user`. Never put a real token in `.mcp.json` itself; it is
+tracked in git. Cloud environments with a restricted network policy must allow
+`mcp.cloudways.com`.
 
 ### Claude Code (native HTTP — recommended)
 
@@ -83,7 +88,7 @@ Claude Desktop does not natively support remote HTTP MCP servers, so it uses the
 
 > **No spaces around the colon** in `--header` values for the bridge: use `X-Access-Token:abc123`, not `X-Access-Token: abc123`. After saving, **fully quit** Claude Desktop (Cmd-Q / tray → Quit — closing the window is not enough) and reopen.
 
-> Keep real credentials out of version control. For Claude Code, prefer the `claude mcp add` command above (stored in your user config) or a git-ignored `.mcp.json`. See `.mcp.json.example` in the repo root for the per-account shape. Header names are case-sensitive.
+> Keep real credentials out of version control. For Claude Code, put the token in your user scope with the `claude mcp add` command above, or in the `CLOUDWAYS_ACCESS_TOKEN` env var (the committed `.mcp.json` reads it) — never edit a real token into `.mcp.json`, which is a **tracked** file. See `.mcp.json.example` in the repo root for the per-account shape. Header names are case-sensitive.
 
 ### Other clients (Cursor, Windsurf, VS Code Copilot, Gemini CLI, Codex)
 

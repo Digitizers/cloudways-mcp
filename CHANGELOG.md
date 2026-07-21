@@ -2,8 +2,10 @@
 
 ## 1.4.0 - 2026-07-21
 Zero-config connection for cloud sessions and devices:
-- **Committed `.mcp.json`** (placeholders only) — the `cloudways` connection reads its token from the `CLOUDWAYS_ACCESS_TOKEN` env var, so claude.ai cloud environments (which load the repo's `.mcp.json` from the clone and inject env vars from the environment config) and devices with the var in their shell get the tools with no per-machine setup. Unset var → server skipped silently.
-- `.mcp.json` removed from `.gitignore` (the tracked file must only ever contain `${VAR}` placeholders); `.mcp.json.example` re-purposed as the multi-account reference shape — real tokens go to user scope (`claude mcp add -s user`) or env vars, never into the tracked file.
+- **Committed `.mcp.json`** (secrets as placeholders only) — the connection reads its token from the `CLOUDWAYS_ACCESS_TOKEN` env var, so claude.ai cloud environments (which load the repo's `.mcp.json` from the clone and inject env vars from the environment config) and devices with the var in their shell get the tools with no per-machine setup. The `${CLOUDWAYS_ACCESS_TOKEN:-}` default keeps the config parseable when the var is unset — the connection then just shows as unavailable until the token is provided (a bare unset `${VAR}` would fail the whole config parse, per the Claude Code docs).
+- The connection is named **`cloudways-env`**, not `cloudways` — project scope beats user scope on name collisions, so the committed config can never shadow a `claude mcp add -s user cloudways` connection and silently point writes at the wrong account (Codex round-1 P1).
+- `.mcp.json` removed from `.gitignore` (the tracked file must never contain a real token); `.mcp.json.example` re-purposed as the multi-account reference shape — real tokens go to user scope (`claude mcp add -s user`) or env vars, never into the tracked file. installation.md's "git-ignored `.mcp.json`" alternative is gone for the same reason (Codex round-1 P1).
+- The CI no-leak guard now scans the tracked `.mcp.json` / `.mcp.json.example` (plus an `access[_-]?token` pattern) so a real token pasted into them can't pass CI.
 - `.claude/settings.json` sets `enableAllProjectMcpServers` so the committed config is auto-approved.
 - installation.md + README document the env-var route and the migration off a local gitignored `.mcp.json`.
 

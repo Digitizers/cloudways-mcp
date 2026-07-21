@@ -1,11 +1,11 @@
 {
-  "_comment": "Committed connection config — env-var placeholders ONLY, never real tokens (tracked file). The server connects when CLOUDWAYS_ACCESS_TOKEN is set: on devices via the shell env, in claude.ai cloud environments via the environment's env vars. When the variable is unset the server simply doesn't start — no error, no tools. Multi-account setups keep using `claude mcp add -s user cloudways-<client> ...` per references/installation.md; this file wires the single default account.",
+  "_comment": "Committed connection config — never real secrets; the token is the ${CLOUDWAYS_ACCESS_TOKEN:-} env placeholder (tracked file). The connection authenticates when the variable is set: shell env on devices, the environment's env vars in claude.ai cloud sessions. The :- default keeps the config parseable when unset — the connection then just shows as unavailable in /mcp until the token is provided. Named cloudways-env so it never shadows a user-scope connection added via `claude mcp add -s user cloudways ...` (project scope wins over user scope on name collisions). Multi-account setups keep using `claude mcp add -s user cloudways-<client> ...` per references/installation.md.",
   "mcpServers": {
-    "cloudways": {
+    "cloudways-env": {
       "type": "http",
       "url": "https://mcp.cloudways.com/mcp/",
       "headers": {
-        "X-Access-Token": "${CLOUDWAYS_ACCESS_TOKEN}",
+        "X-Access-Token": "${CLOUDWAYS_ACCESS_TOKEN:-}",
         "X-Mcp-Host": "claude-code"
       }
     }
