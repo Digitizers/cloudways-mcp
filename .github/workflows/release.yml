@@ -234,4 +234,28 @@ jobs:
               exit 1
             }
           fi
-          echo "v$VERSION released and published — CI guard is satisfied"
+          echo "v$VERSION released and published"
+
+      - name: Re-run the failed CI guard on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The guard on the version-bump commit failed by design (no release
+          # existed yet), and flipping the draft under GITHUB_TOKEN emits no event
+          # CI listens to — so that red run would stay red until the next push,
+          # showing a failing main over a repo that is now fully in sync. Re-run
+          # it; version-sync now finds the published release + marker and passes.
+          run_id=$(gh run list --workflow=ci.yml --repo "$GITHUB_REPOSITORY" --branch main \
+                     -L 10 --json databaseId,headSha,conclusion \
+                   | jq -r --arg sha "$GITHUB_SHA" \
+                       '[.[] | select(.headSha == $sha) | select(.conclusion == "failure")]
+                        | (first.databaseId // empty)')
+          if [ -n "$run_id" ]; then
+            # Warning, not failure: the release is complete either way — a rerun
+            # hiccup must not fail this workflow after the irreversible parts landed.
+            gh run rerun "$run_id" --repo "$GITHUB_REPOSITORY" --failed \
+              && echo "re-ran CI run $run_id — main will go green" \
+              || echo "::warning::could not re-run CI run $run_id — re-run it manually (gh run rerun $run_id --failed) so main reflects the now-synced state"
+          else
+            echo "no failed ci.yml run found for $GITHUB_SHA — nothing to re-run"
+          fi
