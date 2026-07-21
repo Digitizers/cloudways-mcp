@@ -188,8 +188,13 @@ jobs:
           # publish a newer version while this job watches it and reports success
           # for $VERSION.
           started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # The correlation id lands in the child's run-name, letting the
+          # identification below match THIS dispatch exactly — tag + timestamp
+          # alone can collide with a concurrent manual dry-run on the same tag.
+          CORR="rel-$GITHUB_RUN_ID"
           gh workflow run publish-clawhub.yml \
-            --repo "$GITHUB_REPOSITORY" --ref "v$VERSION" -f dry_run=false \
+            --repo "$GITHUB_REPOSITORY" --ref "v$VERSION" \
+            -f dry_run=false -f correlation="$CORR" \
             || rollback "could not dispatch the ClawHub publish"
 
           # Identify the run we just started — it must be a dispatch, on this exact
@@ -204,12 +209,13 @@ jobs:
             # back while the (successfully dispatched) child is publishing would
             # orphan the registry version.
             if runs_json=$(gh run list --workflow=publish-clawhub.yml --repo "$GITHUB_REPOSITORY" \
-                             -L 10 --json databaseId,createdAt,event,headBranch); then
+                             -L 10 --json databaseId,createdAt,event,headBranch,displayTitle); then
               list_ok=true
-              run_id=$(jq -r --arg s "$started" --arg tag "v$VERSION" \
+              run_id=$(jq -r --arg s "$started" --arg tag "v$VERSION" --arg corr "[$CORR]" \
                          '[.[] | select(.event == "workflow_dispatch")
                                | select(.headBranch == $tag)
-                               | select(.createdAt >= $s)]
+                               | select(.createdAt >= $s)
+                               | select(.displayTitle | contains($corr))]
                           | (first.databaseId // empty)' <<<"$runs_json")
               [ -n "$run_id" ] && break
             else
@@ -301,15 +307,15 @@ jobs:
             echo "::warning::could not list ci.yml runs — if the guard run for $GITHUB_SHA is red, re-run it manually (gh run rerun <id> --failed)"
             exit 0
           fi
-          run_id=$(jq -r --arg sha "$GITHUB_SHA" \
-                     '[.[] | select(.headSha == $sha) | select(.conclusion == "failure")]
-                      | (first.databaseId // empty)' <<<"$runs_json")
-          if [ -n "$run_id" ]; then
-            # Warning, not failure: the release is complete either way — a rerun
-            # hiccup must not fail this workflow after the irreversible parts landed.
+          # ALL recent failures, not only $GITHUB_SHA's: main may have advanced
+          # while this release ran, and the newer commit's guard failed on the
+          # same missing-release cause. Re-running a genuinely-broken one just
+          # turns red again — harmless. Warning, not failure, throughout: the
+          # release is complete either way.
+          ids=$(jq -r '.[] | select(.conclusion == "failure") | .databaseId' <<<"$runs_json")
+          [ -n "$ids" ] || { echo "no failed ci.yml run on main — nothing to re-run"; exit 0; }
+          for run_id in $ids; do
             gh run rerun "$run_id" --repo "$GITHUB_REPOSITORY" --failed \
-              && echo "re-ran CI run $run_id — main will go green" \
-              || echo "::warning::could not re-run CI run $run_id — re-run it manually (gh run rerun $run_id --failed) so main reflects the now-synced state"
-          else
-            echo "no failed ci.yml run found for $GITHUB_SHA — nothing to re-run"
-          fi
+              && echo "re-ran CI run $run_id" \
+              || echo "::warning::could not re-run CI run $run_id — re-run it manually (gh run rerun $run_id --failed)"
+          done

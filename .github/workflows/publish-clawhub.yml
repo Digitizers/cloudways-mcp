@@ -31,6 +31,11 @@ name: Publish to ClawHub
 #
 # The version is read from the skill's SKILL.md front matter (`version:`).
 
+# The run-name embeds the dispatcher's correlation id so release.yml can
+# identify ITS run unambiguously — tag + timestamp alone can collide with a
+# concurrent manual dry-run on the same tag.
+run-name: "Publish to ClawHub${{ inputs.correlation && format(' [{0}]', inputs.correlation) || '' }}"
+
 on:
   release:
     types: [published]
@@ -40,6 +45,11 @@ on:
         description: "Build the publish plan without uploading"
         type: boolean
         default: true
+      correlation:
+        description: "Opaque id from the dispatching workflow (release.yml); shown in the run name"
+        type: string
+        default: ""
+        required: false
 
 permissions:
   # contents: write — the marker-asset upload and the rollback step below.
@@ -117,12 +127,15 @@ jobs:
       # this version actually reached ClawHub. It is written here and nowhere
       # else, only after the publish command above succeeded.
       #
-      # A marker failure WARNS instead of failing the run. The publish is already
-      # irreversible at this point — a failing run would trigger the rollback
-      # paths (this workflow's, and release.yml's watch), deleting the very
-      # release the marker needs and wedging retries on the registry's duplicate
-      # refusal. The safe direction is: keep the release, let CI's guard stay red
-      # (no marker = red) until the marker is re-attached by hand.
+      # Exhausted marker attempts FAIL the run. This is safe — and load-bearing —
+      # since both rollback paths became evidence-gated: this workflow's rollback
+      # checks steps.publish.outcome, and release.yml's watch interrogates the
+      # Publish step conclusion before deciding. A nonzero run here therefore
+      # cannot delete the release; what it DOES do is push the release.yml parent
+      # into its recovery path, which verifies the publish succeeded and attaches
+      # the marker itself. (Exiting 0, as an earlier revision did, made the parent
+      # flip a marker-less draft into a published release the guard rejects and
+      # release.yml refuses to touch again.)
       - name: Upload the publish-completion marker
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
         env:
@@ -140,7 +153,8 @@ jobs:
             fi
             echo "marker upload attempt $attempt failed"; sleep 10
           done
-          echo "::warning::ClawHub serves $VERSION but the marker upload failed after 3 attempts. The release is intentionally left standing — CI's version-sync guard stays red until the marker exists. Re-attach it with: gh release upload $TAG clawhub-published.txt --clobber"
+          echo "::error::ClawHub serves $VERSION but the marker upload failed after 3 attempts. The release is intentionally left standing (rollbacks are gated on the publish outcome); a release.yml parent will verify and attach the marker itself, or re-attach by hand: gh release upload $TAG clawhub-published.txt --clobber"
+          exit 1
 
       # Mirror of release.yml's rerun step, for the UI entry point: the failed
       # version-sync run on main has no event to revive it (ci.yml hears only
@@ -157,14 +171,17 @@ jobs:
             echo "::warning::could not list ci.yml runs — if main's guard is red, re-run it manually (gh run rerun <id> --failed)"
             exit 0
           fi
-          run_id=$(jq -r '[.[] | select(.conclusion == "failure")] | (first.databaseId // empty)' <<<"$runs_json")
-          if [ -n "$run_id" ]; then
+          # All recent failures, not just the newest: main may have advanced past
+          # the bump commit while this publish ran, leaving more than one commit
+          # red on the same missing-release cause. Re-running a still-broken one
+          # just turns red again — harmless.
+          ids=$(jq -r '.[] | select(.conclusion == "failure") | .databaseId' <<<"$runs_json")
+          [ -n "$ids" ] || { echo "no failed ci.yml run on main — nothing to re-run"; exit 0; }
+          for run_id in $ids; do
             gh run rerun "$run_id" --repo "$GITHUB_REPOSITORY" --failed \
               && echo "re-ran CI run $run_id" \
               || echo "::warning::could not re-run CI run $run_id — re-run it manually so main reflects the synced state"
-          else
-            echo "no failed ci.yml run on main — nothing to re-run"
-          fi
+          done
 
       # Defense-in-depth for the UI entry point: the guard no longer NEEDS this
       # (no marker = red regardless), but leaving a published-yet-unpublished
