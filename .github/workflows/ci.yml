@@ -66,4 +66,26 @@ jobs:
              | grep -viE "your-|YOUR_|CLIENT_[AB]|example|<|\$\{|placeholder"; then
             echo "::error::possible real secret found"; exit 1
           fi
+          # The line-based grep can be evaded by valid JSON that splits key and
+          # value across lines, and its charset misses base64-style tokens with
+          # . + =. Parse the tracked MCP configs and check the actual env/header
+          # VALUES, independent of layout: each must be an env placeholder or too
+          # short to be a live credential.
+          python3 - <<'PY'
+          import json, re, sys
+          PLACEHOLDER = re.compile(r'\$\{[A-Za-z_][A-Za-z0-9_]*(:-[^}]*)?\}')
+          bad = []
+          for path in ('.mcp.json', '.mcp.json.example'):
+              cfg = json.load(open(path))
+              for name, srv in cfg.get('mcpServers', {}).items():
+                  for section in ('env', 'headers'):
+                      for key, val in srv.get(section, {}).items():
+                          if isinstance(val, str) and not PLACEHOLDER.search(val) and len(val) >= 24:
+                              bad.append(f'{path}: {name}.{section}.{key}')
+          if bad:
+              print('::error::secret-shaped value in tracked MCP config (placeholder-only policy):')
+              [print('  ' + b) for b in bad]
+              sys.exit(1)
+          print('mcp placeholder-value guard passed')
+          PY
           echo "no-leak guard passed"
