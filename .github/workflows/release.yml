@@ -1,0 +1,74 @@
+name: Release
+
+# Cuts a GitHub Release for the version declared in SKILL.md, with notes taken
+# from the matching CHANGELOG.md section.
+#
+# This workflow does NOT publish to ClawHub — publish-clawhub.yml does, and it
+# fires on `release: published`, so creating the release here triggers it.
+#
+# Run it after merging a version bump, which is exactly what CI's version-sync
+# job tells you to do when main is ahead of the last release.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Cut the release
+    runs-on: ubuntu-latest
+    env:
+      SKILL: .claude/skills/cloudways-mcp/SKILL.md
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Refuse to release off a non-default branch
+        run: |
+          # A release tag must point at a commit on main; tagging a feature branch
+          # would publish code that never landed.
+          [ "$GITHUB_REF_NAME" = "main" ] || {
+            echo "::error::dispatched against '$GITHUB_REF_NAME' — re-run with --ref main"; exit 1; }
+
+      - name: Read version and extract the changelog section
+        id: rel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(grep -m1 '^version:' "$SKILL" | sed 's/^version:[[:space:]]*//' | tr -d '"' | tr -d "'" | xargs)
+          [ -n "$VERSION" ] || { echo "::error::no version in $SKILL"; exit 1; }
+          echo "Releasing v$VERSION"
+
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName >/dev/null 2>&1; then
+            echo "::error::v$VERSION is already released — bump the version first"; exit 1
+          fi
+
+          python3 - "$VERSION" <<'PY'
+          import re, sys, pathlib
+          version = sys.argv[1]
+          text = pathlib.Path("CHANGELOG.md").read_text()
+          # Section runs from its own heading to the next "## " heading (or EOF).
+          m = re.search(rf'^## {re.escape(version)} - .*?\n(.*?)(?=\n## |\Z)', text, re.S | re.M)
+          if not m or not m.group(1).strip():
+              sys.exit(f"::error::no CHANGELOG.md section for {version} — add one before releasing")
+          pathlib.Path("release-notes.md").write_text(m.group(1).strip() + "\n")
+          print(f"changelog section: {len(m.group(1).strip().splitlines())} lines")
+          PY
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          gh release create "v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "v$VERSION" \
+            --notes-file release-notes.md
+          echo "Created v$VERSION — publish-clawhub.yml will now run on the release event."

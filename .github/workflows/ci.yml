@@ -6,6 +6,55 @@ on:
   pull_request:
 
 jobs:
+  version-sync:
+    name: Version declarations agree, and a release exists
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SKILL: .claude/skills/cloudways-mcp/SKILL.md
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: All three version declarations agree
+        id: ver
+        run: |
+          skill_v=$(grep -m1 '^version:' "$SKILL" | sed 's/^version:[[:space:]]*//' | tr -d '"' | tr -d "'" | xargs)
+          pkg_v=$(grep -m1 '"version"' package.json | sed 's/.*"version"[[:space:]]*:[[:space:]]*"//; s/".*//')
+          readme_v=$(grep -o 'badge/version-[0-9][^-]*-blue' README.md | sed 's|badge/version-||; s|-blue||')
+          echo "SKILL.md=$skill_v  package.json=$pkg_v  README badge=$readme_v"
+          [ -n "$skill_v" ] || { echo "::error::no version in $SKILL"; exit 1; }
+          if [ "$skill_v" != "$pkg_v" ] || [ "$skill_v" != "$readme_v" ]; then
+            echo "::error::version mismatch — SKILL.md=$skill_v, package.json=$pkg_v, README badge=$readme_v. Bump all three in the same commit."
+            exit 1
+          fi
+          echo "version=$skill_v" >> "$GITHUB_OUTPUT"
+
+      # Only on main: a PR that bumps the version cannot have a release yet
+      # (the tag has to point at the merged commit), so gating PRs would deadlock.
+      - name: A release exists for this version
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          # Capture stderr instead of discarding it: a network/auth failure must not
+          # be misread as "no release" (and vice versa).
+          if out=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName 2>&1); then
+            echo "release v$VERSION exists — ClawHub publish fired for it"
+            exit 0
+          fi
+          echo "$out"
+          case "$out" in
+            *"release not found"*|*"Not Found"*|*"HTTP 404"*)
+              echo "::error::SKILL.md is at $VERSION but there is no v$VERSION release, so ClawHub is still serving the previous version. Cut one with: gh workflow run release.yml"
+              ;;
+            *)
+              echo "::error::could not query releases (this is NOT a verdict on whether v$VERSION exists): $out"
+              ;;
+          esac
+          exit 1
+
   skill:
     runs-on: ubuntu-latest
     env:
