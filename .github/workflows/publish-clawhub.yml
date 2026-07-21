@@ -127,16 +127,37 @@ jobs:
             exit 0
           fi
 
-          # UI releases: the event tag must equal the version this checkout's
-          # SKILL.md declares. A mistyped tag would publish $VERSION to the
-          # registry while the marker lands on the unrelated tag's release —
-          # the guard hunts v$VERSION forever and a corrected release then hits
-          # the duplicate refusal. Refuse before touching the registry; the
-          # mistyped release is preserved (no verified_failure) for a human to
-          # delete.
-          if [ "$GITHUB_EVENT_NAME" = "release" ] && [ "$RELEASE_TAG" != "v$VERSION" ]; then
-            echo "::error::release tag '$RELEASE_TAG' does not match the checked-out SKILL.md version v$VERSION — refusing to publish. Delete the mistyped release and cut one whose tag matches."
-            exit 1
+          # UI releases: two deterministic gates, both BEFORE any registry
+          # contact. They set registry_untouched=true on refusal — these
+          # refusals are deterministic on the event payload, so if they fire on
+          # THIS attempt they fired on every prior attempt too, meaning no
+          # attempt ever reached the registry and the rollback below may clean
+          # the bad release automatically.
+          if [ "$GITHUB_EVENT_NAME" = "release" ]; then
+            # 1. The tag must equal the version the checked-out SKILL.md
+            #    declares — else the version publishes while the marker lands on
+            #    an unrelated tag's release.
+            if [ "$RELEASE_TAG" != "v$VERSION" ]; then
+              echo "::error::release tag '$RELEASE_TAG' does not match the checked-out SKILL.md version v$VERSION — refusing to publish; rolling the mistyped release back."
+              echo "registry_untouched=true" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+            # 2. The tag's commit must be on main — a feature-branch release
+            #    ships a payload main's guard can never match, and the corrected
+            #    republish then hits the duplicate refusal.
+            if ! cmp_status=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status 2>&1); then
+              # Lookup failure is NOT a lineage verdict: the release may be
+              # perfectly valid, so refuse to publish but also refuse to delete.
+              echo "::error::could not verify that $RELEASE_TAG's commit is on main ($cmp_status) — refusing to publish blind; the release is preserved. Retry when the API responds."
+              exit 1
+            fi
+            case "$cmp_status" in
+              identical|behind) ;;
+              *)
+                echo "::error::release $RELEASE_TAG points at a commit not on main (compare status: $cmp_status) — refusing to publish; rolling the misrooted release back. Cut releases from main only."
+                echo "registry_untouched=true" >> "$GITHUB_OUTPUT"
+                exit 1 ;;
+            esac
           fi
 
           # Re-run awareness: a PRIOR attempt may already have committed the
@@ -244,18 +265,31 @@ jobs:
       # cancelled() as well as failure(): a canceled run is not success(), and a
       # UI release whose publish was canceled mid-way is exactly as unpublished as
       # one whose publish failed.
-      # Rollback ONLY on verified_failure — an output the Publish step writes
-      # exclusively when the publish command itself failed on this attempt with
-      # no prior successful attempt. Everything else is ambiguous and preserves
-      # the release: 'cancelled' may land after the registry committed; a step
-      # 'failure' on a re-run may be the duplicate refusal of a version the
-      # FIRST attempt already committed; the ambiguity exits above set no
-      # output. Recovery for preserved states: the guard stays red (no marker) —
-      # if the registry has the version, attach the marker by hand; if not, flip
-      # the release to draft (gh release edit <tag> --draft=true) and run
+      # Rollback fires on exactly three evidence classes, each proving the
+      # registry does not hold this release's version:
+      #   1. verified_failure — this attempt ran the publish command, it failed,
+      #      and no prior attempt succeeded;
+      #   2. registry_untouched — a deterministic pre-publish gate refused
+      #      (mistyped tag, off-main commit), so every attempt refused the same
+      #      way and none reached the registry;
+      #   3. a FIRST-attempt run whose Publish step never ran at all (an earlier
+      #      step — checkout, CLI install, auth — failed): outcome 'skipped',
+      #      registry deterministically untouched. Re-run attempts with a
+      #      skipped Publish are NOT auto-cleaned — a prior attempt may have
+      #      gotten further — and stay preserved for the manual path.
+      # Everything else is ambiguous and preserves the release: 'cancelled' may
+      # land after the registry committed; a step 'failure' on a re-run may be
+      # the duplicate refusal of a version the FIRST attempt already committed.
+      # Recovery for preserved states: the guard stays red (no marker) — if the
+      # registry has the version, attach the marker by hand; if not, flip the
+      # release to draft (gh release edit <tag> --draft=true) and run
       # release.yml, whose pre-flight sweeps the marker-less draft and redoes.
       - name: Roll back the release if a release-triggered publish failed
-        if: (failure() || cancelled()) && github.event_name == 'release' && steps.publish.outputs.verified_failure == 'true'
+        if: >-
+          (failure() || cancelled()) && github.event_name == 'release' &&
+          (steps.publish.outputs.verified_failure == 'true' ||
+           steps.publish.outputs.registry_untouched == 'true' ||
+           (github.run_attempt == '1' && steps.publish.outcome == 'skipped'))
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
