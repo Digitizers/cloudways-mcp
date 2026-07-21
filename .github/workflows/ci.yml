@@ -57,8 +57,12 @@ jobs:
             echo "::error::personal name found in README — use the studio brand, not personal names"; exit 1
           fi
           # Secret-shaped strings must never appear in the payload — nor in the
-          # tracked MCP configs, which are placeholder-only by policy.
+          # tracked MCP configs, which are placeholder-only by policy. Strip the
+          # "path:line:" grep prefix before the exemption filter: otherwise the
+          # ".mcp.json.example" filename matches the "example" exemption and waves
+          # real tokens in that file through.
           if grep -rniE "(api[_-]?key|bearer|secret|password|access[_-]?token)[\"'[:space:]=:]+[A-Za-z0-9/_-]{24,}" .claude/ .mcp.json .mcp.json.example \
+             | sed 's/^[^:]*:[0-9]*://' \
              | grep -viE "your-|YOUR_|CLIENT_[AB]|example|<|\$\{|placeholder"; then
             echo "::error::possible real secret found"; exit 1
           fi
