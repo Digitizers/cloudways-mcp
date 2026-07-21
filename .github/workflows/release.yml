@@ -89,6 +89,21 @@ jobs:
           # treating a transient API error as "no release" would let the tag sweep
           # below delete — and the next step retarget — the tag of a release that
           # IS published.
+          # A previously dispatched publish for this tag may still be running (this
+          # workflow's concurrency group does not cover the child). Sweeping its
+          # marker-less draft mid-flight would race it: the old child publishes or
+          # attaches its marker to a recreated release while the new child hits the
+          # registry's duplicate refusal. Refuse to proceed until it settles.
+          active=$(gh run list --workflow=publish-clawhub.yml --repo "$GITHUB_REPOSITORY" \
+                     -L 20 --json databaseId,status,headBranch \
+                   | jq -r --arg tag "v$VERSION" \
+                       '[.[] | select(.headBranch == $tag) | select(.status != "completed")]
+                        | (first.databaseId // empty)')
+          if [ -n "$active" ]; then
+            echo "::error::publish run $active for v$VERSION is still active — wait for it (gh run watch $active), then re-run this workflow"
+            exit 1
+          fi
+
           resume=false
           if meta=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft,assets 2>&1); then
             if [ "$(jq -r '.isDraft' <<<"$meta")" = "true" ]; then
@@ -188,6 +203,11 @@ jobs:
           done
           [ -n "$run_id" ] || rollback "dispatched the ClawHub publish but no run appeared"
           echo "publish run: $run_id"
+
+          # The child fails ONLY when the publish command itself failed — a marker
+          # upload problem warns without failing it (the release must survive once
+          # the registry has the version; CI stays red until the marker is
+          # re-attached). So rolling back on a failed child is safe here."
 
           # Cancellation here is recoverable: if the publish run finished (it
           # attaches the clawhub-published.txt marker to the draft), the next

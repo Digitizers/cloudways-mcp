@@ -75,6 +75,7 @@ jobs:
           [ -n "$CLAWHUB_TOKEN" ] || { echo "::error::CLAWHUB_TOKEN secret not set"; exit 1; }
           clawhub login --token "$CLAWHUB_TOKEN"
       - name: Publish
+        id: publish
         env:
           GH_TOKEN: ${{ github.token }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
@@ -111,8 +112,14 @@ jobs:
 
       # THE step that turns CI green: the marker asset is the durable proof that
       # this version actually reached ClawHub. It is written here and nowhere
-      # else, only after the publish command above succeeded. Deleting the
-      # release (either rollback path) removes the marker with it.
+      # else, only after the publish command above succeeded.
+      #
+      # A marker failure WARNS instead of failing the run. The publish is already
+      # irreversible at this point — a failing run would trigger the rollback
+      # paths (this workflow's, and release.yml's watch), deleting the very
+      # release the marker needs and wedging retries on the registry's duplicate
+      # refusal. The safe direction is: keep the release, let CI's guard stay red
+      # (no marker = red) until the marker is re-attached by hand.
       - name: Upload the publish-completion marker
         if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
         env:
@@ -124,11 +131,13 @@ jobs:
             "$VERSION" "$GITHUB_RUN_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > clawhub-published.txt
           # --clobber: a re-run of this workflow must refresh, not trip over, an
           # existing marker.
-          gh release upload "$TAG" clawhub-published.txt --repo "$GITHUB_REPOSITORY" --clobber || {
-            echo "::error::ClawHub serves $VERSION but the marker upload failed — CI stays red until the marker exists. Re-attach it with: gh release upload $TAG clawhub-published.txt --clobber"
-            exit 1
-          }
-          echo "marker attached to $TAG"
+          for attempt in 1 2 3; do
+            if gh release upload "$TAG" clawhub-published.txt --repo "$GITHUB_REPOSITORY" --clobber; then
+              echo "marker attached to $TAG"; exit 0
+            fi
+            echo "marker upload attempt $attempt failed"; sleep 10
+          done
+          echo "::warning::ClawHub serves $VERSION but the marker upload failed after 3 attempts. The release is intentionally left standing — CI's version-sync guard stays red until the marker exists. Re-attach it with: gh release upload $TAG clawhub-published.txt --clobber"
 
       # Defense-in-depth for the UI entry point: the guard no longer NEEDS this
       # (no marker = red regardless), but leaving a published-yet-unpublished
@@ -137,8 +146,12 @@ jobs:
       # cancelled() as well as failure(): a canceled run is not success(), and a
       # UI release whose publish was canceled mid-way is exactly as unpublished as
       # one whose publish failed.
+      # steps.publish.outcome guard: once the publish command itself has
+      # succeeded, the registry state is irreversible and deleting the release
+      # would orphan it — so any later failure (e.g. around the marker) must NOT
+      # trigger this rollback.
       - name: Roll back the release if a release-triggered publish failed
-        if: (failure() || cancelled()) && github.event_name == 'release'
+        if: (failure() || cancelled()) && github.event_name == 'release' && steps.publish.outcome != 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
