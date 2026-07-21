@@ -33,14 +33,14 @@ jobs:
       # Only on main: a PR that bumps the version cannot have a release yet
       # (the tag has to point at the merged commit), so gating PRs would deadlock.
       #
-      # A published (non-draft) release is sufficient evidence that ClawHub is in
-      # sync only because BOTH release paths roll back on a failed publish —
-      # release.yml keeps its release a draft until the publish succeeds, and
-      # publish-clawhub.yml's rollback step deletes a UI-created release whose
-      # publish failed. If either of those is ever removed, this check starts
-      # passing over a ClawHub that is a version behind, and it must then be
-      # replaced with a real publish-outcome check.
-      - name: A published release exists and its payload matches
+      # THE PROOF IS THE MARKER ASSET, not release existence. Only
+      # publish-clawhub.yml writes `clawhub-published.txt` onto the release, and
+      # only after its publish command succeeded — so a queued/canceled/failed
+      # publish behind a UI release, a leftover draft, or a bare tag all stay red
+      # here no matter what the releases page shows. Release existence alone
+      # proved nothing: a UI release satisfies it seconds before its publish run
+      # has even started.
+      - name: A published release exists, ClawHub confirmed it, payload matches
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -48,7 +48,7 @@ jobs:
         run: |
           # Capture stderr instead of discarding it: a network/auth failure must not
           # be misread as "no release" (and vice versa).
-          if ! out=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft 2>&1); then
+          if ! out=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,assets 2>&1); then
             echo "$out"
             case "$out" in
               *"release not found"*|*"Not Found"*|*"HTTP 404"*)
@@ -67,7 +67,15 @@ jobs:
             echo "::error::v$VERSION exists only as a DRAFT release — nothing was published to ClawHub. Publish it via release.yml (or delete the leftover draft and re-run: gh workflow run release.yml)"
             exit 1
           fi
-          echo "release v$VERSION exists and is published"
+
+          # The marker is uploaded by publish-clawhub.yml after a successful real
+          # publish, and by nothing else. No marker = the publish never completed
+          # (still queued, canceled, or failed) even though the release is up.
+          if [ "$(jq -r '[.assets[].name] | index("clawhub-published.txt") != null' <<<"$out")" != "true" ]; then
+            echo "::error::the v$VERSION release exists but carries no clawhub-published.txt marker — its ClawHub publish never completed. Check the publish-clawhub.yml runs for v$VERSION; once ClawHub really serves $VERSION, re-attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber), or delete the release and re-run release.yml."
+            exit 1
+          fi
+          echo "release v$VERSION is published and ClawHub confirmed it (marker present)"
 
           # Same version ⇒ same payload. A push that edits the skill directory
           # without bumping the version would otherwise pass here while ClawHub

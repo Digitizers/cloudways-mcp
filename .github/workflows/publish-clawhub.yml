@@ -5,13 +5,21 @@ name: Publish to ClawHub
 #
 # Triggers:
 #   - on a published GitHub Release  → real publish (UI-created releases)
-#   - dispatched by release.yml on a version tag → real publish
+#   - dispatched by release.yml on a version tag → real publish (requires the
+#     draft release release.yml just created — see the gate in the Publish step)
 #   - manual run (workflow_dispatch) on a branch → dry-run ONLY. A freestanding
 #     real publish would put a version on ClawHub with no GitHub release behind
 #     it; CI's version-sync guard then points the operator at release.yml, whose
 #     re-publish of the same version the registry may refuse — wedging the flow
 #     with CI red while ClawHub is actually current. Real publishes therefore go
 #     through release.yml (or a UI release), never from here.
+#
+# THE MARKER ASSET IS THE PROOF OF PUBLICATION. After a successful real publish,
+# this workflow uploads `clawhub-published.txt` as an asset on the vX.Y.Z
+# release. CI's version-sync guard requires that asset — not mere release
+# existence — so any path that creates a release without completing a publish
+# (a canceled run, a queued run that never started, a failure) leaves the guard
+# red until the publish actually lands. Nothing else may ever write that asset.
 #
 # Note on the release trigger: it only fires for releases created by a human
 # (UI / a personal token). A release created by release.yml runs under
@@ -32,8 +40,8 @@ on:
         default: true
 
 permissions:
-  # write is needed only by the rollback step below, which deletes a release whose
-  # publish failed.
+  # write is needed by the marker-asset upload and by the rollback step below,
+  # which deletes a release whose publish failed.
   contents: write
 
 concurrency:
@@ -68,12 +76,15 @@ jobs:
           clawhub login --token "$CLAWHUB_TOKEN"
       - name: Publish
         env:
+          GH_TOKEN: ${{ github.token }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
         run: |
           # A real publish from a manual dispatch is only legitimate when release.yml
-          # is driving it — and release.yml always dispatches on the version tag it
-          # just created. A human dispatching dry_run=false on a branch would push a
-          # version to ClawHub with no release behind it (see the header).
+          # is driving it — and release.yml always (a) creates a DRAFT release for
+          # the version, then (b) dispatches this workflow on the tag it just
+          # created. So a real tag dispatch must find that draft. A human who
+          # hand-creates a bare v* tag and dispatches real has no draft → blocked;
+          # a tag whose release is already published is a duplicate → blocked.
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$DRY_RUN" != "true" ]; then
             case "$GITHUB_REF" in
               refs/tags/v*) ;;
@@ -81,6 +92,15 @@ jobs:
                 echo "::error::real publishes run through release.yml (gh workflow run release.yml), which dispatches this workflow on the version tag. A freestanding real publish would leave ClawHub ahead of the repo with no release, wedging the release flow on a duplicate-version publish."
                 exit 1 ;;
             esac
+            if meta=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft 2>&1); then
+              if [ "$(jq -r '.isDraft' <<<"$meta")" != "true" ]; then
+                echo "::error::$GITHUB_REF_NAME is already a published release — publishing it again would hit the registry's duplicate-version refusal. Nothing to do."
+                exit 1
+              fi
+            else
+              echo "::error::no draft release found for $GITHUB_REF_NAME (lookup said: $meta) — real tag publishes are dispatched by release.yml after it creates the draft. Run: gh workflow run release.yml"
+              exit 1
+            fi
           fi
           if [ "$DRY_RUN" = "true" ]; then
             echo "Dry run — validating the publish without uploading:"
@@ -89,20 +109,40 @@ jobs:
           fi
           clawhub skill publish "$SKILL_DIR" --slug cloudways-mcp --name "Cloudways MCP" --version "${{ steps.ver.outputs.version }}"
 
-      # release.yml rolls back the releases it creates. This covers the other entry
-      # point — a release created by hand in the UI — so the invariant holds for
-      # both: a vX.Y.Z release exists only if X.Y.Z actually reached ClawHub. Without
-      # this, a failed publish on the UI path leaves the release standing and CI's
-      # version-sync guard goes green over a ClawHub that is still a version behind.
+      # THE step that turns CI green: the marker asset is the durable proof that
+      # this version actually reached ClawHub. It is written here and nowhere
+      # else, only after the publish command above succeeded. Deleting the
+      # release (either rollback path) removes the marker with it.
+      - name: Upload the publish-completion marker
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
+        run: |
+          printf 'cloudways-mcp %s published to ClawHub by run %s (%s)\n' \
+            "$VERSION" "$GITHUB_RUN_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > clawhub-published.txt
+          # --clobber: a re-run of this workflow must refresh, not trip over, an
+          # existing marker.
+          gh release upload "$TAG" clawhub-published.txt --repo "$GITHUB_REPOSITORY" --clobber || {
+            echo "::error::ClawHub serves $VERSION but the marker upload failed — CI stays red until the marker exists. Re-attach it with: gh release upload $TAG clawhub-published.txt --clobber"
+            exit 1
+          }
+          echo "marker attached to $TAG"
+
+      # Defense-in-depth for the UI entry point: the guard no longer NEEDS this
+      # (no marker = red regardless), but leaving a published-yet-unpublished
+      # release standing would still mislead humans browsing the releases page,
+      # and would block release.yml's re-run on 'already released'.
       # cancelled() as well as failure(): a canceled run is not success(), and a
       # UI release whose publish was canceled mid-way is exactly as unpublished as
-      # one whose publish failed — without this, it would satisfy the CI guard.
+      # one whose publish failed.
       - name: Roll back the release if a release-triggered publish failed
         if: (failure() || cancelled()) && github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
         run: |
-          echo "::error::the ClawHub publish failed for $TAG — deleting that release and its tag so CI stays red; fix the cause, then re-release"
+          echo "::error::the ClawHub publish failed for $TAG — deleting that release and its tag so the flow can be retried cleanly; fix the cause, then re-release"
           gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag \
             || echo "::error::the rollback itself failed — delete the $TAG release manually"

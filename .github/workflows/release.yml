@@ -9,11 +9,15 @@ name: Release
 # Publish step).
 #
 # The release is created as a DRAFT and only flipped to published after the
-# ClawHub publish succeeds. CI's version-sync guard ignores drafts, so at every
-# instant — including a cancellation at any point in this workflow — a
-# *published* vX.Y.Z release exists only if X.Y.Z actually reached ClawHub.
-# Leftovers from a canceled/failed run (a tag, a draft) are swept by the
-# pre-flight step on the next run.
+# ClawHub publish succeeds — and the publish run attaches a
+# clawhub-published.txt marker asset, which is what CI's version-sync guard
+# actually requires. So at every instant — including a cancellation at any
+# point in this workflow — the guard goes green only once X.Y.Z really reached
+# ClawHub. Leftovers from a canceled/failed run are handled by pre-flight on
+# the next run: a marker-less draft or bare tag is swept and redone; a draft
+# that already CARRIES the marker means the publish finished and only the flip
+# was lost, so the run resumes straight to the flip instead of re-publishing
+# (which the registry would refuse as a duplicate version).
 #
 # Run it after merging a version bump, which is exactly what CI's version-sync
 # job tells you to do when main is ahead of the last release.
@@ -68,24 +72,33 @@ jobs:
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: "Pre-flight: refuse a published version, sweep leftovers"
+      - name: "Pre-flight: refuse a published version, resume or sweep leftovers"
+        id: pre
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.rel.outputs.version }}
         run: |
           # A published release means this version already reached ClawHub — refuse.
-          # A DRAFT release or a bare tag is a leftover from a canceled/failed run
-          # (this workflow publishes the release only after ClawHub succeeds), so
-          # sweep it and continue.
+          # A leftover from a canceled/failed run splits on the marker:
+          #   - draft WITH clawhub-published.txt → the publish finished, only the
+          #     flip was lost → resume: keep the draft + tag, skip straight to the
+          #     flip step (re-publishing would hit the registry's duplicate refusal).
+          #   - draft without the marker, or a bare tag → sweep and redo.
           #
           # Capture stderr and continue ONLY on a definitive "release not found":
           # treating a transient API error as "no release" would let the tag sweep
           # below delete — and the next step retarget — the tag of a release that
           # IS published.
-          if meta=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft 2>&1); then
+          resume=false
+          if meta=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft,assets 2>&1); then
             if [ "$(jq -r '.isDraft' <<<"$meta")" = "true" ]; then
-              echo "sweeping leftover draft release v$VERSION"
-              gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes
+              if [ "$(jq -r '[.assets[].name] | index("clawhub-published.txt") != null' <<<"$meta")" = "true" ]; then
+                echo "draft v$VERSION already carries the publish marker — ClawHub serves it; resuming with the flip only"
+                resume=true
+              else
+                echo "sweeping leftover marker-less draft release v$VERSION"
+                gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes
+              fi
             else
               echo "::error::v$VERSION is already released — bump the version first"; exit 1
             fi
@@ -98,13 +111,16 @@ jobs:
                 exit 1 ;;
             esac
           fi
-          if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
-            # Safe: we only get here when no PUBLISHED release exists for this tag.
+          if [ "$resume" != "true" ] && git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
+            # Safe: we only get here when no PUBLISHED release exists for this tag
+            # and no resumable draft is being kept.
             echo "sweeping leftover tag v$VERSION"
             gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/v$VERSION"
           fi
+          echo "resume=$resume" >> "$GITHUB_OUTPUT"
 
       - name: Create the tag and a draft release at the inspected commit
+        if: steps.pre.outputs.resume != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.rel.outputs.version }}
@@ -126,6 +142,7 @@ jobs:
           echo "Created tag + draft release v$VERSION at $GITHUB_SHA"
 
       - name: Publish to ClawHub, and wait for it
+        if: steps.pre.outputs.resume != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.rel.outputs.version }}
@@ -172,11 +189,11 @@ jobs:
           [ -n "$run_id" ] || rollback "dispatched the ClawHub publish but no run appeared"
           echo "publish run: $run_id"
 
-          # Known residual risk: canceling THIS job while the publish run is mid-
-          # upload can leave ClawHub serving $VERSION with the release still a
-          # draft. A re-run would then re-publish the same version, which the
-          # registry may refuse. If that happens: verify ClawHub really serves
-          # $VERSION, then finish by hand with: gh release edit v$VERSION --draft=false
+          # Cancellation here is recoverable: if the publish run finished (it
+          # attaches the clawhub-published.txt marker to the draft), the next
+          # release.yml run detects the marker in pre-flight and resumes straight
+          # to the flip. If the publish run itself was still mid-upload, no marker
+          # exists and the re-run sweeps + redoes normally.
           gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status \
             || rollback "the ClawHub publish failed (run $run_id)"
           echo "ClawHub publish succeeded"
