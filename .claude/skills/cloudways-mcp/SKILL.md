@@ -1,6 +1,6 @@
 ---
 name: cloudways-mcp
-version: 1.3.1
+version: 1.4.0
 license: MIT
 description: |
   Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the official Cloudways MCP server (Cloudways' hosted MCP / Remote MCP, per their support docs).

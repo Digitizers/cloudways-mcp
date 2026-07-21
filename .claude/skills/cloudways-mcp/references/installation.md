@@ -37,6 +37,15 @@ This skill targets the **official Cloudways (Remote) MCP** — a Cloudways-hoste
 
 ## Step 2 — Connect Claude to the MCP
 
+### Env var (zero-config — devices and cloud sessions)
+
+The repo commits a placeholder-only `.mcp.json` whose `X-Access-Token` header reads
+`${CLOUDWAYS_ACCESS_TOKEN}`. Set that variable — in your shell profile on a device, or in
+the claude.ai cloud environment's environment variables for web/phone sessions — and the
+`cloudways` connection starts automatically. Unset, the server is skipped silently. Never
+put a real token in `.mcp.json` itself; it is tracked in git. Cloud environments with a
+restricted network policy must allow `mcp.cloudways.com`.
+
 ### Claude Code (native HTTP — recommended)
 
 ```bash

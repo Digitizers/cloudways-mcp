@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0 - 2026-07-21
+Zero-config connection for cloud sessions and devices:
+- **Committed `.mcp.json`** (placeholders only) — the `cloudways` connection reads its token from the `CLOUDWAYS_ACCESS_TOKEN` env var, so claude.ai cloud environments (which load the repo's `.mcp.json` from the clone and inject env vars from the environment config) and devices with the var in their shell get the tools with no per-machine setup. Unset var → server skipped silently.
+- `.mcp.json` removed from `.gitignore` (the tracked file must only ever contain `${VAR}` placeholders); `.mcp.json.example` re-purposed as the multi-account reference shape — real tokens go to user scope (`claude mcp add -s user`) or env vars, never into the tracked file.
+- `.claude/settings.json` sets `enableAllProjectMcpServers` so the committed config is auto-approved.
+- installation.md + README document the env-var route and the migration off a local gitignored `.mcp.json`.
+
 ## 1.3.1 - 2026-07-20
 Live-MCP re-enumeration — closes the follow-up left open by 1.3.0. All 22 toolsets enumerated via `list_available_toolsets` + `get_toolset_tools` on a connected Cloudways account:
 - **Alias question resolved: there are no aliases.** Every primary tool name in the catalog matches the live `tool_name` byte-for-byte. The endpoint-style aliases the official tools article lists for the Security and Service categories (`security_dns_create`, `security_whitelisted_ips_update`, `service_state_update`, `service_varnish_manage`, …) **do not exist on the live server**. The "pending live-MCP re-enumeration" banner is removed.
