@@ -30,6 +30,16 @@ name: Publish to ClawHub
 # rather than depending on the event. Do not "simplify" that away.
 #
 # The version is read from the skill's SKILL.md front matter (`version:`).
+#
+# KNOWN ACCEPTED RESIDUAL: dispatch inputs carry no verifiable provenance, so
+# an operator who manually dispatches a REAL publish on the version tag in the
+# seconds between release.yml creating its draft and its own child starting
+# can publish first and make the legitimate child hit the duplicate refusal.
+# The draft-requirement gate, the concurrency queue, and the ambiguity rules
+# bound the damage (nothing is deleted; states are preserved for manual
+# recovery), but the race itself is not closable from inside the workflow.
+# Operational rule: never manually dispatch a real publish while a release is
+# in flight — release.yml is the only sanctioned real-publish driver.
 
 # The run-name embeds the dispatcher's correlation id so release.yml can
 # identify ITS run unambiguously — tag + timestamp alone can collide with a
@@ -189,12 +199,15 @@ jobs:
             echo "every prior attempt's publish verifiably failed — safe to retry"
           fi
 
-          # verified_failure is the ONLY evidence the rollback below accepts: it
-          # means THIS attempt ran the publish command and the command itself
-          # failed, with no prior successful attempt. Ambiguity paths above exit
-          # without setting it, so they can never trigger a deletion.
+          # A nonzero publish command is NOT proof the registry is empty: the
+          # upload may have committed and the acknowledgement been lost (network
+          # timeout — the two-generals floor). There is no registry-side
+          # is-published query to break the tie, so command failure is treated
+          # as AMBIGUOUS: the run fails, nothing is deleted here, and recovery
+          # is manual (verify the registry; marker or redo accordingly). Only
+          # the deterministic pre-publish evidence classes below may delete.
           clawhub skill publish "$SKILL_DIR" --slug cloudways-mcp --name "Cloudways MCP" --version "${{ steps.ver.outputs.version }}" || {
-            echo "verified_failure=true" >> "$GITHUB_OUTPUT"
+            echo "::error::the publish command failed — this is ambiguous (the registry may still have committed $VERSION before the response was lost). The release is preserved. Verify the registry: if $VERSION is there, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber); if not, delete or draft the release and redo."
             exit 1
           }
 
@@ -265,21 +278,21 @@ jobs:
       # cancelled() as well as failure(): a canceled run is not success(), and a
       # UI release whose publish was canceled mid-way is exactly as unpublished as
       # one whose publish failed.
-      # Rollback fires on exactly three evidence classes, each proving the
-      # registry does not hold this release's version:
-      #   1. verified_failure — this attempt ran the publish command, it failed,
-      #      and no prior attempt succeeded;
-      #   2. registry_untouched — a deterministic pre-publish gate refused
+      # DELETING A PUBLISHED RELEASE REQUIRES DETERMINISTIC PROOF the registry
+      # never saw this version. Exactly two evidence classes qualify:
+      #   1. registry_untouched — a deterministic pre-publish gate refused
       #      (mistyped tag, off-main commit), so every attempt refused the same
       #      way and none reached the registry;
-      #   3. a FIRST-attempt run whose Publish step never ran at all (an earlier
+      #   2. a FIRST-attempt run whose Publish step never ran at all (an earlier
       #      step — checkout, CLI install, auth — failed): outcome 'skipped',
-      #      registry deterministically untouched. Re-run attempts with a
-      #      skipped Publish are NOT auto-cleaned — a prior attempt may have
-      #      gotten further — and stay preserved for the manual path.
-      # Everything else is ambiguous and preserves the release: 'cancelled' may
-      # land after the registry committed; a step 'failure' on a re-run may be
-      # the duplicate refusal of a version the FIRST attempt already committed.
+      #      registry untouched by construction. Re-run attempts with a skipped
+      #      Publish stay preserved — a prior attempt may have gotten further.
+      # A FAILED PUBLISH COMMAND IS NOT PROOF — the upload may have committed
+      # and the acknowledgement been lost (two-generals; no registry query
+      # exists to break the tie), so it preserves the release. This asymmetry is
+      # deliberate: a published release is not re-creatable evidence, while the
+      # draft+tag pairs release.yml manages ARE re-creatable, which is why its
+      # draft sweeps may still act on all-attempts-failure verdicts.
       # Recovery for preserved states: the guard stays red (no marker) — if the
       # registry has the version, attach the marker by hand; if not, flip the
       # release to draft (gh release edit <tag> --draft=true) and run
@@ -287,8 +300,7 @@ jobs:
       - name: Roll back the release if a release-triggered publish failed
         if: >-
           (failure() || cancelled()) && github.event_name == 'release' &&
-          (steps.publish.outputs.verified_failure == 'true' ||
-           steps.publish.outputs.registry_untouched == 'true' ||
+          (steps.publish.outputs.registry_untouched == 'true' ||
            (github.run_attempt == '1' && steps.publish.outcome == 'skipped'))
         env:
           GH_TOKEN: ${{ github.token }}

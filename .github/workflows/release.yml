@@ -171,7 +171,11 @@ jobs:
                       }
                       resume=true ;;
                     failure)
-                      echo "run $last_real verifiably failed to publish on every attempt — sweeping leftover marker-less draft release v$VERSION"
+                      # Same asymmetry note as the watch step: drafts are
+                      # re-creatable, so an all-attempts-failure verdict may
+                      # sweep; a secretly-committed registry converges to a
+                      # preserved ambiguous state on the redo, never an orphan.
+                      echo "run $last_real failed to publish on every attempt — sweeping leftover marker-less draft release v$VERSION"
                       gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes ;;
                     *)
                       echo "::error::the last real publish run ($last_real) for v$VERSION has an ambiguous Publish history (${verdict#ambiguous:}) — the registry may hold the version. Not sweeping. Verify: if $VERSION is published, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, delete the draft (gh release delete v$VERSION --yes) and re-run."
@@ -351,7 +355,12 @@ jobs:
                 }
                 ;;
               failure)
-                rollback "the ClawHub publish failed (run $run_id, every attempt's Publish verifiably failed)"
+                # Command failure is ambiguous in principle (two-generals), but
+                # draft+tag are RE-CREATABLE state — if the registry secretly
+                # committed, the redo's duplicate refusal lands in an ambiguity
+                # branch that preserves everything, never an orphan. Published
+                # releases (the UI path) do NOT get this treatment.
+                rollback "the ClawHub publish failed on every attempt (run $run_id)"
                 ;;
               *)
                 echo "::error::child run $run_id has an ambiguous Publish history (${verdict#ambiguous:} — e.g. canceled mid-publish). ClawHub may or may not hold $VERSION; leaving the draft and tag in place (no rollback). Verify against the registry: if $VERSION is published, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, just re-run — pre-flight sweeps the marker-less draft and redoes."
