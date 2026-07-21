@@ -32,6 +32,13 @@ jobs:
 
       # Only on main: a PR that bumps the version cannot have a release yet
       # (the tag has to point at the merged commit), so gating PRs would deadlock.
+      #
+      # Release existence is sufficient evidence that ClawHub is in sync only
+      # because BOTH release paths roll back on a failed publish — release.yml for
+      # the releases it creates, and publish-clawhub.yml's rollback step for ones
+      # created by hand in the UI. If either rollback is ever removed, this check
+      # starts passing over a ClawHub that is a version behind, and it must then be
+      # replaced with a real publish-outcome check.
       - name: A release exists for this version
         if: github.event_name == 'push'
         env:

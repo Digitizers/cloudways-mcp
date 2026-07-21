@@ -3,8 +3,11 @@ name: Release
 # Cuts a GitHub Release for the version declared in SKILL.md, with notes taken
 # from the matching CHANGELOG.md section.
 #
-# This workflow does NOT publish to ClawHub — publish-clawhub.yml does, and it
-# fires on `release: published`, so creating the release here triggers it.
+# publish-clawhub.yml does the actual publishing. This workflow dispatches it
+# explicitly and waits for it — it does NOT rely on the `release: published`
+# event, which GitHub suppresses for releases created with GITHUB_TOKEN (see the
+# Publish step). If the publish fails, the release is rolled back, so a release
+# existing always means that version reached ClawHub.
 #
 # Run it after merging a version bump, which is exactly what CI's version-sync
 # job tells you to do when main is ahead of the last release.
@@ -70,11 +73,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.rel.outputs.version }}
         run: |
+          # --target pins the tag to the commit this job checked out and inspected.
+          # Without it the tag lands on the default branch's *current* tip, which may
+          # already carry a different SKILL.md version than the one being released.
           gh release create "v$VERSION" \
             --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
             --title "v$VERSION" \
             --notes-file release-notes.md
-          echo "Created v$VERSION"
+          echo "Created v$VERSION at $GITHUB_SHA"
 
       - name: Publish to ClawHub, and wait for it
         env:
@@ -98,20 +105,27 @@ jobs:
             exit 1
           }
 
+          # Dispatch against the tag just created, NOT main: main can advance between
+          # creating the release and dispatching, and publish-clawhub.yml reads the
+          # version out of the tree it runs on — so --ref main could publish a newer
+          # version while this job watches it and reports success for $VERSION.
           started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           gh workflow run publish-clawhub.yml \
-            --repo "$GITHUB_REPOSITORY" --ref main -f dry_run=false \
+            --repo "$GITHUB_REPOSITORY" --ref "v$VERSION" -f dry_run=false \
             || rollback "could not dispatch the ClawHub publish"
 
-          # Find the run we just started (not an older dispatch) by requiring it to
-          # be newer than the timestamp above.
+          # Identify the run we just started — it must be a dispatch, on this exact
+          # tag, created after the timestamp above — so no other run can be mistaken
+          # for it and watched in its place.
           run_id=""
           for _ in $(seq 1 12); do
             sleep 5
             run_id=$(gh run list --workflow=publish-clawhub.yml --repo "$GITHUB_REPOSITORY" \
-                       -L 5 --json databaseId,createdAt,event \
-                     | jq -r --arg s "$started" \
-                         '[.[] | select(.event == "workflow_dispatch") | select(.createdAt >= $s)]
+                       -L 10 --json databaseId,createdAt,event,headBranch \
+                     | jq -r --arg s "$started" --arg tag "v$VERSION" \
+                         '[.[] | select(.event == "workflow_dispatch")
+                               | select(.headBranch == $tag)
+                               | select(.createdAt >= $s)]
                           | (first.databaseId // empty)')
             [ -n "$run_id" ] && break
           done

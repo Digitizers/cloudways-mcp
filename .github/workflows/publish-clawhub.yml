@@ -26,7 +26,9 @@ on:
         default: true
 
 permissions:
-  contents: read
+  # write is needed only by the rollback step below, which deletes a release whose
+  # publish failed.
+  contents: write
 
 concurrency:
   group: clawhub-publish
@@ -68,3 +70,18 @@ jobs:
             exit 0
           fi
           clawhub skill publish "$SKILL_DIR" --slug cloudways-mcp --name "Cloudways MCP" --version "${{ steps.ver.outputs.version }}"
+
+      # release.yml rolls back the releases it creates. This covers the other entry
+      # point — a release created by hand in the UI — so the invariant holds for
+      # both: a vX.Y.Z release exists only if X.Y.Z actually reached ClawHub. Without
+      # this, a failed publish on the UI path leaves the release standing and CI's
+      # version-sync guard goes green over a ClawHub that is still a version behind.
+      - name: Roll back the release if a release-triggered publish failed
+        if: failure() && github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          echo "::error::the ClawHub publish failed for $TAG — deleting that release and its tag so CI stays red; fix the cause, then re-release"
+          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag \
+            || echo "::error::the rollback itself failed — delete the $TAG release manually"
