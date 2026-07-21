@@ -34,7 +34,10 @@ name: Publish to ClawHub
 # The run-name embeds the dispatcher's correlation id so release.yml can
 # identify ITS run unambiguously — tag + timestamp alone can collide with a
 # concurrent manual dry-run on the same tag.
-run-name: "Publish to ClawHub${{ inputs.correlation && format(' [{0}]', inputs.correlation) || '' }}"
+# ' (dry-run)' is appended from the ACTUAL dry_run input, so a run's title is
+# unforgeable evidence of its mode — recovery classifiers rely on it to reject
+# correlated-but-dry dispatches.
+run-name: "Publish to ClawHub${{ inputs.correlation && format(' [{0}]', inputs.correlation) || '' }}${{ inputs.dry_run && ' (dry-run)' || '' }}"
 
 on:
   release:
@@ -92,6 +95,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
         run: |
           # A real publish from a manual dispatch is only legitimate when release.yml
           # is driving it — and release.yml always (a) creates a DRAFT release for
@@ -120,6 +125,18 @@ jobs:
             echo "Dry run — validating the publish without uploading:"
             clawhub skill publish "$SKILL_DIR" --slug cloudways-mcp --name "Cloudways MCP" --version "${{ steps.ver.outputs.version }}" --dry-run
             exit 0
+          fi
+
+          # UI releases: the event tag must equal the version this checkout's
+          # SKILL.md declares. A mistyped tag would publish $VERSION to the
+          # registry while the marker lands on the unrelated tag's release —
+          # the guard hunts v$VERSION forever and a corrected release then hits
+          # the duplicate refusal. Refuse before touching the registry; the
+          # mistyped release is preserved (no verified_failure) for a human to
+          # delete.
+          if [ "$GITHUB_EVENT_NAME" = "release" ] && [ "$RELEASE_TAG" != "v$VERSION" ]; then
+            echo "::error::release tag '$RELEASE_TAG' does not match the checked-out SKILL.md version v$VERSION — refusing to publish. Delete the mistyped release and cut one whose tag matches."
+            exit 1
           fi
 
           # Re-run awareness: a PRIOR attempt may already have committed the

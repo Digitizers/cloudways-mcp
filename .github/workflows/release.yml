@@ -132,7 +132,8 @@ jobs:
                 fi
                 last_real=$(jq -r --arg tag "v$VERSION" \
                               '[.[] | select(.headBranch == $tag)
-                                    | select((.event == "release") or (.displayTitle | contains("[rel-")))]
+                                    | select((.event == "release") or (.displayTitle | contains("[rel-")))
+                                    | select(.displayTitle | contains("(dry-run)") | not)]
                                | (first.databaseId // empty)' <<<"$runs2")
                 if [ -n "$last_real" ]; then
                   RID="$last_real"
@@ -263,7 +264,7 @@ jobs:
           # for it and watched in its place.
           run_id=""
           list_ok=false
-          for _ in $(seq 1 12); do
+          for _ in $(seq 1 24); do
             sleep 5
             # Capture gh's own exit status: a listing failure must not be read as
             # "no run appeared" — that verdict triggers a rollback, and rolling
@@ -285,12 +286,19 @@ jobs:
             fi
           done
           if [ -z "$run_id" ]; then
+            # NEVER roll back here — in either branch. The dispatch endpoint
+            # returns 204 with no run id and no listability guarantee, so an
+            # accepted dispatch can surface after any fixed window; deleting the
+            # draft/tag now could yank them from under a child that is about to
+            # (or already did) pass its draft gate and publish. Preserve state;
+            # the next release.yml run's pre-flight sees the late child in its
+            # active-run check or classifies it before sweeping.
             if [ "$list_ok" = "true" ]; then
-              rollback "dispatched the ClawHub publish but no run appeared"
+              echo "::error::dispatched the publish but no matching run became visible within the polling window — it may still appear. Leaving the draft and tag in place (no rollback). Check: gh run list --workflow=publish-clawhub.yml, then re-run this workflow; pre-flight will resume or sweep as appropriate."
             else
               echo "::error::dispatched the publish but could not LIST runs due to API errors — the child may be running, so the draft and tag are left in place (no rollback). Check with: gh run list --workflow=publish-clawhub.yml, then re-run this workflow; pre-flight will resume or sweep as appropriate."
-              exit 1
             fi
+            exit 1
           fi
           echo "publish run: $run_id"
 
