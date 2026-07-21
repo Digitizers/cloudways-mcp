@@ -117,8 +117,50 @@ jobs:
                 echo "draft v$VERSION already carries the publish marker — ClawHub serves it; resuming with the flip only"
                 resume=true
               else
-                echo "sweeping leftover marker-less draft release v$VERSION"
-                gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes
+                # Canceled-after-publish race: a child that committed $VERSION to
+                # the registry and then died before the marker ends up COMPLETED
+                # (a canceled run's status is completed), slipping past the
+                # active-run check — and this draft is the only recovery state.
+                # Interrogate the newest REAL child for this tag (release-event,
+                # or a dispatch carrying a [rel-...] correlation; plain dispatches
+                # may be dry runs whose Publish step succeeds without publishing)
+                # before deleting anything.
+                if ! runs2=$(gh run list --workflow=publish-clawhub.yml --repo "$GITHUB_REPOSITORY" \
+                               -L 20 --json databaseId,headBranch,event,displayTitle); then
+                  echo "::error::could not list publish runs — refusing to sweep the draft while the last publish outcome is unknown"
+                  exit 1
+                fi
+                last_real=$(jq -r --arg tag "v$VERSION" \
+                              '[.[] | select(.headBranch == $tag)
+                                    | select((.event == "release") or (.displayTitle | contains("[rel-")))]
+                               | (first.databaseId // empty)' <<<"$runs2")
+                if [ -n "$last_real" ]; then
+                  if ! child=$(gh run view "$last_real" --repo "$GITHUB_REPOSITORY" --json jobs 2>&1); then
+                    echo "::error::could not inspect publish run $last_real ($child) — refusing to sweep the draft; retry when the API responds"
+                    exit 1
+                  fi
+                  po=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$child")
+                  case "$po" in
+                    success)
+                      echo "run $last_real published v$VERSION (verified step outcome) but no marker landed — attaching it and resuming with the flip"
+                      printf 'cloudways-mcp %s published to ClawHub by run %s (verified from step outcome by release run %s)\n' \
+                        "$VERSION" "$last_real" "$GITHUB_RUN_ID" > clawhub-published.txt
+                      gh release upload "v$VERSION" clawhub-published.txt --repo "$GITHUB_REPOSITORY" --clobber || {
+                        echo "::error::could not attach the marker — attach it manually (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run; pre-flight will resume"
+                        exit 1
+                      }
+                      resume=true ;;
+                    failure)
+                      echo "run $last_real verifiably failed to publish — sweeping leftover marker-less draft release v$VERSION"
+                      gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes ;;
+                    *)
+                      echo "::error::the last real publish run ($last_real) for v$VERSION ended '$po' — ambiguous; the registry may hold the version. Not sweeping. Verify: if $VERSION is published, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, delete the draft (gh release delete v$VERSION --yes) and re-run."
+                      exit 1 ;;
+                  esac
+                else
+                  echo "no real publish run ever targeted v$VERSION — sweeping leftover marker-less draft"
+                  gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes
+                fi
               fi
             else
               echo "::error::v$VERSION is already released — bump the version first"; exit 1

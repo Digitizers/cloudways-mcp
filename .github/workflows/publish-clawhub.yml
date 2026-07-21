@@ -121,7 +121,36 @@ jobs:
             clawhub skill publish "$SKILL_DIR" --slug cloudways-mcp --name "Cloudways MCP" --version "${{ steps.ver.outputs.version }}" --dry-run
             exit 0
           fi
-          clawhub skill publish "$SKILL_DIR" --slug cloudways-mcp --name "Cloudways MCP" --version "${{ steps.ver.outputs.version }}"
+
+          # Re-run awareness: on attempt >1, a PRIOR attempt may already have
+          # committed the version (published, then died on the marker). Publishing
+          # again would hit the duplicate refusal and read as a failure it isn't.
+          if [ "${GITHUB_RUN_ATTEMPT:-1}" -gt 1 ]; then
+            if ! prev=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$((GITHUB_RUN_ATTEMPT-1))/jobs" 2>&1); then
+              echo "::error::attempt $GITHUB_RUN_ATTEMPT cannot query the prior attempt ($prev) — refusing to publish blind; a prior attempt may already have committed $VERSION. Verify the registry manually, then re-run."
+              exit 1
+            fi
+            prev_outcome=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$prev")
+            case "$prev_outcome" in
+              success)
+                echo "prior attempt already published — skipping the duplicate publish; the marker step will attach"
+                exit 0 ;;
+              failure)
+                echo "prior attempt's publish verifiably failed — safe to retry" ;;
+              *)
+                echo "::error::prior attempt ended '$prev_outcome' — ambiguous, it may have committed $VERSION. Refusing to re-publish. Verify the registry: if $VERSION is there, attach the marker (gh release upload <tag> clawhub-published.txt --clobber); if not, delete or draft the release and redo via release.yml."
+                exit 1 ;;
+            esac
+          fi
+
+          # verified_failure is the ONLY evidence the rollback below accepts: it
+          # means THIS attempt ran the publish command and the command itself
+          # failed, with no prior successful attempt. Ambiguity paths above exit
+          # without setting it, so they can never trigger a deletion.
+          clawhub skill publish "$SKILL_DIR" --slug cloudways-mcp --name "Cloudways MCP" --version "${{ steps.ver.outputs.version }}" || {
+            echo "verified_failure=true" >> "$GITHUB_OUTPUT"
+            exit 1
+          }
 
       # THE step that turns CI green: the marker asset is the durable proof that
       # this version actually reached ClawHub. It is written here and nowhere
@@ -190,18 +219,18 @@ jobs:
       # cancelled() as well as failure(): a canceled run is not success(), and a
       # UI release whose publish was canceled mid-way is exactly as unpublished as
       # one whose publish failed.
-      # Rollback ONLY on a VERIFIED publish failure (outcome == 'failure') — the
-      # same evidence rule as release.yml's watch. 'cancelled' is ambiguous: a
-      # cancel mid-`clawhub skill publish` may land after the registry committed
-      # the version, and deleting the release then orphans it (next attempt dies
-      # on the duplicate refusal, with nothing left to carry the marker). An
-      # ambiguous outcome therefore preserves the release: the guard stays red
-      # (no marker), and the operator verifies the registry — if the version is
-      # there, attach the marker by hand; if not, flip the release to draft
-      # (gh release edit <tag> --draft=true) and run release.yml, whose
-      # pre-flight sweeps the marker-less draft and redoes cleanly.
+      # Rollback ONLY on verified_failure — an output the Publish step writes
+      # exclusively when the publish command itself failed on this attempt with
+      # no prior successful attempt. Everything else is ambiguous and preserves
+      # the release: 'cancelled' may land after the registry committed; a step
+      # 'failure' on a re-run may be the duplicate refusal of a version the
+      # FIRST attempt already committed; the ambiguity exits above set no
+      # output. Recovery for preserved states: the guard stays red (no marker) —
+      # if the registry has the version, attach the marker by hand; if not, flip
+      # the release to draft (gh release edit <tag> --draft=true) and run
+      # release.yml, whose pre-flight sweeps the marker-less draft and redoes.
       - name: Roll back the release if a release-triggered publish failed
-        if: (failure() || cancelled()) && github.event_name == 'release' && steps.publish.outcome == 'failure'
+        if: (failure() || cancelled()) && github.event_name == 'release' && steps.publish.outputs.verified_failure == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
