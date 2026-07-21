@@ -86,9 +86,22 @@ jobs:
           # recursive runs. workflow_dispatch is the documented exception, so the
           # publish is triggered explicitly instead of relying on the release event.
           # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow
+          # If the publish does not succeed, the release must not survive: the CI
+          # guard treats "a vX.Y.Z release exists" as proof that ClawHub serves
+          # X.Y.Z, and a released-but-unpublished version would turn that guard
+          # green over a broken state — while blocking this workflow from being
+          # re-run, since it refuses to re-release an existing version.
+          rollback() {
+            echo "::error::$1 — rolling back the v$VERSION release and its tag, so the CI guard stays red and this workflow can be re-run once the cause is fixed"
+            gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag \
+              || echo "::error::the rollback itself failed — delete the v$VERSION release manually before retrying"
+            exit 1
+          }
+
           started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           gh workflow run publish-clawhub.yml \
-            --repo "$GITHUB_REPOSITORY" --ref main -f dry_run=false
+            --repo "$GITHUB_REPOSITORY" --ref main -f dry_run=false \
+            || rollback "could not dispatch the ClawHub publish"
 
           # Find the run we just started (not an older dispatch) by requiring it to
           # be newer than the timestamp above.
@@ -102,11 +115,9 @@ jobs:
                           | (first.databaseId // empty)')
             [ -n "$run_id" ] && break
           done
-          [ -n "$run_id" ] && echo "publish run: $run_id" || {
-            echo "::error::dispatched the ClawHub publish but no run appeared — v$VERSION is released but NOT published"; exit 1; }
+          [ -n "$run_id" ] || rollback "dispatched the ClawHub publish but no run appeared"
+          echo "publish run: $run_id"
 
-          # Fail the release job if the publish fails, so that "a release exists"
-          # can never stand in for a publish that silently didn't happen — which is
-          # the exact drift this whole workflow exists to prevent.
-          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status \
+            || rollback "the ClawHub publish failed (run $run_id)"
           echo "ClawHub now serves $VERSION"
