@@ -56,9 +56,48 @@ jobs:
           if grep -rniE "Ben/Avi|benkalsky" README.md; then
             echo "::error::personal name found in README — use the studio brand, not personal names"; exit 1
           fi
-          # Secret-shaped strings must never appear in the payload.
-          if grep -rniE "(api[_-]?key|bearer|secret|password)[\"'[:space:]=:]+[A-Za-z0-9/_-]{24,}" .claude/ \
+          # Secret-shaped strings must never appear in the payload — nor in the
+          # tracked MCP configs, which are placeholder-only by policy. Strip the
+          # "path:line:" grep prefix before the exemption filter: otherwise the
+          # ".mcp.json.example" filename matches the "example" exemption and waves
+          # real tokens in that file through.
+          if grep -rniE "(api[_-]?key|bearer|secret|password|access[_-]?token)[\"'[:space:]=:]+[A-Za-z0-9/_-]{24,}" .claude/ .mcp.json .mcp.json.example \
+             | sed 's/^[^:]*:[0-9]*://' \
              | grep -viE "your-|YOUR_|CLIENT_[AB]|example|<|\$\{|placeholder"; then
             echo "::error::possible real secret found"; exit 1
           fi
+          # The line-based grep can be evaded by valid JSON that splits key and
+          # value across lines, and its charset misses base64-style tokens with
+          # . + =. Parse the tracked MCP configs and check the actual env/header
+          # VALUES, independent of layout: each must be an env placeholder or too
+          # short to be a live credential.
+          python3 - <<'PY'
+          import json, re, sys
+          PLACEHOLDER = re.compile(r'\$\{[A-Za-z_][A-Za-z0-9_]*(:-([^}]*))?\}')
+          def secret_shaped(val):
+              # A live credential can hide INSIDE placeholder defaults
+              # (${VAR:-<secret>}), outside placeholders, or SPLIT across several
+              # defaults (${A:-half1}${B:-half2}) — so the COMBINED length of all
+              # :- defaults plus the literal residue must stay below credential
+              # size. Env-var expansion of unset vars yields exactly that
+              # combination, so this bounds what the value can expand to.
+              total = len(PLACEHOLDER.sub('', val))
+              for m in PLACEHOLDER.finditer(val):
+                  total += len(m.group(2) or '')
+              return total >= 24
+          bad = []
+          for path in ('.mcp.json', '.mcp.json.example'):
+              with open(path) as f:
+                  cfg = json.load(f)
+              for name, srv in cfg.get('mcpServers', {}).items():
+                  for section in ('env', 'headers'):
+                      for key, val in srv.get(section, {}).items():
+                          if isinstance(val, str) and secret_shaped(val):
+                              bad.append(f'{path}: {name}.{section}.{key}')
+          if bad:
+              print('::error::secret-shaped value in tracked MCP config (placeholder-only policy):')
+              [print('  ' + b) for b in bad]
+              sys.exit(1)
+          print('mcp placeholder-value guard passed')
+          PY
           echo "no-leak guard passed"

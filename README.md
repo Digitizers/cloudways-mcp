@@ -5,7 +5,7 @@
 ![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-Skill-purple)
 ![Cloudways](https://img.shields.io/badge/Cloudways-MCP-2b6cb0)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)
-![Version](https://img.shields.io/badge/version-1.3.1-blue)
+![Version](https://img.shields.io/badge/version-1.4.0-blue)
 
 A production-grade **Claude Code & OpenClaw skill** for managing [Cloudways](https://digitizer.li/cloudways) infrastructure through the official **Cloudways (Remote) MCP** — connect directly to the hosted server, run one or many accounts, with a safety rule on every write.
 
@@ -70,6 +70,8 @@ Use it solo for your own boxes; reach for Aura when you operate a fleet on clien
 ## Activation
 
 The skill activates automatically when Cloudways is discussed, as long as the skill is available and the MCP server is connected (the tools appear as `mcp__cloudways*__*`). For setup and connection — see [`installation.md`](.claude/skills/cloudways-mcp/references/installation.md) and [`.mcp.json.example`](.mcp.json.example).
+
+**Zero-config connection via env var.** The repo commits a [`.mcp.json`](.mcp.json) whose token is the `${CLOUDWAYS_ACCESS_TOKEN:-}` env placeholder — set the variable in your shell (devices) or in the claude.ai cloud environment's env vars (web/phone sessions), and the `cloudways-env` connection authenticates on its own. While the variable is unset the connection just shows as unavailable in `/mcp` (it can't authenticate) — set the var to bring it up. The name `cloudways-env` avoids shadowing the documented user-scope names — `cloudways` and `cloudways-<client>` — since project scope wins name collisions (don't reuse `cloudways-env` for a user-scope connection). Real tokens never go into the file — it is tracked in git. **Migrating from a local gitignored `.mcp.json`:** move your token to the env var (or `claude mcp add -s user`), delete the local file, then pull.
 
 The official hosted MCP is at `https://mcp.cloudways.com/mcp/`. Authenticate with per-account request headers: `X-Access-Token` (a role-based **Access Token** — READ / LIMITED / FULL ACCESS) and `X-Mcp-Host` (the client name, e.g. `claude-code`). Generate the token at [platform.cloudways.com](https://platform.cloudways.com/) → API section. One connection per account, named `cloudways-<client>`. (The legacy `X-CW-Email`/`X-CW-Api-Key` API-key flow is deprecated — the API key stops working on **October 15, 2026**.)
 
