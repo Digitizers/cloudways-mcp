@@ -73,14 +73,23 @@ jobs:
           # short to be a live credential.
           python3 - <<'PY'
           import json, re, sys
-          PLACEHOLDER = re.compile(r'\$\{[A-Za-z_][A-Za-z0-9_]*(:-[^}]*)?\}')
+          PLACEHOLDER = re.compile(r'\$\{[A-Za-z_][A-Za-z0-9_]*(:-([^}]*))?\}')
+          def secret_shaped(val):
+              # A live credential can hide INSIDE a placeholder default
+              # (${VAR:-<secret>}) or outside placeholders entirely — check both:
+              # every :- default and the literal residue must stay below
+              # credential size.
+              for m in PLACEHOLDER.finditer(val):
+                  if len(m.group(2) or '') >= 24:
+                      return True
+              return len(PLACEHOLDER.sub('', val)) >= 24
           bad = []
           for path in ('.mcp.json', '.mcp.json.example'):
               cfg = json.load(open(path))
               for name, srv in cfg.get('mcpServers', {}).items():
                   for section in ('env', 'headers'):
                       for key, val in srv.get(section, {}).items():
-                          if isinstance(val, str) and not PLACEHOLDER.search(val) and len(val) >= 24:
+                          if isinstance(val, str) and secret_shaped(val):
                               bad.append(f'{path}: {name}.{section}.{key}')
           if bad:
               print('::error::secret-shaped value in tracked MCP config (placeholder-only policy):')
