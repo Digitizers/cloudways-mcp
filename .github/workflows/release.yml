@@ -6,8 +6,14 @@ name: Release
 # publish-clawhub.yml does the actual publishing. This workflow dispatches it
 # explicitly and waits for it — it does NOT rely on the `release: published`
 # event, which GitHub suppresses for releases created with GITHUB_TOKEN (see the
-# Publish step). If the publish fails, the release is rolled back, so a release
-# existing always means that version reached ClawHub.
+# Publish step).
+#
+# The release is created as a DRAFT and only flipped to published after the
+# ClawHub publish succeeds. CI's version-sync guard ignores drafts, so at every
+# instant — including a cancellation at any point in this workflow — a
+# *published* vX.Y.Z release exists only if X.Y.Z actually reached ClawHub.
+# Leftovers from a canceled/failed run (a tag, a draft) are swept by the
+# pre-flight step on the next run.
 #
 # Run it after merging a version bump, which is exactly what CI's version-sync
 # job tells you to do when main is ahead of the last release.
@@ -43,16 +49,10 @@ jobs:
 
       - name: Read version and extract the changelog section
         id: rel
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(grep -m1 '^version:' "$SKILL" | sed 's/^version:[[:space:]]*//' | tr -d '"' | tr -d "'" | xargs)
           [ -n "$VERSION" ] || { echo "::error::no version in $SKILL"; exit 1; }
           echo "Releasing v$VERSION"
-
-          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName >/dev/null 2>&1; then
-            echo "::error::v$VERSION is already released — bump the version first"; exit 1
-          fi
 
           python3 - "$VERSION" <<'PY'
           import re, sys, pathlib
@@ -68,20 +68,49 @@ jobs:
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Create the release
+      - name: "Pre-flight: refuse a published version, sweep leftovers"
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.rel.outputs.version }}
         run: |
-          # --target pins the tag to the commit this job checked out and inspected.
-          # Without it the tag lands on the default branch's *current* tip, which may
-          # already carry a different SKILL.md version than the one being released.
+          # A published release means this version already reached ClawHub — refuse.
+          # A DRAFT release or a bare tag is a leftover from a canceled/failed run
+          # (this workflow publishes the release only after ClawHub succeeds), so
+          # sweep it and continue.
+          if meta=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft 2>/dev/null); then
+            if [ "$(jq -r '.isDraft' <<<"$meta")" = "true" ]; then
+              echo "sweeping leftover draft release v$VERSION"
+              gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes
+            else
+              echo "::error::v$VERSION is already released — bump the version first"; exit 1
+            fi
+          fi
+          if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
+            # Safe: we only get here when no PUBLISHED release exists for this tag.
+            echo "sweeping leftover tag v$VERSION"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/v$VERSION"
+          fi
+
+      - name: Create the tag and a draft release at the inspected commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          # The tag is created explicitly at $GITHUB_SHA — the commit this job
+          # checked out and inspected — never at main's current tip, which may
+          # already carry a different SKILL.md version. It must exist before the
+          # dispatch below, because a draft release alone creates no tag and the
+          # dispatch targets the tag ref.
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/v$VERSION" -f sha="$GITHUB_SHA"
+
+          # Draft: invisible to the CI guard until the publish has succeeded.
           gh release create "v$VERSION" \
             --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
+            --draft \
             --title "v$VERSION" \
             --notes-file release-notes.md
-          echo "Created v$VERSION at $GITHUB_SHA"
+          echo "Created tag + draft release v$VERSION at $GITHUB_SHA"
 
       - name: Publish to ClawHub, and wait for it
         env:
@@ -93,22 +122,20 @@ jobs:
           # recursive runs. workflow_dispatch is the documented exception, so the
           # publish is triggered explicitly instead of relying on the release event.
           # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow
-          # If the publish does not succeed, the release must not survive: the CI
-          # guard treats "a vX.Y.Z release exists" as proof that ClawHub serves
-          # X.Y.Z, and a released-but-unpublished version would turn that guard
-          # green over a broken state — while blocking this workflow from being
-          # re-run, since it refuses to re-release an existing version.
           rollback() {
-            echo "::error::$1 — rolling back the v$VERSION release and its tag, so the CI guard stays red and this workflow can be re-run once the cause is fixed"
-            gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag \
-              || echo "::error::the rollback itself failed — delete the v$VERSION release manually before retrying"
+            echo "::error::$1 — removing the v$VERSION draft and tag, so the CI guard stays red and this workflow can be re-run once the cause is fixed"
+            gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes \
+              || echo "(no draft release to delete)"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/v$VERSION" \
+              || echo "::error::tag cleanup failed — delete tag v$VERSION manually before retrying"
             exit 1
           }
 
-          # Dispatch against the tag just created, NOT main: main can advance between
-          # creating the release and dispatching, and publish-clawhub.yml reads the
-          # version out of the tree it runs on — so --ref main could publish a newer
-          # version while this job watches it and reports success for $VERSION.
+          # Dispatch against the tag just created, NOT main: main can advance
+          # between creating the release and dispatching, and publish-clawhub.yml
+          # reads the version out of the tree it runs on — so --ref main could
+          # publish a newer version while this job watches it and reports success
+          # for $VERSION.
           started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           gh workflow run publish-clawhub.yml \
             --repo "$GITHUB_REPOSITORY" --ref "v$VERSION" -f dry_run=false \
@@ -132,6 +159,29 @@ jobs:
           [ -n "$run_id" ] || rollback "dispatched the ClawHub publish but no run appeared"
           echo "publish run: $run_id"
 
+          # Known residual risk: canceling THIS job while the publish run is mid-
+          # upload can leave ClawHub serving $VERSION with the release still a
+          # draft. A re-run would then re-publish the same version, which the
+          # registry may refuse. If that happens: verify ClawHub really serves
+          # $VERSION, then finish by hand with: gh release edit v$VERSION --draft=false
           gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status \
             || rollback "the ClawHub publish failed (run $run_id)"
-          echo "ClawHub now serves $VERSION"
+          echo "ClawHub publish succeeded"
+
+      - name: Publish the release (flip the draft)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          # ClawHub already serves $VERSION, so from here the only correct terminal
+          # state is a PUBLISHED release — never a rollback, which would leave the
+          # registry ahead of the repo and wedge a re-run on a duplicate-version
+          # publish. Retry once, then hand off to a human.
+          if ! gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false; then
+            sleep 5
+            gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false || {
+              echo "::error::ClawHub serves $VERSION but the release is still a draft — finish by hand: gh release edit v$VERSION --draft=false"
+              exit 1
+            }
+          fi
+          echo "v$VERSION released and published — CI guard is satisfied"
