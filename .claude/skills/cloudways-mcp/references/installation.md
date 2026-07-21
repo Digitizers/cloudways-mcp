@@ -48,7 +48,10 @@ the connection can't authenticate and shows as unavailable in `/mcp` — expecte
 provide the token. The `cloudways-env` name is deliberate: project scope beats user scope on
 name collisions, so it never shadows a `cloudways` or `cloudways-<client>` connection you
 add with `claude mcp add -s user`. Never put a real token in `.mcp.json` itself; it is
-tracked in git. Cloud environments with a restricted network policy must allow
+tracked in git. The committed `.claude/settings.json` sets `enableAllProjectMcpServers`,
+which is why the project-scope server activates without a prompt once the folder is trusted —
+to opt out locally, set `"enableAllProjectMcpServers": false` in `.claude/settings.local.json`
+(not committed). Cloud environments with a restricted network policy must allow
 `mcp.cloudways.com`.
 
 ### Claude Code (native HTTP — recommended)

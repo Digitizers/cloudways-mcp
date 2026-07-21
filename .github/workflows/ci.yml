@@ -75,17 +75,20 @@ jobs:
           import json, re, sys
           PLACEHOLDER = re.compile(r'\$\{[A-Za-z_][A-Za-z0-9_]*(:-([^}]*))?\}')
           def secret_shaped(val):
-              # A live credential can hide INSIDE a placeholder default
-              # (${VAR:-<secret>}) or outside placeholders entirely — check both:
-              # every :- default and the literal residue must stay below
-              # credential size.
+              # A live credential can hide INSIDE placeholder defaults
+              # (${VAR:-<secret>}), outside placeholders, or SPLIT across several
+              # defaults (${A:-half1}${B:-half2}) — so the COMBINED length of all
+              # :- defaults plus the literal residue must stay below credential
+              # size. Env-var expansion of unset vars yields exactly that
+              # combination, so this bounds what the value can expand to.
+              total = len(PLACEHOLDER.sub('', val))
               for m in PLACEHOLDER.finditer(val):
-                  if len(m.group(2) or '') >= 24:
-                      return True
-              return len(PLACEHOLDER.sub('', val)) >= 24
+                  total += len(m.group(2) or '')
+              return total >= 24
           bad = []
           for path in ('.mcp.json', '.mcp.json.example'):
-              cfg = json.load(open(path))
+              with open(path) as f:
+                  cfg = json.load(f)
               for name, srv in cfg.get('mcpServers', {}).items():
                   for section in ('env', 'headers'):
                       for key, val in srv.get(section, {}).items():
