@@ -76,8 +76,11 @@ jobs:
       # both: a vX.Y.Z release exists only if X.Y.Z actually reached ClawHub. Without
       # this, a failed publish on the UI path leaves the release standing and CI's
       # version-sync guard goes green over a ClawHub that is still a version behind.
+      # cancelled() as well as failure(): a canceled run is not success(), and a
+      # UI release whose publish was canceled mid-way is exactly as unpublished as
+      # one whose publish failed — without this, it would satisfy the CI guard.
       - name: Roll back the release if a release-triggered publish failed
-        if: failure() && github.event_name == 'release'
+        if: (failure() || cancelled()) && github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}

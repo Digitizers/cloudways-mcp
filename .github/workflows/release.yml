@@ -77,13 +77,26 @@ jobs:
           # A DRAFT release or a bare tag is a leftover from a canceled/failed run
           # (this workflow publishes the release only after ClawHub succeeds), so
           # sweep it and continue.
-          if meta=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft 2>/dev/null); then
+          #
+          # Capture stderr and continue ONLY on a definitive "release not found":
+          # treating a transient API error as "no release" would let the tag sweep
+          # below delete — and the next step retarget — the tag of a release that
+          # IS published.
+          if meta=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft 2>&1); then
             if [ "$(jq -r '.isDraft' <<<"$meta")" = "true" ]; then
               echo "sweeping leftover draft release v$VERSION"
               gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes
             else
               echo "::error::v$VERSION is already released — bump the version first"; exit 1
             fi
+          else
+            case "$meta" in
+              *"release not found"*|*"Not Found"*|*"HTTP 404"*)
+                echo "no existing v$VERSION release" ;;
+              *)
+                echo "::error::could not query releases — aborting rather than risk sweeping a published release's tag: $meta"
+                exit 1 ;;
+            esac
           fi
           if git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
             # Safe: we only get here when no PUBLISHED release exists for this tag.
