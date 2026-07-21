@@ -19,7 +19,9 @@ name: Publish to ClawHub
 # release. CI's version-sync guard requires that asset — not mere release
 # existence — so any path that creates a release without completing a publish
 # (a canceled run, a queued run that never started, a failure) leaves the guard
-# red until the publish actually lands. Nothing else may ever write that asset.
+# red until the publish actually lands. The only other sanctioned writer is
+# release.yml's watch step, and only after verifying — from this run's own
+# Publish step conclusion — that the publish succeeded.
 #
 # Note on the release trigger: it only fires for releases created by a human
 # (UI / a personal token). A release created by release.yml runs under
@@ -40,9 +42,10 @@ on:
         default: true
 
 permissions:
-  # write is needed by the marker-asset upload and by the rollback step below,
-  # which deletes a release whose publish failed.
+  # contents: write — the marker-asset upload and the rollback step below.
+  # actions: write — re-running the failed main CI guard after a UI publish.
   contents: write
+  actions: write
 
 concurrency:
   group: clawhub-publish
@@ -138,6 +141,30 @@ jobs:
             echo "marker upload attempt $attempt failed"; sleep 10
           done
           echo "::warning::ClawHub serves $VERSION but the marker upload failed after 3 attempts. The release is intentionally left standing — CI's version-sync guard stays red until the marker exists. Re-attach it with: gh release upload $TAG clawhub-published.txt --clobber"
+
+      # Mirror of release.yml's rerun step, for the UI entry point: the failed
+      # version-sync run on main has no event to revive it (ci.yml hears only
+      # push/pull_request), so after a successful UI-triggered publish main would
+      # stay red until an unrelated push. Warn-only on any hiccup — the publish
+      # is already complete. Fail-closed listing per the round-10 rule.
+      - name: Re-run the failed CI guard on main (UI path)
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! runs_json=$(gh run list --workflow=ci.yml --repo "$GITHUB_REPOSITORY" --branch main \
+                             -L 10 --json databaseId,conclusion); then
+            echo "::warning::could not list ci.yml runs — if main's guard is red, re-run it manually (gh run rerun <id> --failed)"
+            exit 0
+          fi
+          run_id=$(jq -r '[.[] | select(.conclusion == "failure")] | (first.databaseId // empty)' <<<"$runs_json")
+          if [ -n "$run_id" ]; then
+            gh run rerun "$run_id" --repo "$GITHUB_REPOSITORY" --failed \
+              && echo "re-ran CI run $run_id" \
+              || echo "::warning::could not re-run CI run $run_id — re-run it manually so main reflects the synced state"
+          else
+            echo "no failed ci.yml run on main — nothing to re-run"
+          fi
 
       # Defense-in-depth for the UI entry point: the guard no longer NEEDS this
       # (no marker = red regardless), but leaving a published-yet-unpublished

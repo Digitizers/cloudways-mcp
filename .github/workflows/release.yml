@@ -227,19 +227,45 @@ jobs:
           fi
           echo "publish run: $run_id"
 
-          # The child fails ONLY when the publish command itself failed — a marker
-          # upload problem warns without failing it (the release must survive once
-          # the registry has the version; CI stays red until the marker is
-          # re-attached). So rolling back on a failed child is safe here."
-
-          # Cancellation here is recoverable: if the publish run finished (it
-          # attaches the clawhub-published.txt marker to the draft), the next
-          # release.yml run detects the marker in pre-flight and resumes straight
-          # to the flip. If the publish run itself was still mid-upload, no marker
-          # exists and the re-run sweeps + redoes normally.
-          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status \
-            || rollback "the ClawHub publish failed (run $run_id)"
-          echo "ClawHub publish succeeded"
+          # A nonzero watch is NOT proof the publish failed: the child may have
+          # been canceled after `clawhub skill publish` succeeded (its marker step
+          # warns rather than fails, but cancellation can still kill it), or watch
+          # itself may have hit an API error. Deleting the draft/tag is only safe
+          # when the child's Publish step VERIFIABLY failed — otherwise the
+          # registry may already hold $VERSION and a rollback orphans it. So
+          # interrogate the child's step outcome before deciding.
+          watch_rc=0
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status || watch_rc=$?
+          if [ "$watch_rc" -ne 0 ]; then
+            if ! child=$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json jobs 2>&1); then
+              echo "::error::child run $run_id ended nonzero and its outcome could not be queried ($child) — leaving the draft and tag in place (no rollback). Verify manually, then re-run this workflow."
+              exit 1
+            fi
+            publish_outcome=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$child")
+            case "$publish_outcome" in
+              success)
+                # The registry verifiably holds $VERSION; the child died on
+                # something after the point of no return. Attach the marker HERE
+                # on that step-outcome evidence — the only other sanctioned
+                # marker writer, and only on this proof — and carry on to the flip.
+                echo "child failed AFTER a successful publish — attaching the marker from verified step outcome"
+                printf 'cloudways-mcp %s published to ClawHub by run %s (verified from step outcome by release run %s)\n' \
+                  "$VERSION" "$run_id" "$GITHUB_RUN_ID" > clawhub-published.txt
+                gh release upload "v$VERSION" clawhub-published.txt --repo "$GITHUB_REPOSITORY" --clobber || {
+                  echo "::error::could not attach the marker — attach it manually (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run this workflow; pre-flight will resume with the flip"
+                  exit 1
+                }
+                ;;
+              failure)
+                rollback "the ClawHub publish failed (run $run_id, Publish step conclusion: failure)"
+                ;;
+              *)
+                echo "::error::child run $run_id ended without a decisive Publish outcome ($publish_outcome — e.g. canceled mid-publish). ClawHub may or may not hold $VERSION; leaving the draft and tag in place (no rollback). Verify against the registry: if $VERSION is published, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, just re-run — pre-flight sweeps the marker-less draft and redoes."
+                exit 1
+                ;;
+            esac
+          fi
+          echo "ClawHub publish confirmed"
 
       - name: Publish the release (flip the draft)
         env:
