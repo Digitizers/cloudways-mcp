@@ -14,6 +14,9 @@ on:
 
 permissions:
   contents: write
+  # Needed to dispatch publish-clawhub.yml — see the Publish step for why the
+  # release event alone is not enough.
+  actions: write
 
 concurrency:
   group: release
@@ -71,4 +74,39 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "v$VERSION" \
             --notes-file release-notes.md
-          echo "Created v$VERSION — publish-clawhub.yml will now run on the release event."
+          echo "Created v$VERSION"
+
+      - name: Publish to ClawHub, and wait for it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          # A release created with GITHUB_TOKEN does NOT emit a `release: published`
+          # event that starts another workflow — GitHub suppresses those to prevent
+          # recursive runs. workflow_dispatch is the documented exception, so the
+          # publish is triggered explicitly instead of relying on the release event.
+          # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow
+          started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          gh workflow run publish-clawhub.yml \
+            --repo "$GITHUB_REPOSITORY" --ref main -f dry_run=false
+
+          # Find the run we just started (not an older dispatch) by requiring it to
+          # be newer than the timestamp above.
+          run_id=""
+          for _ in $(seq 1 12); do
+            sleep 5
+            run_id=$(gh run list --workflow=publish-clawhub.yml --repo "$GITHUB_REPOSITORY" \
+                       -L 5 --json databaseId,createdAt,event \
+                     | jq -r --arg s "$started" \
+                         '[.[] | select(.event == "workflow_dispatch") | select(.createdAt >= $s)]
+                          | (first.databaseId // empty)')
+            [ -n "$run_id" ] && break
+          done
+          [ -n "$run_id" ] && echo "publish run: $run_id" || {
+            echo "::error::dispatched the ClawHub publish but no run appeared — v$VERSION is released but NOT published"; exit 1; }
+
+          # Fail the release job if the publish fails, so that "a release exists"
+          # can never stand in for a publish that silently didn't happen — which is
+          # the exact drift this whole workflow exists to prevent.
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status
+          echo "ClawHub now serves $VERSION"

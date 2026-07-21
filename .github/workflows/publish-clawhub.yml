@@ -7,6 +7,12 @@ name: Publish to ClawHub
 #   - on a published GitHub Release  → real publish
 #   - manual run (workflow_dispatch) → choose dry-run or real publish
 #
+# Note on the release trigger: it only fires for releases created by a human
+# (UI / a personal token). A release created by release.yml runs under
+# GITHUB_TOKEN, and GitHub suppresses the resulting `release: published` event
+# to prevent recursive runs — so release.yml dispatches this workflow explicitly
+# rather than depending on the event. Do not "simplify" that away.
+#
 # The version is read from the skill's SKILL.md front matter (`version:`).
 
 on:
