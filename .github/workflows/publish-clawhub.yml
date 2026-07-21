@@ -4,8 +4,14 @@ name: Publish to ClawHub
 # Dormant until the repo is public and a CLAWHUB_TOKEN repo secret is set.
 #
 # Triggers:
-#   - on a published GitHub Release  → real publish
-#   - manual run (workflow_dispatch) → choose dry-run or real publish
+#   - on a published GitHub Release  → real publish (UI-created releases)
+#   - dispatched by release.yml on a version tag → real publish
+#   - manual run (workflow_dispatch) on a branch → dry-run ONLY. A freestanding
+#     real publish would put a version on ClawHub with no GitHub release behind
+#     it; CI's version-sync guard then points the operator at release.yml, whose
+#     re-publish of the same version the registry may refuse — wedging the flow
+#     with CI red while ClawHub is actually current. Real publishes therefore go
+#     through release.yml (or a UI release), never from here.
 #
 # Note on the release trigger: it only fires for releases created by a human
 # (UI / a personal token). A release created by release.yml runs under
@@ -64,6 +70,18 @@ jobs:
         env:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
         run: |
+          # A real publish from a manual dispatch is only legitimate when release.yml
+          # is driving it — and release.yml always dispatches on the version tag it
+          # just created. A human dispatching dry_run=false on a branch would push a
+          # version to ClawHub with no release behind it (see the header).
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$DRY_RUN" != "true" ]; then
+            case "$GITHUB_REF" in
+              refs/tags/v*) ;;
+              *)
+                echo "::error::real publishes run through release.yml (gh workflow run release.yml), which dispatches this workflow on the version tag. A freestanding real publish would leave ClawHub ahead of the repo with no release, wedging the release flow on a duplicate-version publish."
+                exit 1 ;;
+            esac
+          fi
           if [ "$DRY_RUN" = "true" ]; then
             echo "Dry run — validating the publish without uploading:"
             clawhub skill publish "$SKILL_DIR" --slug cloudways-mcp --name "Cloudways MCP" --version "${{ steps.ver.outputs.version }}" --dry-run
