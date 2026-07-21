@@ -122,25 +122,33 @@ jobs:
             exit 0
           fi
 
-          # Re-run awareness: on attempt >1, a PRIOR attempt may already have
-          # committed the version (published, then died on the marker). Publishing
-          # again would hit the duplicate refusal and read as a failure it isn't.
+          # Re-run awareness: a PRIOR attempt may already have committed the
+          # version (published, then died on the marker). Scan ALL prior
+          # attempts, not just the previous one — AMBIGUITY IS STICKY: an
+          # attempt-1 cancellation stays ambiguous forever, and a later
+          # attempt's guard-refusal records a step 'failure' that must never be
+          # read as proof the version was not committed.
           if [ "${GITHUB_RUN_ATTEMPT:-1}" -gt 1 ]; then
-            if ! prev=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$((GITHUB_RUN_ATTEMPT-1))/jobs" 2>&1); then
-              echo "::error::attempt $GITHUB_RUN_ATTEMPT cannot query the prior attempt ($prev) — refusing to publish blind; a prior attempt may already have committed $VERSION. Verify the registry manually, then re-run."
+            ambiguous=""
+            a=1
+            while [ "$a" -lt "$GITHUB_RUN_ATTEMPT" ]; do
+              if ! prev=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$a/jobs" 2>&1); then
+                echo "::error::attempt $GITHUB_RUN_ATTEMPT cannot query attempt $a ($prev) — refusing to publish blind; an earlier attempt may already have committed $VERSION. Verify the registry manually, then re-run."
+                exit 1
+              fi
+              po=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$prev")
+              if [ "$po" = "success" ]; then
+                echo "attempt $a already published — skipping the duplicate publish; the marker step will attach"
+                exit 0
+              fi
+              [ "$po" = "failure" ] || ambiguous="$a:$po"
+              a=$((a + 1))
+            done
+            if [ -n "$ambiguous" ]; then
+              echo "::error::attempt ${ambiguous%%:*} ended '${ambiguous#*:}' — ambiguous, it may have committed $VERSION, and no later attempt can launder that away. Refusing to re-publish. Verify the registry: if $VERSION is there, attach the marker (gh release upload <tag> clawhub-published.txt --clobber); if not, delete or draft the release and redo via release.yml."
               exit 1
             fi
-            prev_outcome=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$prev")
-            case "$prev_outcome" in
-              success)
-                echo "prior attempt already published — skipping the duplicate publish; the marker step will attach"
-                exit 0 ;;
-              failure)
-                echo "prior attempt's publish verifiably failed — safe to retry" ;;
-              *)
-                echo "::error::prior attempt ended '$prev_outcome' — ambiguous, it may have committed $VERSION. Refusing to re-publish. Verify the registry: if $VERSION is there, attach the marker (gh release upload <tag> clawhub-published.txt --clobber); if not, delete or draft the release and redo via release.yml."
-                exit 1 ;;
-            esac
+            echo "every prior attempt's publish verifiably failed — safe to retry"
           fi
 
           # verified_failure is the ONLY evidence the rollback below accepts: it

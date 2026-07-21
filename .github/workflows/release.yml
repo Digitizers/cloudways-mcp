@@ -135,12 +135,31 @@ jobs:
                                     | select((.event == "release") or (.displayTitle | contains("[rel-")))]
                                | (first.databaseId // empty)' <<<"$runs2")
                 if [ -n "$last_real" ]; then
-                  if ! child=$(gh run view "$last_real" --repo "$GITHUB_REPOSITORY" --json jobs 2>&1); then
-                    echo "::error::could not inspect publish run $last_real ($child) — refusing to sweep the draft; retry when the API responds"
-                    exit 1
+                  RID="$last_real"
+                  # Classify RID across ALL attempts — ambiguity is sticky: a later
+                  # guard-refusal 'failure' never launders an earlier ambiguous attempt.
+                  verdict=""
+                  if ! meta=$(gh run view "$RID" --repo "$GITHUB_REPOSITORY" --json attempt 2>&1); then
+                    verdict="error:$meta"
+                  else
+                    n=$(jq -r '.attempt // 1' <<<"$meta"); saw=""; a=1
+                    while [ "$a" -le "$n" ]; do
+                      if ! jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RID/attempts/$a/jobs" 2>&1); then
+                        verdict="error:$jobs"; break
+                      fi
+                      po=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$jobs")
+                      if [ "$po" = "success" ]; then verdict="success"; break; fi
+                      [ "$po" = "failure" ] || saw="attempt $a: $po"
+                      a=$((a + 1))
+                    done
+                    if [ -z "$verdict" ]; then
+                      if [ -n "$saw" ]; then verdict="ambiguous:$saw"; else verdict="failure"; fi
+                    fi
                   fi
-                  po=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$child")
-                  case "$po" in
+                  case "$verdict" in
+                    error:*)
+                      echo "::error::could not inspect publish run $last_real (${verdict#error:}) — refusing to sweep the draft; retry when the API responds"
+                      exit 1 ;;
                     success)
                       echo "run $last_real published v$VERSION (verified step outcome) but no marker landed — attaching it and resuming with the flip"
                       printf 'cloudways-mcp %s published to ClawHub by run %s (verified from step outcome by release run %s)\n' \
@@ -151,10 +170,10 @@ jobs:
                       }
                       resume=true ;;
                     failure)
-                      echo "run $last_real verifiably failed to publish — sweeping leftover marker-less draft release v$VERSION"
+                      echo "run $last_real verifiably failed to publish on every attempt — sweeping leftover marker-less draft release v$VERSION"
                       gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes ;;
                     *)
-                      echo "::error::the last real publish run ($last_real) for v$VERSION ended '$po' — ambiguous; the registry may hold the version. Not sweeping. Verify: if $VERSION is published, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, delete the draft (gh release delete v$VERSION --yes) and re-run."
+                      echo "::error::the last real publish run ($last_real) for v$VERSION has an ambiguous Publish history (${verdict#ambiguous:}) — the registry may hold the version. Not sweeping. Verify: if $VERSION is published, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, delete the draft (gh release delete v$VERSION --yes) and re-run."
                       exit 1 ;;
                   esac
                 else
@@ -285,12 +304,31 @@ jobs:
           watch_rc=0
           gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status || watch_rc=$?
           if [ "$watch_rc" -ne 0 ]; then
-            if ! child=$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json jobs 2>&1); then
-              echo "::error::child run $run_id ended nonzero and its outcome could not be queried ($child) — leaving the draft and tag in place (no rollback). Verify manually, then re-run this workflow."
-              exit 1
+            RID="$run_id"
+            # Classify RID across ALL attempts — ambiguity is sticky: a later
+            # guard-refusal 'failure' never launders an earlier ambiguous attempt.
+            verdict=""
+            if ! meta=$(gh run view "$RID" --repo "$GITHUB_REPOSITORY" --json attempt 2>&1); then
+              verdict="error:$meta"
+            else
+              n=$(jq -r '.attempt // 1' <<<"$meta"); saw=""; a=1
+              while [ "$a" -le "$n" ]; do
+                if ! jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RID/attempts/$a/jobs" 2>&1); then
+                  verdict="error:$jobs"; break
+                fi
+                po=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$jobs")
+                if [ "$po" = "success" ]; then verdict="success"; break; fi
+                [ "$po" = "failure" ] || saw="attempt $a: $po"
+                a=$((a + 1))
+              done
+              if [ -z "$verdict" ]; then
+                if [ -n "$saw" ]; then verdict="ambiguous:$saw"; else verdict="failure"; fi
+              fi
             fi
-            publish_outcome=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$child")
-            case "$publish_outcome" in
+            case "$verdict" in
+              error:*)
+                echo "::error::child run $run_id ended nonzero and its outcome could not be queried (${verdict#error:}) — leaving the draft and tag in place (no rollback). Verify manually, then re-run this workflow."
+                exit 1 ;;
               success)
                 # The registry verifiably holds $VERSION; the child died on
                 # something after the point of no return. Attach the marker HERE
@@ -305,10 +343,10 @@ jobs:
                 }
                 ;;
               failure)
-                rollback "the ClawHub publish failed (run $run_id, Publish step conclusion: failure)"
+                rollback "the ClawHub publish failed (run $run_id, every attempt's Publish verifiably failed)"
                 ;;
               *)
-                echo "::error::child run $run_id ended without a decisive Publish outcome ($publish_outcome — e.g. canceled mid-publish). ClawHub may or may not hold $VERSION; leaving the draft and tag in place (no rollback). Verify against the registry: if $VERSION is published, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, just re-run — pre-flight sweeps the marker-less draft and redoes."
+                echo "::error::child run $run_id has an ambiguous Publish history (${verdict#ambiguous:} — e.g. canceled mid-publish). ClawHub may or may not hold $VERSION; leaving the draft and tag in place (no rollback). Verify against the registry: if $VERSION is published, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, just re-run — pre-flight sweeps the marker-less draft and redoes."
                 exit 1
                 ;;
             esac
