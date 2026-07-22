@@ -49,7 +49,10 @@ name: Publish to ClawHub
 # ' (dry-run)' is appended from the ACTUAL dry_run input, so a run's title is
 # unforgeable evidence of its mode — recovery classifiers rely on it to reject
 # correlated-but-dry dispatches.
-run-name: "Publish to ClawHub${{ inputs.correlation && format(' [{0}]', inputs.correlation) || '' }}${{ inputs.dry_run && ' (dry-run)' || '' }}"
+# The dry_run test is written type-agnostically (boolean true OR string 'true')
+# so the suffix is correct regardless of how the runner types dispatch inputs —
+# a wrong suffix here would flip the recovery classifiers' real/dry verdicts.
+run-name: "Publish to ClawHub${{ inputs.correlation && format(' [{0}]', inputs.correlation) || '' }}${{ (inputs.dry_run == true || inputs.dry_run == 'true') && ' (dry-run)' || '' }}"
 
 on:
   release:
@@ -247,7 +250,7 @@ jobs:
       # flip a marker-less draft into a published release the guard rejects and
       # release.yml refuses to touch again.)
       - name: Upload the publish-completion marker
-        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false)
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true && inputs.dry_run != 'true')
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.ver.outputs.version }}

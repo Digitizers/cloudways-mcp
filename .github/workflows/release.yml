@@ -122,22 +122,25 @@ jobs:
                 # the registry and then died before the marker ends up COMPLETED
                 # (a canceled run's status is completed), slipping past the
                 # active-run check — and this draft is the only recovery state.
-                # Outstanding-dispatch grace: a prior run may have dispatched and
-                # died before its child became listable. Its breadcrumb on the
-                # draft is durable; within the grace window nothing may be swept,
-                # because run listings cannot yet prove the child's absence.
+                # Outstanding-dispatch breadcrumb: a prior run may have dispatched
+                # and died before its child became listable, and listability has
+                # NO bounded window — elapsed time never proves absence. The
+                # breadcrumb carries that dispatch's correlation id: if the
+                # correlated run is listed, the aggregation below classifies it
+                # like any other real run; if it is not, only a HUMAN may break
+                # the tie, by deleting the breadcrumb after verifying no such run
+                # exists.
                 if [ "$(jq -r '[.assets[].name] | index("dispatch-pending.txt") != null' <<<"$meta")" = "true" ]; then
                   gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern dispatch-pending.txt --output "$RUNNER_TEMP/pending.txt" || {
                     echo "::error::draft v$VERSION carries a dispatch-pending breadcrumb that could not be read — not sweeping. Retry when the API responds."
                     exit 1
                   }
-                  pend_at=$(cut -d' ' -f1 <"$RUNNER_TEMP/pending.txt")
-                  age=$(( $(date -u +%s) - pend_at ))
-                  if [ "$age" -lt 600 ]; then
-                    echo "::error::a dispatch recorded ${age}s ago may still be surfacing (run listings cannot prove its absence yet) — not sweeping. Wait for the grace window (10 min) and re-run."
+                  pend_corr=$(cut -d' ' -f2 <"$RUNNER_TEMP/pending.txt")
+                  if [ "$(jq -r --arg c "[$pend_corr]" '[.[] | select((.displayTitle // "") | contains($c))] | length' <<<"$runs2")" -eq 0 ]; then
+                    echo "::error::draft v$VERSION records an outstanding dispatch ($pend_corr) whose run is not listed — it may still surface; elapsed time cannot prove otherwise. Not sweeping. Verify by hand (gh run list --workflow=publish-clawhub.yml, look for [$pend_corr]); if it truly never started, acknowledge by removing the breadcrumb (gh release delete-asset v$VERSION dispatch-pending.txt --yes) and re-run."
                     exit 1
                   fi
-                  echo "dispatch-pending breadcrumb is ${age}s old — past the grace window; any accepted child would be listable by now"
+                  echo "the outstanding dispatch ($pend_corr) is listed — the aggregation below will classify it"
                 fi
 
                 # Interrogate the newest REAL child for this tag before deleting
