@@ -6,6 +6,92 @@ on:
   pull_request:
 
 jobs:
+  version-sync:
+    name: Version sync (declarations always; release+marker on main only)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SKILL: .claude/skills/cloudways-mcp/SKILL.md
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: All three version declarations agree
+        id: ver
+        run: |
+          skill_v=$(grep -m1 '^version:' "$SKILL" | sed 's/^version:[[:space:]]*//' | tr -d '"' | tr -d "'" | xargs)
+          pkg_v=$(jq -r .version package.json)
+          # Color-agnostic: match the semver itself, not the badge color suffix.
+          readme_v=$(grep -oE 'badge/version-[0-9]+\.[0-9]+\.[0-9]+' README.md | head -1 | sed 's|badge/version-||')
+          echo "SKILL.md=$skill_v  package.json=$pkg_v  README badge=$readme_v"
+          [ -n "$skill_v" ] || { echo "::error::no version in $SKILL"; exit 1; }
+          if [ "$skill_v" != "$pkg_v" ] || [ "$skill_v" != "$readme_v" ]; then
+            echo "::error::version mismatch — SKILL.md=$skill_v, package.json=$pkg_v, README badge=$readme_v. Bump all three in the same commit."
+            exit 1
+          fi
+          echo "version=$skill_v" >> "$GITHUB_OUTPUT"
+
+      # Only on main: a PR that bumps the version cannot have a release yet
+      # (the tag has to point at the merged commit), so gating PRs would deadlock.
+      #
+      # THE PROOF IS THE MARKER ASSET, not release existence. Only
+      # publish-clawhub.yml writes `clawhub-published.txt` onto the release, and
+      # only after its publish command succeeded — so a queued/canceled/failed
+      # publish behind a UI release, a leftover draft, or a bare tag all stay red
+      # here no matter what the releases page shows. Release existence alone
+      # proved nothing: a UI release satisfies it seconds before its publish run
+      # has even started.
+      - name: A published release exists, ClawHub confirmed it, payload matches
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          # Capture stderr instead of discarding it: a network/auth failure must not
+          # be misread as "no release" (and vice versa).
+          if ! out=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,assets 2>"$RUNNER_TEMP/gherr"); then
+            out=$(cat "$RUNNER_TEMP/gherr")
+            echo "$out"
+            case "$out" in
+              *"release not found"*|*"Not Found"*|*"HTTP 404"*)
+                echo "::error::SKILL.md is at $VERSION but there is no v$VERSION release, so ClawHub is still serving the previous version. Cut one with: gh workflow run release.yml"
+                ;;
+              *)
+                echo "::error::could not query releases (this is NOT a verdict on whether v$VERSION exists): $out"
+                ;;
+            esac
+            exit 1
+          fi
+
+          # A draft is not a publication: no release event fired, nothing reached
+          # ClawHub — and gh release view DOES find drafts when authenticated.
+          if [ "$(jq -r '.isDraft' <<<"$out")" = "true" ]; then
+            echo "::error::v$VERSION exists only as a DRAFT release — nothing was published to ClawHub. Publish it via release.yml (or delete the leftover draft and re-run: gh workflow run release.yml)"
+            exit 1
+          fi
+
+          # The marker is uploaded by publish-clawhub.yml after a successful real
+          # publish, and by nothing else. No marker = the publish never completed
+          # (still queued, canceled, or failed) even though the release is up.
+          if [ "$(jq -r '[.assets[].name] | index("clawhub-published.txt") != null' <<<"$out")" != "true" ]; then
+            echo "::error::the v$VERSION release exists but carries no clawhub-published.txt marker — its ClawHub publish never completed. Check the publish-clawhub.yml runs for v$VERSION; once ClawHub really serves $VERSION, re-attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber), or delete the release and re-run release.yml."
+            exit 1
+          fi
+          echo "release v$VERSION is published and ClawHub confirmed it (marker present)"
+
+          # Same version ⇒ same payload. A push that edits the skill directory
+          # without bumping the version would otherwise pass here while ClawHub
+          # keeps serving the payload frozen at the tag.
+          PAYLOAD_DIR=$(dirname "$SKILL")
+          git fetch --no-tags --depth=1 origin "+refs/tags/v$VERSION:refs/tags/v$VERSION"
+          if git diff --quiet "v$VERSION" HEAD -- "$PAYLOAD_DIR"; then
+            echo "payload matches the released v$VERSION tag — ClawHub is in sync"
+          else
+            echo "::error::$PAYLOAD_DIR changed since v$VERSION was released, but the version was not bumped — ClawHub is serving the old payload under the same version. Bump the version (all three declarations + CHANGELOG) and release."
+            git diff --stat "v$VERSION" HEAD -- "$PAYLOAD_DIR"
+            exit 1
+          fi
+
   skill:
     runs-on: ubuntu-latest
     env:

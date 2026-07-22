@@ -1,0 +1,498 @@
+name: Release
+
+# Cuts a GitHub Release for the version declared in SKILL.md, with notes taken
+# from the matching CHANGELOG.md section.
+#
+# publish-clawhub.yml does the actual publishing. This workflow dispatches it
+# explicitly and waits for it — it does NOT rely on the `release: published`
+# event, which GitHub suppresses for releases created with GITHUB_TOKEN (see the
+# Publish step).
+#
+# The release is created as a DRAFT and only flipped to published after the
+# ClawHub publish succeeds — and the publish run attaches a
+# clawhub-published.txt marker asset, which is what CI's version-sync guard
+# actually requires. So at every instant — including a cancellation at any
+# point in this workflow — the guard goes green only once X.Y.Z really reached
+# ClawHub. Leftovers from a canceled/failed run are handled by pre-flight on
+# the next run: a marker-less draft or bare tag is swept and redone; a draft
+# that already CARRIES the marker means the publish finished and only the flip
+# was lost, so the run resumes straight to the flip instead of re-publishing
+# (which the registry would refuse as a duplicate version).
+#
+# Run it after merging a version bump, which is exactly what CI's version-sync
+# job tells you to do when main is ahead of the last release.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  # Needed to dispatch publish-clawhub.yml — see the Publish step for why the
+  # release event alone is not enough.
+  actions: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Cut the release
+    runs-on: ubuntu-latest
+    env:
+      SKILL: .claude/skills/cloudways-mcp/SKILL.md
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Refuse to release off a non-default branch
+        run: |
+          # A release tag must point at a commit on main; tagging a feature branch
+          # would publish code that never landed.
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] || {
+            echo "::error::dispatched against '$GITHUB_REF_NAME' — re-run with --ref $DEFAULT_BRANCH"; exit 1; }
+
+      - name: Read version and extract the changelog section
+        id: rel
+        run: |
+          VERSION=$(grep -m1 '^version:' "$SKILL" | sed 's/^version:[[:space:]]*//' | tr -d '"' | tr -d "'" | xargs)
+          [ -n "$VERSION" ] || { echo "::error::no version in $SKILL"; exit 1; }
+          echo "Releasing v$VERSION"
+
+          python3 - "$VERSION" <<'PY'
+          import re, sys, pathlib
+          version = sys.argv[1]
+          text = pathlib.Path("CHANGELOG.md").read_text()
+          # Section runs from its own heading to the next "## " heading (or EOF).
+          m = re.search(rf'^## {re.escape(version)} - .*?\n(.*?)(?=\n## |\Z)', text, re.S | re.M)
+          if not m or not m.group(1).strip():
+              sys.exit(f"::error::no CHANGELOG.md section for {version} — add one before releasing")
+          pathlib.Path("release-notes.md").write_text(m.group(1).strip() + "\n")
+          print(f"changelog section: {len(m.group(1).strip().splitlines())} lines")
+          PY
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: "Pre-flight: refuse a published version, resume or sweep leftovers"
+        id: pre
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          # A published release means this version already reached ClawHub — refuse.
+          # A leftover from a canceled/failed run splits on the marker:
+          #   - draft WITH clawhub-published.txt → the publish finished, only the
+          #     flip was lost → resume: keep the draft + tag, skip straight to the
+          #     flip step (re-publishing would hit the registry's duplicate refusal).
+          #   - draft without the marker, or a bare tag → sweep and redo.
+          #
+          # Capture stderr and continue ONLY on a definitive "release not found":
+          # treating a transient API error as "no release" would let the tag sweep
+          # below delete — and the next step retarget — the tag of a release that
+          # IS published.
+          # A previously dispatched publish for this tag may still be running (this
+          # workflow's concurrency group does not cover the child). Sweeping its
+          # marker-less draft mid-flight would race it: the old child publishes or
+          # attaches its marker to a recreated release while the new child hits the
+          # registry's duplicate refusal. Refuse to proceed until it settles.
+          # Fail CLOSED on the listing itself: without pipefail, a gh failure feeds
+          # jq empty input, reads as "nothing active", and the sweep below would
+          # race a child that may still be publishing.
+          runs_json=$(gh run list --workflow=publish-clawhub.yml --repo "$GITHUB_REPOSITORY" \
+                        -L 50 --json databaseId,status,headBranch) || {
+            echo "::error::could not list publish runs — refusing to sweep release state while a publish may be active. Retry once the API responds."
+            exit 1
+          }
+          active=$(jq -r --arg tag "v$VERSION" \
+                     '[.[] | select(.headBranch == $tag) | select(.status != "completed")]
+                      | (first.databaseId // empty)' <<<"$runs_json")
+          if [ -n "$active" ]; then
+            echo "::error::publish run $active for v$VERSION is still active — wait for it (gh run watch $active), then re-run this workflow"
+            exit 1
+          fi
+
+          resume=false
+          if meta=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft,assets 2>"$RUNNER_TEMP/gherr"); then
+            if [ "$(jq -r '.isDraft' <<<"$meta")" = "true" ]; then
+              if [ "$(jq -r '[.assets[].name] | index("clawhub-published.txt") != null' <<<"$meta")" = "true" ]; then
+                echo "draft v$VERSION already carries the publish marker — ClawHub serves it; resuming with the flip only"
+                resume=true
+              else
+                # Canceled-after-publish race: a child that committed $VERSION to
+                # the registry and then died before the marker ends up COMPLETED
+                # (a canceled run's status is completed), slipping past the
+                # active-run check — and this draft is the only recovery state.
+                if ! runs2=$(gh run list --workflow=publish-clawhub.yml --repo "$GITHUB_REPOSITORY" \
+                               -L 50 --json databaseId,headBranch,event,displayTitle); then
+                  echo "::error::could not list publish runs — refusing to sweep the draft while the last publish outcome is unknown"
+                  exit 1
+                fi
+                # Outstanding-dispatch breadcrumb: a prior run may have dispatched
+                # and died before its child became listable, and listability has
+                # NO bounded window — elapsed time never proves absence. The
+                # breadcrumb carries that dispatch's correlation id: if the
+                # correlated run is listed, the aggregation below classifies it
+                # like any other real run; if it is not, only a HUMAN may break
+                # the tie, by deleting the breadcrumb after verifying no such run
+                # exists.
+                if [ "$(jq -r '[.assets[].name] | index("dispatch-pending.txt") != null' <<<"$meta")" = "true" ]; then
+                  gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern dispatch-pending.txt --output "$RUNNER_TEMP/pending.txt" || {
+                    echo "::error::draft v$VERSION carries a dispatch-pending breadcrumb that could not be read — not sweeping. Retry when the API responds."
+                    exit 1
+                  }
+                  pend_corr=$(cut -d' ' -f2 <"$RUNNER_TEMP/pending.txt")
+                  if [ "$(jq -r --arg c "[$pend_corr]" '[.[] | select((.displayTitle // "") | contains($c))] | length' <<<"$runs2")" -eq 0 ]; then
+                    echo "::error::draft v$VERSION records an outstanding dispatch ($pend_corr) whose run is not listed — it may still surface; elapsed time cannot prove otherwise. Not sweeping. Verify by hand (gh run list --workflow=publish-clawhub.yml, look for [$pend_corr]); if it truly never started, acknowledge by removing the breadcrumb (gh release delete-asset v$VERSION dispatch-pending.txt --yes) and re-run."
+                    exit 1
+                  fi
+                  echo "the outstanding dispatch ($pend_corr) is listed — the aggregation below will classify it"
+                fi
+
+                # Interrogate the newest REAL child for this tag before deleting
+                # anything. Real = a release-event run, or any dispatch whose
+                # run-name lacks the ' (dry-run)' suffix — the suffix is computed
+                # from the actual input, so its absence proves a real publish,
+                # correlated or not (an uncorrelated manual real dispatch on the
+                # tag is allowed by the draft gate and must count here).
+                real_ids=$(jq -r --arg tag "v$VERSION" \
+                              '.[] | select(.headBranch == $tag)
+                                   | select((.event == "release") or (.event == "workflow_dispatch"))
+                                   | select((.displayTitle // "") | contains("(dry-run)") | not)
+                                   | .databaseId' <<<"$runs2")
+                if [ -n "$real_ids" ]; then
+                  # Aggregate EVERY real run, not just the newest: an older run
+                  # may have published (success) while a newer one never reached
+                  # the registry ('untouched') — inspecting only the newest would
+                  # sweep a draft whose version is live. Precedence:
+                  # success > stop (failed/ambiguous/error) > untouched.
+                  overall=""; overall_detail=""
+                  for RID in $real_ids; do
+                  # Classify RID across ALL attempts. Verdicts, by what they prove about
+                  # the registry: 'success' (it has the version), 'untouched' (every
+                  # attempt's Publish was skipped — no attempt ever reached the registry),
+                  # 'failed' (>=1 attempt ran the publish command and it failed — which is
+                  # STILL not proof the registry is empty: two-generals), 'ambiguous'
+                  # (anything else; sticky — a later guard-failure never launders it).
+                  verdict=""
+                  if ! meta=$(gh run view "$RID" --repo "$GITHUB_REPOSITORY" --json attempt 2>"$RUNNER_TEMP/gherr"); then
+                    verdict="error:$(cat "$RUNNER_TEMP/gherr")"
+                  else
+                    n=$(jq -r '.attempt // 1' <<<"$meta"); saw_ambig=""; saw_fail=false; a=1
+                    while [ "$a" -le "$n" ]; do
+                      if ! jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RID/attempts/$a/jobs" 2>"$RUNNER_TEMP/gherr"); then
+                        verdict="error:$(cat "$RUNNER_TEMP/gherr")"; break
+                      fi
+                      po=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$jobs")
+                      if [ "$po" = "success" ]; then verdict="success"; break; fi
+                      case "$po" in
+                        failure) saw_fail=true ;;
+                        skipped) ;;
+                        *) saw_ambig="attempt $a: $po" ;;
+                      esac
+                      a=$((a + 1))
+                    done
+                    if [ -z "$verdict" ]; then
+                      if [ -n "$saw_ambig" ]; then verdict="ambiguous:$saw_ambig"
+                      elif [ "$saw_fail" = "true" ]; then verdict="failed"
+                      else verdict="untouched"; fi
+                    fi
+                  fi
+                    case "$verdict" in
+                      success) overall="success"; break ;;
+                      untouched) : ;;
+                      *) overall="stop"; overall_detail="run $RID: $verdict" ;;
+                    esac
+                  done
+                  case "$overall" in
+                    success)
+                      echo "a real run published v$VERSION (verified step outcome) but no marker landed — attaching it and resuming with the flip"
+                      printf 'cloudways-mcp %s published to ClawHub by run %s (verified from step outcome by release run %s)\n' \
+                        "$VERSION" "$RID" "$GITHUB_RUN_ID" > clawhub-published.txt
+                      gh release upload "v$VERSION" clawhub-published.txt --repo "$GITHUB_REPOSITORY" --clobber || {
+                        echo "::error::could not attach the marker — attach it manually (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run; pre-flight will resume"
+                        exit 1
+                      }
+                      resume=true ;;
+                    stop)
+                      echo "::error::a real publish run for v$VERSION could not be cleared ($overall_detail — failed/ambiguous/unqueryable histories may hide a committed version). Not sweeping. Verify: if v$VERSION is published, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, delete the draft (gh release delete v$VERSION --yes --cleanup-tag) and re-run."
+                      exit 1 ;;
+                    *)
+                      echo "every real publish run for v$VERSION was skipped before reaching the registry — sweeping leftover marker-less draft release v$VERSION"
+                      gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes ;;
+                  esac
+                else
+                  echo "no real publish run ever targeted v$VERSION — sweeping leftover marker-less draft"
+                  gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes
+                fi
+              fi
+            else
+              echo "::error::v$VERSION is already released — bump the version first"; exit 1
+            fi
+          else
+            gherr=$(cat "$RUNNER_TEMP/gherr")
+            case "$gherr" in
+              *"release not found"*|*"Not Found"*|*"HTTP 404"*)
+                echo "no existing v$VERSION release" ;;
+              *)
+                echo "::error::could not query releases — aborting rather than risk sweeping a published release's tag: $gherr"
+                exit 1 ;;
+            esac
+          fi
+          if [ "$resume" != "true" ]; then
+            if ! tags_out=$(git ls-remote --tags origin "refs/tags/v$VERSION"); then
+              echo "::error::could not query remote tags — aborting rather than mis-reading a leftover tag as absent"
+              exit 1
+            fi
+          fi
+          if [ "$resume" != "true" ] && [ -n "$tags_out" ]; then
+            # Safe: we only get here when no PUBLISHED release exists for this tag
+            # and no resumable draft is being kept.
+            echo "sweeping leftover tag v$VERSION"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/v$VERSION"
+          fi
+          echo "resume=$resume" >> "$GITHUB_OUTPUT"
+
+      - name: Create the tag and a draft release at the inspected commit
+        if: steps.pre.outputs.resume != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          # The tag is created explicitly at $GITHUB_SHA — the commit this job
+          # checked out and inspected — never at main's current tip, which may
+          # already carry a different SKILL.md version. It must exist before the
+          # dispatch below, because a draft release alone creates no tag and the
+          # dispatch targets the tag ref.
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/v$VERSION" -f sha="$GITHUB_SHA"
+
+          # Draft: invisible to the CI guard until the publish has succeeded.
+          gh release create "v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --title "v$VERSION" \
+            --notes-file release-notes.md
+          echo "Created tag + draft release v$VERSION at $GITHUB_SHA"
+
+      - name: Publish to ClawHub, and wait for it
+        if: steps.pre.outputs.resume != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          # A release created with GITHUB_TOKEN does NOT emit a `release: published`
+          # event that starts another workflow — GitHub suppresses those to prevent
+          # recursive runs. workflow_dispatch is the documented exception, so the
+          # publish is triggered explicitly instead of relying on the release event.
+          # https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow
+          rollback() {
+            echo "::error::$1 — removing the v$VERSION draft and tag, so the CI guard stays red and this workflow can be re-run once the cause is fixed"
+            gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes \
+              || echo "(no draft release to delete)"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/v$VERSION" \
+              || echo "::error::tag cleanup failed — delete tag v$VERSION manually before retrying"
+            exit 1
+          }
+
+          # Dispatch against the tag just created, NOT main: main can advance
+          # between creating the release and dispatching, and publish-clawhub.yml
+          # reads the version out of the tree it runs on — so --ref main could
+          # publish a newer version while this job watches it and reports success
+          # for $VERSION.
+          started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # The correlation id lands in the child's run-name, letting the
+          # identification below match THIS dispatch exactly — tag + timestamp
+          # alone can collide with a concurrent manual dry-run on the same tag.
+          CORR="rel-$GITHUB_RUN_ID"
+
+          # Durable outstanding-dispatch breadcrumb ON THE DRAFT: if this run
+          # dies in the not-yet-listable window (lost ack, no-show timeout), a
+          # quick re-run's pre-flight would otherwise see a clean marker-less
+          # draft, sweep it, and race the hidden child when it surfaces. The
+          # breadcrumb makes that window visible; pre-flight enforces a grace
+          # period on it before any sweep.
+          printf '%s %s\n' "$(date -u +%s)" "$CORR" > dispatch-pending.txt
+          gh release upload "v$VERSION" dispatch-pending.txt --repo "$GITHUB_REPOSITORY" --clobber || {
+            echo "::error::could not record the outstanding-dispatch breadcrumb — refusing to dispatch without it (a lost ack would leave an invisible race window). Re-run when the API responds."
+            exit 1
+          }
+          # A nonzero dispatch is NOT proof no run started: GitHub may have
+          # accepted the dispatch (204) and the response been lost. Same
+          # ambiguity as the no-show window below — preserve, never roll back.
+          gh workflow run publish-clawhub.yml \
+            --repo "$GITHUB_REPOSITORY" --ref "v$VERSION" \
+            -f dry_run=false -f correlation="$CORR" || {
+            echo "::error::the dispatch command failed — but the dispatch may still have been accepted and a child may start. Leaving the draft and tag in place (no rollback). Check: gh run list --workflow=publish-clawhub.yml, then re-run this workflow; pre-flight will resume or sweep as appropriate."
+            exit 1
+          }
+
+          # Identify the run we just started — it must be a dispatch, on this exact
+          # tag, created after the timestamp above — so no other run can be mistaken
+          # for it and watched in its place.
+          run_id=""
+          list_ok=false
+          for _ in $(seq 1 24); do
+            sleep 5
+            # Capture gh's own exit status: a listing failure must not be read as
+            # "no run appeared" — that verdict triggers a rollback, and rolling
+            # back while the (successfully dispatched) child is publishing would
+            # orphan the registry version.
+            if runs_json=$(gh run list --workflow=publish-clawhub.yml --repo "$GITHUB_REPOSITORY" \
+                             -L 30 --json databaseId,createdAt,event,headBranch,displayTitle); then
+              list_ok=true
+              run_id=$(jq -r --arg s "$started" --arg tag "v$VERSION" --arg corr "[$CORR]" \
+                         '[.[] | select(.event == "workflow_dispatch")
+                               | select(.headBranch == $tag)
+                               | select(.createdAt >= $s)
+                               | select((.displayTitle // "") | contains($corr))]
+                          | (first.databaseId // empty)' <<<"$runs_json")
+              [ -n "$run_id" ] && break
+            else
+              list_ok=false
+              echo "run listing failed; retrying"
+            fi
+          done
+          if [ -z "$run_id" ]; then
+            # NEVER roll back here — in either branch. The dispatch endpoint
+            # returns 204 with no run id and no listability guarantee, so an
+            # accepted dispatch can surface after any fixed window; deleting the
+            # draft/tag now could yank them from under a child that is about to
+            # (or already did) pass its draft gate and publish. Preserve state;
+            # the next release.yml run's pre-flight sees the late child in its
+            # active-run check or classifies it before sweeping.
+            if [ "$list_ok" = "true" ]; then
+              echo "::error::dispatched the publish but no matching run became visible within the polling window — it may still appear. Leaving the draft and tag in place (no rollback). Check: gh run list --workflow=publish-clawhub.yml, then re-run this workflow; pre-flight will resume or sweep as appropriate."
+            else
+              echo "::error::dispatched the publish but could not LIST runs due to API errors — the child may be running, so the draft and tag are left in place (no rollback). Check with: gh run list --workflow=publish-clawhub.yml, then re-run this workflow; pre-flight will resume or sweep as appropriate."
+            fi
+            exit 1
+          fi
+          echo "publish run: $run_id"
+
+          # A nonzero watch is NOT proof the publish failed: the child may have
+          # been canceled after `clawhub skill publish` succeeded (its marker step
+          # warns rather than fails, but cancellation can still kill it), or watch
+          # itself may have hit an API error. Deleting the draft/tag is only safe
+          # when the child's Publish step VERIFIABLY failed — otherwise the
+          # registry may already hold $VERSION and a rollback orphans it. So
+          # interrogate the child's step outcome before deciding.
+          watch_rc=0
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status || watch_rc=$?
+          if [ "$watch_rc" -ne 0 ]; then
+            RID="$run_id"
+            # Classify RID across ALL attempts. Verdicts, by what they prove about
+            # the registry: 'success' (it has the version), 'untouched' (every
+            # attempt's Publish was skipped — no attempt ever reached the registry),
+            # 'failed' (>=1 attempt ran the publish command and it failed — which is
+            # STILL not proof the registry is empty: two-generals), 'ambiguous'
+            # (anything else; sticky — a later guard-failure never launders it).
+            verdict=""
+            if ! meta=$(gh run view "$RID" --repo "$GITHUB_REPOSITORY" --json attempt 2>"$RUNNER_TEMP/gherr"); then
+              verdict="error:$(cat "$RUNNER_TEMP/gherr")"
+            else
+              n=$(jq -r '.attempt // 1' <<<"$meta"); saw_ambig=""; saw_fail=false; a=1
+              while [ "$a" -le "$n" ]; do
+                if ! jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RID/attempts/$a/jobs" 2>"$RUNNER_TEMP/gherr"); then
+                  verdict="error:$(cat "$RUNNER_TEMP/gherr")"; break
+                fi
+                po=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$jobs")
+                if [ "$po" = "success" ]; then verdict="success"; break; fi
+                case "$po" in
+                  failure) saw_fail=true ;;
+                  skipped) ;;
+                  *) saw_ambig="attempt $a: $po" ;;
+                esac
+                a=$((a + 1))
+              done
+              if [ -z "$verdict" ]; then
+                if [ -n "$saw_ambig" ]; then verdict="ambiguous:$saw_ambig"
+                elif [ "$saw_fail" = "true" ]; then verdict="failed"
+                else verdict="untouched"; fi
+              fi
+            fi
+            case "$verdict" in
+              error:*)
+                echo "::error::child run $run_id ended nonzero and its outcome could not be queried (${verdict#error:}) — leaving the draft and tag in place (no rollback). Verify manually, then re-run this workflow."
+                exit 1 ;;
+              success)
+                # The registry verifiably holds $VERSION; the child died on
+                # something after the point of no return. Attach the marker HERE
+                # on that step-outcome evidence — the only other sanctioned
+                # marker writer, and only on this proof — and carry on to the flip.
+                echo "child failed AFTER a successful publish — attaching the marker from verified step outcome"
+                printf 'cloudways-mcp %s published to ClawHub by run %s (verified from step outcome by release run %s)\n' \
+                  "$VERSION" "$run_id" "$GITHUB_RUN_ID" > clawhub-published.txt
+                gh release upload "v$VERSION" clawhub-published.txt --repo "$GITHUB_REPOSITORY" --clobber || {
+                  echo "::error::could not attach the marker — attach it manually (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run this workflow; pre-flight will resume with the flip"
+                  exit 1
+                }
+                ;;
+              untouched)
+                # Every attempt's Publish was skipped — deterministically no
+                # registry contact. The only command-history verdict that may
+                # delete.
+                rollback "the publish run never reached the registry (run $run_id, Publish skipped on every attempt)"
+                ;;
+              failed)
+                # A failed publish COMMAND is not proof the registry is empty
+                # (the ack may have been lost after a commit) — deleting the
+                # draft here could orphan a committed version behind a redo's
+                # duplicate refusal. Preserve; a human breaks the tie.
+                echo "::error::the publish command failed (run $run_id). This is ambiguous by the two-generals rule, so the draft and tag are preserved. Verify the registry: if v$VERSION is there, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, delete the draft (gh release delete v$VERSION --yes --cleanup-tag) and re-run."
+                exit 1
+                ;;
+              *)
+                echo "::error::child run $run_id has an ambiguous Publish history (${verdict#ambiguous:} — e.g. canceled mid-publish). ClawHub may or may not hold $VERSION; leaving the draft and tag in place (no rollback). Verify against the registry: if $VERSION is published, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, just re-run — pre-flight sweeps the marker-less draft and redoes."
+                exit 1
+                ;;
+            esac
+          fi
+          echo "ClawHub publish confirmed"
+
+      - name: Publish the release (flip the draft)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.rel.outputs.version }}
+        run: |
+          # ClawHub already serves $VERSION, so from here the only correct terminal
+          # state is a PUBLISHED release — never a rollback, which would leave the
+          # registry ahead of the repo and wedge a re-run on a duplicate-version
+          # publish. Retry once, then hand off to a human.
+          if ! gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false; then
+            sleep 5
+            gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false || {
+              echo "::error::ClawHub serves $VERSION but the release is still a draft — finish by hand: gh release edit v$VERSION --draft=false"
+              exit 1
+            }
+          fi
+          echo "v$VERSION released and published"
+
+      - name: Re-run the failed CI guard on the default branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          # The guard on the version-bump commit failed by design (no release
+          # existed yet), and flipping the draft under GITHUB_TOKEN emits no event
+          # CI listens to — so that red run would stay red until the next push,
+          # showing a failing main over a repo that is now fully in sync. Re-run
+          # it; version-sync now finds the published release + marker and passes.
+          # Same fail-closed listing rule as pre-flight: a gh failure must surface
+          # as the promised warning, not read as "no failed run exists".
+          if ! runs_json=$(gh run list --workflow=ci.yml --repo "$GITHUB_REPOSITORY" --branch "$DEFAULT_BRANCH" \
+                             -L 30 --json databaseId,headSha,conclusion); then
+            echo "::warning::could not list ci.yml runs — if the guard run for $GITHUB_SHA is red, re-run it manually (gh run rerun <id> --failed)"
+            exit 0
+          fi
+          # ALL recent failures, not only $GITHUB_SHA's: main may have advanced
+          # while this release ran, and the newer commit's guard failed on the
+          # same missing-release cause. Re-running a genuinely-broken one just
+          # turns red again — harmless. Warning, not failure, throughout: the
+          # release is complete either way.
+          ids=$(jq -r '.[] | select(.conclusion == "failure") | .databaseId' <<<"$runs_json")
+          [ -n "$ids" ] || { echo "no failed ci.yml run on $DEFAULT_BRANCH — nothing to re-run"; exit 0; }
+          for run_id in $ids; do
+            gh run rerun "$run_id" --repo "$GITHUB_REPOSITORY" --failed \
+              && echo "re-ran CI run $run_id" \
+              || echo "::warning::could not re-run CI run $run_id — re-run it manually (gh run rerun $run_id --failed)"
+          done

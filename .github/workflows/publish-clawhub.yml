@@ -4,10 +4,55 @@ name: Publish to ClawHub
 # Dormant until the repo is public and a CLAWHUB_TOKEN repo secret is set.
 #
 # Triggers:
-#   - on a published GitHub Release  → real publish
-#   - manual run (workflow_dispatch) → choose dry-run or real publish
+#   - on a published GitHub Release  → real publish (UI-created releases)
+#   - dispatched by release.yml on a version tag → real publish (requires the
+#     draft release that release.yml created — see the gate in the Publish step)
+#   - manual run (workflow_dispatch) on a branch → dry-run ONLY. A freestanding
+#     real publish would put a version on ClawHub with no GitHub release behind
+#     it; CI's version-sync guard then points the operator at release.yml, whose
+#     re-publish of the same version the registry may refuse — wedging the flow
+#     with CI red while ClawHub is actually current. Real publishes therefore go
+#     through release.yml (or a UI release), never from here.
+#
+# THE MARKER ASSET IS THE PROOF OF PUBLICATION. After a successful real publish,
+# this workflow uploads `clawhub-published.txt` as an asset on the vX.Y.Z
+# release. CI's version-sync guard requires that asset — not mere release
+# existence — so any path that creates a release without completing a publish
+# (a canceled run, a queued run that never started, a failure) leaves the guard
+# red until the publish actually lands. The only other sanctioned writer is
+# release.yml's watch step, and only after verifying — from this run's own
+# Publish step conclusion — that the publish succeeded.
+#
+# Note on the release trigger: the `release: published` event always occurs,
+# but GitHub does not START workflow runs for events generated with the
+# repository GITHUB_TOKEN (recursion prevention). release.yml creates its
+# releases under that token, so its publications never trigger this workflow
+# via the event — which is why it dispatches this workflow explicitly. Events
+# from a human (UI / personal token) do start runs. Do not "simplify" the
+# explicit dispatch away.
 #
 # The version is read from the skill's SKILL.md front matter (`version:`).
+#
+# KNOWN ACCEPTED RESIDUAL: dispatch inputs carry no verifiable provenance, so
+# an operator who manually dispatches a REAL publish on the version tag in the
+# seconds between release.yml creating its draft and its own child starting
+# can publish first and make the legitimate child hit the duplicate refusal.
+# The draft-requirement gate, the concurrency queue, and the ambiguity rules
+# bound the damage (nothing is deleted; states are preserved for manual
+# recovery), but the race itself is not closable from inside the workflow.
+# Operational rule: never manually dispatch a real publish while a release is
+# in flight — release.yml is the only sanctioned real-publish driver.
+
+# The run-name embeds the dispatcher's correlation id so release.yml can
+# identify ITS run unambiguously — tag + timestamp alone can collide with a
+# concurrent manual dry-run on the same tag.
+# ' (dry-run)' is appended from the ACTUAL dry_run input, so a run's title is
+# unforgeable evidence of its mode — recovery classifiers rely on it to reject
+# correlated-but-dry dispatches.
+# The dry_run test is written type-agnostically (boolean true OR string 'true')
+# so the suffix is correct regardless of how the runner types dispatch inputs —
+# a wrong suffix here would flip the recovery classifiers' real/dry verdicts.
+run-name: "Publish to ClawHub${{ inputs.correlation && format(' [{0}]', inputs.correlation) || '' }}${{ (inputs.dry_run == true || inputs.dry_run == 'true') && ' (dry-run)' || '' }}"
 
 on:
   release:
@@ -18,9 +63,17 @@ on:
         description: "Build the publish plan without uploading"
         type: boolean
         default: true
+      correlation:
+        description: "Opaque id from the dispatching workflow (release.yml); shown in the run name"
+        type: string
+        default: ""
+        required: false
 
 permissions:
-  contents: read
+  # contents: write — the marker-asset upload and the rollback step below.
+  # actions: write — re-running the failed main CI guard after a UI publish.
+  contents: write
+  actions: write
 
 concurrency:
   group: clawhub-publish
@@ -34,6 +87,9 @@ jobs:
       SKILL_DIR: .claude/skills/cloudways-mcp
     steps:
       - uses: actions/checkout@v7
+        with:
+          # npm i -g runs in this job; don't leave the token in .git config.
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
@@ -53,12 +109,228 @@ jobs:
           [ -n "$CLAWHUB_TOKEN" ] || { echo "::error::CLAWHUB_TOKEN secret not set"; exit 1; }
           clawhub login --token "$CLAWHUB_TOKEN"
       - name: Publish
+        id: publish
         env:
+          GH_TOKEN: ${{ github.token }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
+          # A real publish from a manual dispatch is only legitimate when release.yml
+          # is driving it — and release.yml always (a) creates a DRAFT release for
+          # the version, then (b) dispatches this workflow on the tag it just
+          # created. So a real tag dispatch must find that draft. A human who
+          # hand-creates a bare v* tag and dispatches real has no draft → blocked;
+          # a tag whose release is already published is a duplicate → blocked.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$DRY_RUN" != "true" ]; then
+            case "$GITHUB_REF" in
+              refs/tags/v*) ;;
+              *)
+                echo "::error::real publishes run through release.yml (gh workflow run release.yml), which dispatches this workflow on the version tag. A freestanding real publish would leave ClawHub ahead of the repo with no release, wedging the release flow on a duplicate-version publish."
+                exit 1 ;;
+            esac
+            if meta=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft 2>"$RUNNER_TEMP/gherr"); then
+              if [ "$(jq -r '.isDraft' <<<"$meta")" != "true" ]; then
+                echo "::error::$GITHUB_REF_NAME is already a published release — publishing it again would hit the registry's duplicate-version refusal. Nothing to do."
+                exit 1
+              fi
+            else
+              echo "::error::no draft release found for $GITHUB_REF_NAME (lookup said: $(cat "$RUNNER_TEMP/gherr")) — real tag publishes are dispatched by release.yml after it creates the draft. Run: gh workflow run release.yml"
+              exit 1
+            fi
+          fi
           if [ "$DRY_RUN" = "true" ]; then
             echo "Dry run — validating the publish without uploading:"
             clawhub skill publish "$SKILL_DIR" --slug cloudways-mcp --name "Cloudways MCP" --version "${{ steps.ver.outputs.version }}" --dry-run
             exit 0
           fi
-          clawhub skill publish "$SKILL_DIR" --slug cloudways-mcp --name "Cloudways MCP" --version "${{ steps.ver.outputs.version }}"
+
+          # UI releases: two deterministic gates, both BEFORE any registry
+          # contact. They set registry_untouched=true on refusal — these
+          # refusals are deterministic on the event payload, so if they fire on
+          # THIS attempt they fired on every prior attempt too, meaning no
+          # attempt ever reached the registry and the rollback below may clean
+          # the bad release automatically.
+          if [ "$GITHUB_EVENT_NAME" = "release" ]; then
+            # 1. The tag must equal the version the checked-out SKILL.md
+            #    declares — else the version publishes while the marker lands on
+            #    an unrelated tag's release.
+            if [ "$RELEASE_TAG" != "v$VERSION" ]; then
+              echo "::error::release tag '$RELEASE_TAG' does not match the checked-out SKILL.md version v$VERSION — refusing to publish; rolling the mistyped release back."
+              echo "registry_untouched=true" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+            # 2. The tag's commit must be on the default branch — a feature-branch release
+            #    ships a payload main's guard can never match, and the corrected
+            #    republish then hits the duplicate refusal.
+            if ! cmp_status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$DEFAULT_BRANCH...$GITHUB_SHA" --jq .status 2>"$RUNNER_TEMP/gherr"); then
+              cmp_status=$(cat "$RUNNER_TEMP/gherr")
+              # Lookup failure is NOT a lineage verdict: the release may be
+              # perfectly valid, so refuse to publish but also refuse to delete.
+              echo "::error::could not verify that $RELEASE_TAG's commit is on main ($cmp_status) — refusing to publish blind; the release is preserved. Retry when the API responds."
+              exit 1
+            fi
+            case "$cmp_status" in
+              identical|behind) ;;
+              *)
+                echo "::error::release $RELEASE_TAG points at a commit not on $DEFAULT_BRANCH (compare status: $cmp_status) — refusing to publish; rolling the misrooted release back. Cut releases from $DEFAULT_BRANCH only."
+                echo "registry_untouched=true" >> "$GITHUB_OUTPUT"
+                exit 1 ;;
+            esac
+            # 3. The release must still exist. A rerun of a run whose first
+            #    attempt was rolled back (release + tag deleted) still carries
+            #    the event payload; publishing against a deleted release would
+            #    put the version on the registry with nothing to carry the
+            #    marker. Refuse before registry contact.
+            if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft >/dev/null 2>"$RUNNER_TEMP/gherr"; then
+              echo "::error::release $RELEASE_TAG no longer exists ($(cat "$RUNNER_TEMP/gherr")) — it was likely rolled back by an earlier attempt. Nothing to publish against; cut a fresh release (or run release.yml) instead of re-running this run."
+              exit 1
+            fi
+          fi
+
+          # Re-run awareness: a PRIOR attempt may already have committed the
+          # version (published, then died on the marker). Scan ALL prior
+          # attempts, not just the previous one — AMBIGUITY IS STICKY: an
+          # attempt-1 cancellation stays ambiguous forever, and a later
+          # attempt's guard-refusal records a step 'failure' that must never be
+          # read as proof the version was not committed.
+          if [ "${GITHUB_RUN_ATTEMPT:-1}" -gt 1 ]; then
+            ambiguous=""
+            a=1
+            while [ "$a" -lt "$GITHUB_RUN_ATTEMPT" ]; do
+              if ! prev=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$a/jobs" 2>"$RUNNER_TEMP/gherr"); then
+                echo "::error::attempt $GITHUB_RUN_ATTEMPT cannot query attempt $a ($(cat "$RUNNER_TEMP/gherr")) — refusing to publish blind; an earlier attempt may already have committed $VERSION. Verify the registry manually, then re-run."
+                exit 1
+              fi
+              po=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$prev")
+              if [ "$po" = "success" ]; then
+                echo "attempt $a already published — skipping the duplicate publish; the marker step will attach"
+                exit 0
+              fi
+              # ONLY 'skipped' proves the attempt never contacted the registry.
+              # A prior 'failure' is two-generals-ambiguous (the request may have
+              # committed before the ack was lost) — it must refuse, same as any
+              # other non-skipped outcome, or the retry publishes into the
+              # duplicate refusal with no way to attach the marker.
+              case "$po" in skipped) ;; *) ambiguous="$a:$po" ;; esac
+              a=$((a + 1))
+            done
+            if [ -n "$ambiguous" ]; then
+              echo "::error::attempt ${ambiguous%%:*} ended '${ambiguous#*:}' — ambiguous, it may have committed $VERSION, and no later attempt can launder that away. Refusing to re-publish. Verify the registry: if $VERSION is there, attach the marker (gh release upload ${RELEASE_TAG:-$GITHUB_REF_NAME} clawhub-published.txt --clobber); if not, delete or draft the release and redo via release.yml."
+              exit 1
+            fi
+            echo "every prior attempt was skipped before reaching the registry — safe to retry"
+          fi
+
+          # A nonzero publish command is NOT proof the registry is empty: the
+          # upload may have committed and the acknowledgement been lost (network
+          # timeout — the two-generals floor). There is no registry-side
+          # is-published query to break the tie, so command failure is treated
+          # as AMBIGUOUS: the run fails, nothing is deleted here, and recovery
+          # is manual (verify the registry; marker or redo accordingly). Only
+          # the deterministic pre-publish evidence classes below may delete.
+          clawhub skill publish "$SKILL_DIR" --slug cloudways-mcp --name "Cloudways MCP" --version "${{ steps.ver.outputs.version }}" || {
+            echo "::error::the publish command failed — this is ambiguous (the registry may still have committed $VERSION before the response was lost). The release is preserved. Verify the registry: if $VERSION is there, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber); if not, delete or draft the release and redo."
+            exit 1
+          }
+
+      # THE step that turns CI green: the marker asset is the durable proof that
+      # this version actually reached ClawHub. It is written here and nowhere
+      # else, only after the publish command above succeeded.
+      #
+      # Exhausted marker attempts FAIL the run. This is safe — and load-bearing —
+      # since both rollback paths are evidence-gated: this workflow's rollback
+      # accepts only deterministic pre-publish proof (registry_untouched /
+      # first-attempt skipped), and release.yml's watch classifies the child's
+      # full attempt history before deciding. A nonzero run here therefore
+      # cannot delete the release; what it DOES do is push the release.yml parent
+      # into its recovery path, which verifies the publish succeeded and attaches
+      # the marker itself. (Exiting 0, as an earlier revision did, made the parent
+      # flip a marker-less draft into a published release the guard rejects and
+      # release.yml refuses to touch again.)
+      - name: Upload the publish-completion marker
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true && inputs.dry_run != 'true')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
+        run: |
+          printf 'cloudways-mcp %s published to ClawHub by run %s (%s)\n' \
+            "$VERSION" "$GITHUB_RUN_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > clawhub-published.txt
+          # --clobber: a re-run of this workflow must refresh, not trip over, an
+          # existing marker.
+          for attempt in 1 2 3; do
+            if gh release upload "$TAG" clawhub-published.txt --repo "$GITHUB_REPOSITORY" --clobber; then
+              echo "marker attached to $TAG"; exit 0
+            fi
+            echo "marker upload attempt $attempt failed"; sleep 10
+          done
+          echo "::error::ClawHub serves $VERSION but the marker upload failed after 3 attempts. The release is intentionally left standing (rollbacks are gated on the publish outcome); a release.yml parent will verify and attach the marker itself, or re-attach by hand: gh release upload $TAG clawhub-published.txt --clobber"
+          exit 1
+
+      # Mirror of release.yml's rerun step, for the UI entry point: the failed
+      # version-sync run on main has no event to revive it (ci.yml hears only
+      # push/pull_request), so after a successful UI-triggered publish main would
+      # stay red until an unrelated push. Warn-only on any hiccup — the publish
+      # is already complete. Fail-closed listing per the round-10 rule.
+      - name: Re-run the failed CI guard on the default branch (UI path)
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if ! runs_json=$(gh run list --workflow=ci.yml --repo "$GITHUB_REPOSITORY" --branch "$DEFAULT_BRANCH" \
+                             -L 10 --json databaseId,conclusion); then
+            echo "::warning::could not list ci.yml runs — if the default branch's guard is red, re-run it manually (gh run rerun <id> --failed)"
+            exit 0
+          fi
+          # All recent failures, not just the newest: main may have advanced past
+          # the bump commit while this publish ran, leaving more than one commit
+          # red on the same missing-release cause. Re-running a still-broken one
+          # just turns red again — harmless.
+          ids=$(jq -r '.[] | select(.conclusion == "failure") | .databaseId' <<<"$runs_json")
+          [ -n "$ids" ] || { echo "no failed ci.yml run on $DEFAULT_BRANCH — nothing to re-run"; exit 0; }
+          for run_id in $ids; do
+            gh run rerun "$run_id" --repo "$GITHUB_REPOSITORY" --failed \
+              && echo "re-ran CI run $run_id" \
+              || echo "::warning::could not re-run CI run $run_id — re-run it manually so main reflects the synced state"
+          done
+
+      # Defense-in-depth for the UI entry point: the guard no longer NEEDS this
+      # (no marker = red regardless), but leaving a published-yet-unpublished
+      # release standing would still mislead humans browsing the releases page,
+      # and would block release.yml's re-run on 'already released'.
+      # cancelled() as well as failure(): a canceled run is not success(), and a
+      # UI release whose publish was canceled mid-way is exactly as unpublished as
+      # one whose publish failed.
+      # DELETING A PUBLISHED RELEASE REQUIRES DETERMINISTIC PROOF the registry
+      # never saw this version. Exactly two evidence classes qualify:
+      #   1. registry_untouched — a deterministic pre-publish gate refused
+      #      (mistyped tag, off-main commit), so every attempt refused the same
+      #      way and none reached the registry;
+      #   2. a FIRST-attempt run whose Publish step never ran at all (an earlier
+      #      step — checkout, CLI install, auth — failed): outcome 'skipped',
+      #      registry untouched by construction. Re-run attempts with a skipped
+      #      Publish stay preserved — a prior attempt may have gotten further.
+      # A FAILED PUBLISH COMMAND IS NOT PROOF — the upload may have committed
+      # and the acknowledgement been lost (two-generals; no registry query
+      # exists to break the tie), so it preserves the release. The same rule
+      # holds everywhere: release.yml preserves drafts on failed-command
+      # verdicts too, and deletes only on all-attempts-skipped ('untouched').
+      # Recovery for preserved states: the guard stays red (no marker) — if the
+      # registry has the version, attach the marker by hand; if not, flip the
+      # release to draft (gh release edit <tag> --draft=true) and run
+      # release.yml, whose pre-flight sweeps the marker-less draft and redoes.
+      - name: Roll back the release if a release-triggered publish failed
+        if: >-
+          (failure() || cancelled()) && github.event_name == 'release' &&
+          (steps.publish.outputs.registry_untouched == 'true' ||
+           (github.run_attempt == '1' && steps.publish.outcome == 'skipped'))
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          echo "::error::the ClawHub publish failed for $TAG — deleting that release and its tag so the flow can be retried cleanly; fix the cause, then re-release"
+          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag \
+            || echo "::error::the rollback itself failed — delete the $TAG release manually"
