@@ -23,11 +23,13 @@ name: Publish to ClawHub
 # release.yml's watch step, and only after verifying — from this run's own
 # Publish step conclusion — that the publish succeeded.
 #
-# Note on the release trigger: it only fires for releases created by a human
-# (UI / a personal token). A release created by release.yml runs under
-# GITHUB_TOKEN, and GitHub suppresses the resulting `release: published` event
-# to prevent recursive runs — so release.yml dispatches this workflow explicitly
-# rather than depending on the event. Do not "simplify" that away.
+# Note on the release trigger: the `release: published` event always occurs,
+# but GitHub does not START workflow runs for events generated with the
+# repository GITHUB_TOKEN (recursion prevention). release.yml creates its
+# releases under that token, so its publications never trigger this workflow
+# via the event — which is why it dispatches this workflow explicitly. Events
+# from a human (UI / personal token) do start runs. Do not "simplify" the
+# explicit dispatch away.
 #
 # The version is read from the skill's SKILL.md front matter (`version:`).
 #
@@ -82,6 +84,9 @@ jobs:
       SKILL_DIR: .claude/skills/cloudways-mcp
     steps:
       - uses: actions/checkout@v7
+        with:
+          # npm i -g runs in this job; don't leave the token in .git config.
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
@@ -121,13 +126,13 @@ jobs:
                 echo "::error::real publishes run through release.yml (gh workflow run release.yml), which dispatches this workflow on the version tag. A freestanding real publish would leave ClawHub ahead of the repo with no release, wedging the release flow on a duplicate-version publish."
                 exit 1 ;;
             esac
-            if meta=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft 2>&1); then
+            if meta=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft 2>"$RUNNER_TEMP/gherr"); then
               if [ "$(jq -r '.isDraft' <<<"$meta")" != "true" ]; then
                 echo "::error::$GITHUB_REF_NAME is already a published release — publishing it again would hit the registry's duplicate-version refusal. Nothing to do."
                 exit 1
               fi
             else
-              echo "::error::no draft release found for $GITHUB_REF_NAME (lookup said: $meta) — real tag publishes are dispatched by release.yml after it creates the draft. Run: gh workflow run release.yml"
+              echo "::error::no draft release found for $GITHUB_REF_NAME (lookup said: $(cat "$RUNNER_TEMP/gherr")) — real tag publishes are dispatched by release.yml after it creates the draft. Run: gh workflow run release.yml"
               exit 1
             fi
           fi
@@ -155,7 +160,8 @@ jobs:
             # 2. The tag's commit must be on main — a feature-branch release
             #    ships a payload main's guard can never match, and the corrected
             #    republish then hits the duplicate refusal.
-            if ! cmp_status=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status 2>&1); then
+            if ! cmp_status=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$GITHUB_SHA" --jq .status 2>"$RUNNER_TEMP/gherr"); then
+              cmp_status=$(cat "$RUNNER_TEMP/gherr")
               # Lookup failure is NOT a lineage verdict: the release may be
               # perfectly valid, so refuse to publish but also refuse to delete.
               echo "::error::could not verify that $RELEASE_TAG's commit is on main ($cmp_status) — refusing to publish blind; the release is preserved. Retry when the API responds."
@@ -180,8 +186,8 @@ jobs:
             ambiguous=""
             a=1
             while [ "$a" -lt "$GITHUB_RUN_ATTEMPT" ]; do
-              if ! prev=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$a/jobs" 2>&1); then
-                echo "::error::attempt $GITHUB_RUN_ATTEMPT cannot query attempt $a ($prev) — refusing to publish blind; an earlier attempt may already have committed $VERSION. Verify the registry manually, then re-run."
+              if ! prev=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$a/jobs" 2>"$RUNNER_TEMP/gherr"); then
+                echo "::error::attempt $GITHUB_RUN_ATTEMPT cannot query attempt $a ($(cat "$RUNNER_TEMP/gherr")) — refusing to publish blind; an earlier attempt may already have committed $VERSION. Verify the registry manually, then re-run."
                 exit 1
               fi
               po=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$prev")
@@ -189,11 +195,13 @@ jobs:
                 echo "attempt $a already published — skipping the duplicate publish; the marker step will attach"
                 exit 0
               fi
-              [ "$po" = "failure" ] || ambiguous="$a:$po"
+              # 'skipped' means an earlier step failed before Publish ran — the
+              # registry was untouched that attempt, so it does not block a retry.
+              case "$po" in failure|skipped) ;; *) ambiguous="$a:$po" ;; esac
               a=$((a + 1))
             done
             if [ -n "$ambiguous" ]; then
-              echo "::error::attempt ${ambiguous%%:*} ended '${ambiguous#*:}' — ambiguous, it may have committed $VERSION, and no later attempt can launder that away. Refusing to re-publish. Verify the registry: if $VERSION is there, attach the marker (gh release upload <tag> clawhub-published.txt --clobber); if not, delete or draft the release and redo via release.yml."
+              echo "::error::attempt ${ambiguous%%:*} ended '${ambiguous#*:}' — ambiguous, it may have committed $VERSION, and no later attempt can launder that away. Refusing to re-publish. Verify the registry: if $VERSION is there, attach the marker (gh release upload ${RELEASE_TAG:-$GITHUB_REF_NAME} clawhub-published.txt --clobber); if not, delete or draft the release and redo via release.yml."
               exit 1
             fi
             echo "every prior attempt's publish verifiably failed — safe to retry"
@@ -216,9 +224,10 @@ jobs:
       # else, only after the publish command above succeeded.
       #
       # Exhausted marker attempts FAIL the run. This is safe — and load-bearing —
-      # since both rollback paths became evidence-gated: this workflow's rollback
-      # checks steps.publish.outcome, and release.yml's watch interrogates the
-      # Publish step conclusion before deciding. A nonzero run here therefore
+      # since both rollback paths are evidence-gated: this workflow's rollback
+      # accepts only deterministic pre-publish proof (registry_untouched /
+      # first-attempt skipped), and release.yml's watch classifies the child's
+      # full attempt history before deciding. A nonzero run here therefore
       # cannot delete the release; what it DOES do is push the release.yml parent
       # into its recovery path, which verifies the publish succeeded and attaches
       # the marker itself. (Exiting 0, as an earlier revision did, made the parent
@@ -289,10 +298,9 @@ jobs:
       #      Publish stay preserved — a prior attempt may have gotten further.
       # A FAILED PUBLISH COMMAND IS NOT PROOF — the upload may have committed
       # and the acknowledgement been lost (two-generals; no registry query
-      # exists to break the tie), so it preserves the release. This asymmetry is
-      # deliberate: a published release is not re-creatable evidence, while the
-      # draft+tag pairs release.yml manages ARE re-creatable, which is why its
-      # draft sweeps may still act on all-attempts-failure verdicts.
+      # exists to break the tie), so it preserves the release. The same rule
+      # holds everywhere: release.yml preserves drafts on failed-command
+      # verdicts too, and deletes only on all-attempts-skipped ('untouched').
       # Recovery for preserved states: the guard stays red (no marker) — if the
       # registry has the version, attach the marker by hand; if not, flip the
       # release to draft (gh release edit <tag> --draft=true) and run

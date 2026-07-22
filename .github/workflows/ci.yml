@@ -7,7 +7,7 @@ on:
 
 jobs:
   version-sync:
-    name: Version declarations agree, and a release exists
+    name: Version sync (declarations always; release+marker on main only)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -20,7 +20,7 @@ jobs:
         id: ver
         run: |
           skill_v=$(grep -m1 '^version:' "$SKILL" | sed 's/^version:[[:space:]]*//' | tr -d '"' | tr -d "'" | xargs)
-          pkg_v=$(grep -m1 '"version"' package.json | sed 's/.*"version"[[:space:]]*:[[:space:]]*"//; s/".*//')
+          pkg_v=$(jq -r .version package.json)
           readme_v=$(grep -o 'badge/version-[0-9][^-]*-blue' README.md | sed 's|badge/version-||; s|-blue||')
           echo "SKILL.md=$skill_v  package.json=$pkg_v  README badge=$readme_v"
           [ -n "$skill_v" ] || { echo "::error::no version in $SKILL"; exit 1; }
@@ -48,7 +48,8 @@ jobs:
         run: |
           # Capture stderr instead of discarding it: a network/auth failure must not
           # be misread as "no release" (and vice versa).
-          if ! out=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,assets 2>&1); then
+          if ! out=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,assets 2>"$RUNNER_TEMP/gherr"); then
+            out=$(cat "$RUNNER_TEMP/gherr")
             echo "$out"
             case "$out" in
               *"release not found"*|*"Not Found"*|*"HTTP 404"*)

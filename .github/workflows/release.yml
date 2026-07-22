@@ -48,8 +48,9 @@ jobs:
         run: |
           # A release tag must point at a commit on main; tagging a feature branch
           # would publish code that never landed.
-          [ "$GITHUB_REF_NAME" = "main" ] || {
-            echo "::error::dispatched against '$GITHUB_REF_NAME' — re-run with --ref main"; exit 1; }
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] || {
+            echo "::error::dispatched against '$GITHUB_REF_NAME' — re-run with --ref $DEFAULT_BRANCH"; exit 1; }
 
       - name: Read version and extract the changelog section
         id: rel
@@ -98,7 +99,7 @@ jobs:
           # jq empty input, reads as "nothing active", and the sweep below would
           # race a child that may still be publishing.
           runs_json=$(gh run list --workflow=publish-clawhub.yml --repo "$GITHUB_REPOSITORY" \
-                        -L 20 --json databaseId,status,headBranch) || {
+                        -L 50 --json databaseId,status,headBranch) || {
             echo "::error::could not list publish runs — refusing to sweep release state while a publish may be active. Retry once the API responds."
             exit 1
           }
@@ -111,7 +112,7 @@ jobs:
           fi
 
           resume=false
-          if meta=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft,assets 2>&1); then
+          if meta=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft,assets 2>"$RUNNER_TEMP/gherr"); then
             if [ "$(jq -r '.isDraft' <<<"$meta")" = "true" ]; then
               if [ "$(jq -r '[.assets[].name] | index("clawhub-published.txt") != null' <<<"$meta")" = "true" ]; then
                 echo "draft v$VERSION already carries the publish marker — ClawHub serves it; resuming with the flip only"
@@ -121,40 +122,52 @@ jobs:
                 # the registry and then died before the marker ends up COMPLETED
                 # (a canceled run's status is completed), slipping past the
                 # active-run check — and this draft is the only recovery state.
-                # Interrogate the newest REAL child for this tag (release-event,
-                # or a dispatch carrying a [rel-...] correlation; plain dispatches
-                # may be dry runs whose Publish step succeeds without publishing)
-                # before deleting anything.
+                # Interrogate the newest REAL child for this tag before deleting
+                # anything. Real = a release-event run, or any dispatch whose
+                # run-name lacks the ' (dry-run)' suffix — the suffix is computed
+                # from the actual input, so its absence proves a real publish,
+                # correlated or not (an uncorrelated manual real dispatch on the
+                # tag is allowed by the draft gate and must count here).
                 if ! runs2=$(gh run list --workflow=publish-clawhub.yml --repo "$GITHUB_REPOSITORY" \
-                               -L 20 --json databaseId,headBranch,event,displayTitle); then
+                               -L 50 --json databaseId,headBranch,event,displayTitle); then
                   echo "::error::could not list publish runs — refusing to sweep the draft while the last publish outcome is unknown"
                   exit 1
                 fi
                 last_real=$(jq -r --arg tag "v$VERSION" \
                               '[.[] | select(.headBranch == $tag)
-                                    | select((.event == "release") or (.displayTitle | contains("[rel-")))
-                                    | select(.displayTitle | contains("(dry-run)") | not)]
+                                    | select((.event == "release") or (.event == "workflow_dispatch"))
+                                    | select((.displayTitle // "") | contains("(dry-run)") | not)]
                                | (first.databaseId // empty)' <<<"$runs2")
                 if [ -n "$last_real" ]; then
                   RID="$last_real"
-                  # Classify RID across ALL attempts — ambiguity is sticky: a later
-                  # guard-refusal 'failure' never launders an earlier ambiguous attempt.
+                  # Classify RID across ALL attempts. Verdicts, by what they prove about
+                  # the registry: 'success' (it has the version), 'untouched' (every
+                  # attempt's Publish was skipped — no attempt ever reached the registry),
+                  # 'failed' (>=1 attempt ran the publish command and it failed — which is
+                  # STILL not proof the registry is empty: two-generals), 'ambiguous'
+                  # (anything else; sticky — a later guard-failure never launders it).
                   verdict=""
-                  if ! meta=$(gh run view "$RID" --repo "$GITHUB_REPOSITORY" --json attempt 2>&1); then
-                    verdict="error:$meta"
+                  if ! meta=$(gh run view "$RID" --repo "$GITHUB_REPOSITORY" --json attempt 2>"$RUNNER_TEMP/gherr"); then
+                    verdict="error:$(cat "$RUNNER_TEMP/gherr")"
                   else
-                    n=$(jq -r '.attempt // 1' <<<"$meta"); saw=""; a=1
+                    n=$(jq -r '.attempt // 1' <<<"$meta"); saw_ambig=""; saw_fail=false; a=1
                     while [ "$a" -le "$n" ]; do
-                      if ! jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RID/attempts/$a/jobs" 2>&1); then
-                        verdict="error:$jobs"; break
+                      if ! jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RID/attempts/$a/jobs" 2>"$RUNNER_TEMP/gherr"); then
+                        verdict="error:$(cat "$RUNNER_TEMP/gherr")"; break
                       fi
                       po=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$jobs")
                       if [ "$po" = "success" ]; then verdict="success"; break; fi
-                      [ "$po" = "failure" ] || saw="attempt $a: $po"
+                      case "$po" in
+                        failure) saw_fail=true ;;
+                        skipped) ;;
+                        *) saw_ambig="attempt $a: $po" ;;
+                      esac
                       a=$((a + 1))
                     done
                     if [ -z "$verdict" ]; then
-                      if [ -n "$saw" ]; then verdict="ambiguous:$saw"; else verdict="failure"; fi
+                      if [ -n "$saw_ambig" ]; then verdict="ambiguous:$saw_ambig"
+                      elif [ "$saw_fail" = "true" ]; then verdict="failed"
+                      else verdict="untouched"; fi
                     fi
                   fi
                   case "$verdict" in
@@ -170,13 +183,12 @@ jobs:
                         exit 1
                       }
                       resume=true ;;
-                    failure)
-                      # Same asymmetry note as the watch step: drafts are
-                      # re-creatable, so an all-attempts-failure verdict may
-                      # sweep; a secretly-committed registry converges to a
-                      # preserved ambiguous state on the redo, never an orphan.
-                      echo "run $last_real failed to publish on every attempt — sweeping leftover marker-less draft release v$VERSION"
+                    untouched)
+                      echo "run $last_real never reached the registry (Publish skipped on every attempt) — sweeping leftover marker-less draft release v$VERSION"
                       gh release delete "v$VERSION" --repo "$GITHUB_REPOSITORY" --yes ;;
+                    failed)
+                      echo "::error::the last real publish run ($last_real) ran the publish command and it failed — ambiguous by the two-generals rule (the registry may have committed before the ack was lost). Not sweeping. Verify: if v$VERSION is published, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, delete the draft (gh release delete v$VERSION --yes --cleanup-tag) and re-run."
+                      exit 1 ;;
                     *)
                       echo "::error::the last real publish run ($last_real) for v$VERSION has an ambiguous Publish history (${verdict#ambiguous:}) — the registry may hold the version. Not sweeping. Verify: if $VERSION is published, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, delete the draft (gh release delete v$VERSION --yes) and re-run."
                       exit 1 ;;
@@ -190,15 +202,22 @@ jobs:
               echo "::error::v$VERSION is already released — bump the version first"; exit 1
             fi
           else
-            case "$meta" in
+            gherr=$(cat "$RUNNER_TEMP/gherr")
+            case "$gherr" in
               *"release not found"*|*"Not Found"*|*"HTTP 404"*)
                 echo "no existing v$VERSION release" ;;
               *)
-                echo "::error::could not query releases — aborting rather than risk sweeping a published release's tag: $meta"
+                echo "::error::could not query releases — aborting rather than risk sweeping a published release's tag: $gherr"
                 exit 1 ;;
             esac
           fi
-          if [ "$resume" != "true" ] && git ls-remote --tags origin "refs/tags/v$VERSION" | grep -q .; then
+          if [ "$resume" != "true" ]; then
+            if ! tags_out=$(git ls-remote --tags origin "refs/tags/v$VERSION"); then
+              echo "::error::could not query remote tags — aborting rather than mis-reading a leftover tag as absent"
+              exit 1
+            fi
+          fi
+          if [ "$resume" != "true" ] && [ -n "$tags_out" ]; then
             # Safe: we only get here when no PUBLISHED release exists for this tag
             # and no resumable draft is being kept.
             echo "sweeping leftover tag v$VERSION"
@@ -275,13 +294,13 @@ jobs:
             # back while the (successfully dispatched) child is publishing would
             # orphan the registry version.
             if runs_json=$(gh run list --workflow=publish-clawhub.yml --repo "$GITHUB_REPOSITORY" \
-                             -L 10 --json databaseId,createdAt,event,headBranch,displayTitle); then
+                             -L 30 --json databaseId,createdAt,event,headBranch,displayTitle); then
               list_ok=true
               run_id=$(jq -r --arg s "$started" --arg tag "v$VERSION" --arg corr "[$CORR]" \
                          '[.[] | select(.event == "workflow_dispatch")
                                | select(.headBranch == $tag)
                                | select(.createdAt >= $s)
-                               | select(.displayTitle | contains($corr))]
+                               | select((.displayTitle // "") | contains($corr))]
                           | (first.databaseId // empty)' <<<"$runs_json")
               [ -n "$run_id" ] && break
             else
@@ -317,24 +336,34 @@ jobs:
           gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status || watch_rc=$?
           if [ "$watch_rc" -ne 0 ]; then
             RID="$run_id"
-            # Classify RID across ALL attempts — ambiguity is sticky: a later
-            # guard-refusal 'failure' never launders an earlier ambiguous attempt.
+            # Classify RID across ALL attempts. Verdicts, by what they prove about
+            # the registry: 'success' (it has the version), 'untouched' (every
+            # attempt's Publish was skipped — no attempt ever reached the registry),
+            # 'failed' (>=1 attempt ran the publish command and it failed — which is
+            # STILL not proof the registry is empty: two-generals), 'ambiguous'
+            # (anything else; sticky — a later guard-failure never launders it).
             verdict=""
-            if ! meta=$(gh run view "$RID" --repo "$GITHUB_REPOSITORY" --json attempt 2>&1); then
-              verdict="error:$meta"
+            if ! meta=$(gh run view "$RID" --repo "$GITHUB_REPOSITORY" --json attempt 2>"$RUNNER_TEMP/gherr"); then
+              verdict="error:$(cat "$RUNNER_TEMP/gherr")"
             else
-              n=$(jq -r '.attempt // 1' <<<"$meta"); saw=""; a=1
+              n=$(jq -r '.attempt // 1' <<<"$meta"); saw_ambig=""; saw_fail=false; a=1
               while [ "$a" -le "$n" ]; do
-                if ! jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RID/attempts/$a/jobs" 2>&1); then
-                  verdict="error:$jobs"; break
+                if ! jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RID/attempts/$a/jobs" 2>"$RUNNER_TEMP/gherr"); then
+                  verdict="error:$(cat "$RUNNER_TEMP/gherr")"; break
                 fi
                 po=$(jq -r '[.jobs[].steps[]? | select(.name == "Publish")] | (first.conclusion // "unknown")' <<<"$jobs")
                 if [ "$po" = "success" ]; then verdict="success"; break; fi
-                [ "$po" = "failure" ] || saw="attempt $a: $po"
+                case "$po" in
+                  failure) saw_fail=true ;;
+                  skipped) ;;
+                  *) saw_ambig="attempt $a: $po" ;;
+                esac
                 a=$((a + 1))
               done
               if [ -z "$verdict" ]; then
-                if [ -n "$saw" ]; then verdict="ambiguous:$saw"; else verdict="failure"; fi
+                if [ -n "$saw_ambig" ]; then verdict="ambiguous:$saw_ambig"
+                elif [ "$saw_fail" = "true" ]; then verdict="failed"
+                else verdict="untouched"; fi
               fi
             fi
             case "$verdict" in
@@ -354,13 +383,19 @@ jobs:
                   exit 1
                 }
                 ;;
-              failure)
-                # Command failure is ambiguous in principle (two-generals), but
-                # draft+tag are RE-CREATABLE state — if the registry secretly
-                # committed, the redo's duplicate refusal lands in an ambiguity
-                # branch that preserves everything, never an orphan. Published
-                # releases (the UI path) do NOT get this treatment.
-                rollback "the ClawHub publish failed on every attempt (run $run_id)"
+              untouched)
+                # Every attempt's Publish was skipped — deterministically no
+                # registry contact. The only command-history verdict that may
+                # delete.
+                rollback "the publish run never reached the registry (run $run_id, Publish skipped on every attempt)"
+                ;;
+              failed)
+                # A failed publish COMMAND is not proof the registry is empty
+                # (the ack may have been lost after a commit) — deleting the
+                # draft here could orphan a committed version behind a redo's
+                # duplicate refusal. Preserve; a human breaks the tie.
+                echo "::error::the publish command failed (run $run_id). This is ambiguous by the two-generals rule, so the draft and tag are preserved. Verify the registry: if v$VERSION is there, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, delete the draft (gh release delete v$VERSION --yes --cleanup-tag) and re-run."
+                exit 1
                 ;;
               *)
                 echo "::error::child run $run_id has an ambiguous Publish history (${verdict#ambiguous:} — e.g. canceled mid-publish). ClawHub may or may not hold $VERSION; leaving the draft and tag in place (no rollback). Verify against the registry: if $VERSION is published, attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber) and re-run to resume; if not, just re-run — pre-flight sweeps the marker-less draft and redoes."
@@ -400,7 +435,7 @@ jobs:
           # Same fail-closed listing rule as pre-flight: a gh failure must surface
           # as the promised warning, not read as "no failed run exists".
           if ! runs_json=$(gh run list --workflow=ci.yml --repo "$GITHUB_REPOSITORY" --branch main \
-                             -L 10 --json databaseId,headSha,conclusion); then
+                             -L 30 --json databaseId,headSha,conclusion); then
             echo "::warning::could not list ci.yml runs — if the guard run for $GITHUB_SHA is red, re-run it manually (gh run rerun <id> --failed)"
             exit 0
           fi
