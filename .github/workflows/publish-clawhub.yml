@@ -6,7 +6,7 @@ name: Publish to ClawHub
 # Triggers:
 #   - on a published GitHub Release  → real publish (UI-created releases)
 #   - dispatched by release.yml on a version tag → real publish (requires the
-#     draft release release.yml just created — see the gate in the Publish step)
+#     draft release that release.yml created — see the gate in the Publish step)
 #   - manual run (workflow_dispatch) on a branch → dry-run ONLY. A freestanding
 #     real publish would put a version on ClawHub with no GitHub release behind
 #     it; CI's version-sync guard then points the operator at release.yml, whose
@@ -174,6 +174,15 @@ jobs:
                 echo "registry_untouched=true" >> "$GITHUB_OUTPUT"
                 exit 1 ;;
             esac
+            # 3. The release must still exist. A rerun of a run whose first
+            #    attempt was rolled back (release + tag deleted) still carries
+            #    the event payload; publishing against a deleted release would
+            #    put the version on the registry with nothing to carry the
+            #    marker. Refuse before registry contact.
+            if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft >/dev/null 2>"$RUNNER_TEMP/gherr"; then
+              echo "::error::release $RELEASE_TAG no longer exists ($(cat "$RUNNER_TEMP/gherr")) — it was likely rolled back by an earlier attempt. Nothing to publish against; cut a fresh release (or run release.yml) instead of re-running this run."
+              exit 1
+            fi
           fi
 
           # Re-run awareness: a PRIOR attempt may already have committed the
@@ -195,16 +204,19 @@ jobs:
                 echo "attempt $a already published — skipping the duplicate publish; the marker step will attach"
                 exit 0
               fi
-              # 'skipped' means an earlier step failed before Publish ran — the
-              # registry was untouched that attempt, so it does not block a retry.
-              case "$po" in failure|skipped) ;; *) ambiguous="$a:$po" ;; esac
+              # ONLY 'skipped' proves the attempt never contacted the registry.
+              # A prior 'failure' is two-generals-ambiguous (the request may have
+              # committed before the ack was lost) — it must refuse, same as any
+              # other non-skipped outcome, or the retry publishes into the
+              # duplicate refusal with no way to attach the marker.
+              case "$po" in skipped) ;; *) ambiguous="$a:$po" ;; esac
               a=$((a + 1))
             done
             if [ -n "$ambiguous" ]; then
               echo "::error::attempt ${ambiguous%%:*} ended '${ambiguous#*:}' — ambiguous, it may have committed $VERSION, and no later attempt can launder that away. Refusing to re-publish. Verify the registry: if $VERSION is there, attach the marker (gh release upload ${RELEASE_TAG:-$GITHUB_REF_NAME} clawhub-published.txt --clobber); if not, delete or draft the release and redo via release.yml."
               exit 1
             fi
-            echo "every prior attempt's publish verifiably failed — safe to retry"
+            echo "every prior attempt was skipped before reaching the registry — safe to retry"
           fi
 
           # A nonzero publish command is NOT proof the registry is empty: the
