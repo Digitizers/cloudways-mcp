@@ -122,6 +122,11 @@ jobs:
                 # the registry and then died before the marker ends up COMPLETED
                 # (a canceled run's status is completed), slipping past the
                 # active-run check — and this draft is the only recovery state.
+                if ! runs2=$(gh run list --workflow=publish-clawhub.yml --repo "$GITHUB_REPOSITORY" \
+                               -L 50 --json databaseId,headBranch,event,displayTitle); then
+                  echo "::error::could not list publish runs — refusing to sweep the draft while the last publish outcome is unknown"
+                  exit 1
+                fi
                 # Outstanding-dispatch breadcrumb: a prior run may have dispatched
                 # and died before its child became listable, and listability has
                 # NO bounded window — elapsed time never proves absence. The
@@ -149,11 +154,6 @@ jobs:
                 # from the actual input, so its absence proves a real publish,
                 # correlated or not (an uncorrelated manual real dispatch on the
                 # tag is allowed by the draft gate and must count here).
-                if ! runs2=$(gh run list --workflow=publish-clawhub.yml --repo "$GITHUB_REPOSITORY" \
-                               -L 50 --json databaseId,headBranch,event,displayTitle); then
-                  echo "::error::could not list publish runs — refusing to sweep the draft while the last publish outcome is unknown"
-                  exit 1
-                fi
                 real_ids=$(jq -r --arg tag "v$VERSION" \
                               '.[] | select(.headBranch == $tag)
                                    | select((.event == "release") or (.event == "workflow_dispatch"))
