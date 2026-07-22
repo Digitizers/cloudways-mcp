@@ -122,6 +122,24 @@ jobs:
                 # the registry and then died before the marker ends up COMPLETED
                 # (a canceled run's status is completed), slipping past the
                 # active-run check — and this draft is the only recovery state.
+                # Outstanding-dispatch grace: a prior run may have dispatched and
+                # died before its child became listable. Its breadcrumb on the
+                # draft is durable; within the grace window nothing may be swept,
+                # because run listings cannot yet prove the child's absence.
+                if [ "$(jq -r '[.assets[].name] | index("dispatch-pending.txt") != null' <<<"$meta")" = "true" ]; then
+                  gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern dispatch-pending.txt --output "$RUNNER_TEMP/pending.txt" || {
+                    echo "::error::draft v$VERSION carries a dispatch-pending breadcrumb that could not be read — not sweeping. Retry when the API responds."
+                    exit 1
+                  }
+                  pend_at=$(cut -d' ' -f1 <"$RUNNER_TEMP/pending.txt")
+                  age=$(( $(date -u +%s) - pend_at ))
+                  if [ "$age" -lt 600 ]; then
+                    echo "::error::a dispatch recorded ${age}s ago may still be surfacing (run listings cannot prove its absence yet) — not sweeping. Wait for the grace window (10 min) and re-run."
+                    exit 1
+                  fi
+                  echo "dispatch-pending breadcrumb is ${age}s old — past the grace window; any accepted child would be listable by now"
+                fi
+
                 # Interrogate the newest REAL child for this tag before deleting
                 # anything. Real = a release-event run, or any dispatch whose
                 # run-name lacks the ' (dry-run)' suffix — the suffix is computed
@@ -283,6 +301,18 @@ jobs:
           # identification below match THIS dispatch exactly — tag + timestamp
           # alone can collide with a concurrent manual dry-run on the same tag.
           CORR="rel-$GITHUB_RUN_ID"
+
+          # Durable outstanding-dispatch breadcrumb ON THE DRAFT: if this run
+          # dies in the not-yet-listable window (lost ack, no-show timeout), a
+          # quick re-run's pre-flight would otherwise see a clean marker-less
+          # draft, sweep it, and race the hidden child when it surfaces. The
+          # breadcrumb makes that window visible; pre-flight enforces a grace
+          # period on it before any sweep.
+          printf '%s %s\n' "$(date -u +%s)" "$CORR" > dispatch-pending.txt
+          gh release upload "v$VERSION" dispatch-pending.txt --repo "$GITHUB_REPOSITORY" --clobber || {
+            echo "::error::could not record the outstanding-dispatch breadcrumb — refusing to dispatch without it (a lost ack would leave an invisible race window). Re-run when the API responds."
+            exit 1
+          }
           # A nonzero dispatch is NOT proof no run started: GitHub may have
           # accepted the dispatch (204) and the response been lost. Same
           # ambiguity as the no-show window below — preserve, never roll back.
