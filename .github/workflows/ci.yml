@@ -21,7 +21,8 @@ jobs:
         run: |
           skill_v=$(grep -m1 '^version:' "$SKILL" | sed 's/^version:[[:space:]]*//' | tr -d '"' | tr -d "'" | xargs)
           pkg_v=$(jq -r .version package.json)
-          readme_v=$(grep -o 'badge/version-[0-9][^-]*-blue' README.md | sed 's|badge/version-||; s|-blue||')
+          # Color-agnostic: match the semver itself, not the badge color suffix.
+          readme_v=$(grep -oE 'badge/version-[0-9]+\.[0-9]+\.[0-9]+' README.md | head -1 | sed 's|badge/version-||')
           echo "SKILL.md=$skill_v  package.json=$pkg_v  README badge=$readme_v"
           [ -n "$skill_v" ] || { echo "::error::no version in $SKILL"; exit 1; }
           if [ "$skill_v" != "$pkg_v" ] || [ "$skill_v" != "$readme_v" ]; then
