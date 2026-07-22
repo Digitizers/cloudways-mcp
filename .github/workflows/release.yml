@@ -434,9 +434,10 @@ jobs:
           fi
           echo "v$VERSION released and published"
 
-      - name: Re-run the failed CI guard on main
+      - name: Re-run the failed CI guard on the default branch
         env:
           GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           # The guard on the version-bump commit failed by design (no release
           # existed yet), and flipping the draft under GITHUB_TOKEN emits no event
@@ -445,7 +446,7 @@ jobs:
           # it; version-sync now finds the published release + marker and passes.
           # Same fail-closed listing rule as pre-flight: a gh failure must surface
           # as the promised warning, not read as "no failed run exists".
-          if ! runs_json=$(gh run list --workflow=ci.yml --repo "$GITHUB_REPOSITORY" --branch main \
+          if ! runs_json=$(gh run list --workflow=ci.yml --repo "$GITHUB_REPOSITORY" --branch "$DEFAULT_BRANCH" \
                              -L 30 --json databaseId,headSha,conclusion); then
             echo "::warning::could not list ci.yml runs — if the guard run for $GITHUB_SHA is red, re-run it manually (gh run rerun <id> --failed)"
             exit 0
@@ -456,7 +457,7 @@ jobs:
           # turns red again — harmless. Warning, not failure, throughout: the
           # release is complete either way.
           ids=$(jq -r '.[] | select(.conclusion == "failure") | .databaseId' <<<"$runs_json")
-          [ -n "$ids" ] || { echo "no failed ci.yml run on main — nothing to re-run"; exit 0; }
+          [ -n "$ids" ] || { echo "no failed ci.yml run on $DEFAULT_BRANCH — nothing to re-run"; exit 0; }
           for run_id in $ids; do
             gh run rerun "$run_id" --repo "$GITHUB_REPOSITORY" --failed \
               && echo "re-ran CI run $run_id" \
