@@ -454,6 +454,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.rel.outputs.version }}
         run: |
+          # The outstanding-dispatch breadcrumb has served its purpose the moment
+          # the marker exists — it protects marker-less DRAFTS only, so leaving
+          # it on the published release is harmless but untidy. Best-effort
+          # removal; a failure here must not disturb a completed release.
+          gh release delete-asset "v$VERSION" dispatch-pending.txt --repo "$GITHUB_REPOSITORY" --yes \
+            || echo "::warning::could not remove the dispatch-pending breadcrumb from v$VERSION — cosmetic only; remove by hand: gh release delete-asset v$VERSION dispatch-pending.txt --yes"
+
           # ClawHub already serves $VERSION, so from here the only correct terminal
           # state is a PUBLISHED release — never a rollback, which would leave the
           # registry ahead of the repo and wedge a re-run on a duplicate-version
