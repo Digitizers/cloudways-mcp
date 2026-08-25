@@ -31,7 +31,7 @@ This skill targets the **official Cloudways (Remote) MCP** — a Cloudways-hoste
 | Header | Value |
 |--------|-------|
 | `X-Access-Token` | your Cloudways Access Token |
-| `X-Mcp-Host` | the client you connect from — official values: `claude-code`, `claude-desktop`, `cursor`, `windsurf`, `vs-code`, `gemini-cli`, `codex`, `codex-cli` |
+| `X-Mcp-Host` | the client you connect from — official values: `claude-code`, `claude-desktop`, `cursor`, `Devin` (the client formerly called Windsurf — the article's own snippet sends the capitalised `Devin`, and header values are case-sensitive), `vs-code`, `gemini-cli`, `codex`, `codex-cli` |
 
 ---
 
@@ -93,9 +93,19 @@ Claude Desktop does not natively support remote HTTP MCP servers, so it uses the
 
 > Keep real credentials out of version control. For Claude Code, put the token in your user scope with the `claude mcp add` command above, or in the `CLOUDWAYS_ACCESS_TOKEN` env var (the committed `.mcp.json` reads it) — never edit a real token into `.mcp.json`, which is a **tracked** file. See `.mcp.json.example` in the repo root for the per-account shape. Header names are case-sensitive.
 
-### Other clients (Cursor, Windsurf, VS Code Copilot, Gemini CLI, Codex)
+### Other clients (Cursor, Devin, VS Code Copilot, Gemini CLI, Codex)
 
-Same endpoint and headers everywhere; only the config-file shape and the `X-Mcp-Host` value differ per client. The [official article](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management) has the exact snippet for each client.
+Same endpoint and headers everywhere; only the config-file shape and the `X-Mcp-Host` value differ per client. The [official article](https://support.cloudways.com/en/articles/14654372-how-to-use-cloudways-mcp-server-for-ai-based-server-management) has the full snippet for each — but three of them use a **non-obvious key**, and the article warns that a wrong variant **fails silently**:
+
+| Client | Config file | URL key | Headers key | `X-Mcp-Host` |
+|--------|-------------|---------|-------------|--------------|
+| Cursor | `~/.cursor/mcp.json` | `url` | `headers` | `cursor` |
+| Devin (ex-Windsurf) | `~/.codeium/devin/mcp_config.json` | **`serverUrl`** | `headers` | `Devin` |
+| VS Code (Copilot) | `~/Library/Application Support/Code/User/mcp.json` (macOS) / `%APPDATA%\Code\User\mcp.json` | `url`, and the file uses **`"servers"` (not `"mcpServers"`)** plus a required **`"type": "http"`** | `headers` | `vs-code` |
+| Gemini CLI | `~/.gemini/settings.json` | **`httpUrl`** — `url` there attempts an SSE connection instead and fails | `headers` | `gemini-cli` |
+| Codex / Codex CLI | `~/.codex/config.toml` | `url` | **`[mcp_servers.cloudways.http_headers]`** (a separate TOML table) | `codex` / `codex-cli` |
+
+**Cursor connects over native HTTP** — no Node and no `mcp-remote`; the bridge is only a fallback for proxy/connection problems (and then it needs Node v24+, as Claude Desktop does). The article also offers a one-click "Install in Cursor" button that prompts for the credentials.
 
 ---
 
