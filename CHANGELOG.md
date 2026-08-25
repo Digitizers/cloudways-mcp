@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.1 - 2026-08-25
+Re-aligned `references/installation.md` with the current support article (14654372):
+- **`X-Mcp-Host: windsurf` → `Devin`.** Windsurf was renamed Devin; the article's own config snippet sends the capitalised `Devin`, and its FAQ states header values are case-sensitive — so the old value was a silent-failure trap.
+- **Per-client config table added** for the four non-obvious shapes the article calls out: Devin's `serverUrl`, VS Code's `"servers"` block with a required `"type": "http"`, Gemini CLI's `httpUrl` (plain `url` there opens an SSE connection and fails), and Codex's separate `[mcp_servers.cloudways.http_headers]` TOML table. The article warns that incorrect variants "fail silently", so the trap is worth carrying inline rather than deferring to the link.
+- **Cursor documented as native HTTP** — no Node and no `mcp-remote`; the bridge is a proxy-problem fallback only.
+
+No tool-name, endpoint, auth, or safety changes: the endpoint (`https://mcp.cloudways.com/mcp/`), the `X-Access-Token` / `X-Mcp-Host` header pair, the RBAC roles, the 2026-10-15 legacy-API-key EOL, and the whole tool catalog were re-checked against the article and already matched. The article's troubleshooting row saying "Node.js v18+" contradicts its own v24.14.1 prerequisite; this skill keeps v24 in both places deliberately.
+
 ## 1.4.0 - 2026-07-21
 Zero-config connection for cloud sessions and devices:
 - **Committed `.mcp.json`** (secrets as placeholders only) — the connection reads its token from the `CLOUDWAYS_ACCESS_TOKEN` env var, so claude.ai cloud environments (which load the repo's `.mcp.json` from the clone and inject env vars from the environment config) and devices with the var in their shell get the tools with no per-machine setup. The `${CLOUDWAYS_ACCESS_TOKEN:-}` default keeps the config parseable when the var is unset — the connection then just shows as unavailable until the token is provided (a bare unset `${VAR}` would fail the whole config parse, per the Claude Code docs).
