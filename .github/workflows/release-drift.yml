@@ -31,13 +31,8 @@ on:
   workflow_run:
     workflows: ["Release"]
     types: [completed]
-  # Daily, not weekly, because of a residual this workflow cannot fix by itself:
-  # on a release event GITHUB_SHA is the TAGGED commit, so when a release is
-  # published AFTER main has advanced, a green run lands on the tag's commit and
-  # cannot replace the red check sitting on main's head. Re-dispatching against
-  # main would need a PAT - the repository GITHUB_TOKEN is exactly what GitHub
-  # suppresses to prevent recursion - and a stored credential in five repos is a
-  # worse trade than a check that self-heals within a day.
+  # Daily belt-and-braces: it catches a repo that goes quiet, and a release
+  # published from a path that emits no event at all.
   schedule:
     - cron: "0 9 * * *"
   workflow_dispatch:
@@ -46,8 +41,32 @@ permissions:
   contents: read
 
 jobs:
+  # On a release (or workflow_run) event GITHUB_SHA is the TAGGED commit, so a
+  # green run lands on the tag and cannot replace the red check sitting on
+  # main's head. Checking out main fixes which FILES are read; it cannot move
+  # the run's own SHA. So this path does not check anything - it re-dispatches
+  # the workflow against main, and that run reports on main's head commit.
+  #
+  # This works with the repository GITHUB_TOKEN: GitHub's recursion suppression
+  # for token-triggered events explicitly EXEMPTS workflow_dispatch and
+  # repository_dispatch. No PAT is needed.
+  redispatch:
+    name: Re-run against main
+    if: github.event_name == 'release' || github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch the check against main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release-drift.yml --repo "$GITHUB_REPOSITORY" --ref main
+
   check:
     name: SKILL.md version has a release
+    # The dispatched run lands here. Guarding on the event name is what keeps
+    # the two jobs from calling each other forever.
+    if: github.event_name != 'release' && github.event_name != 'workflow_run'
     runs-on: ubuntu-latest
     env:
       SKILL_DIR: ".claude/skills/cloudways-mcp"
@@ -56,7 +75,7 @@ jobs:
       # out the TAG by default, so publishing an older draft - or publishing
       # after main has moved on - would read that tag's SKILL.md and report on
       # a version nobody is asking about. The invariant is about main.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
 
