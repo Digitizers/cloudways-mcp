@@ -157,6 +157,7 @@ New-Item -ItemType Directory -Force -Path $dir -ErrorAction Stop | Out-Null
 $file = Join-Path $dir 'headers.txt'
 $tmp  = Join-Path $dir ('headers.' + [IO.Path]::GetRandomFileName())
 $me   = [Security.Principal.WindowsIdentity]::GetCurrent().Name   # DOMAIN\user, always resolvable
+$bstr = [IntPtr]::Zero
 
 try {
   New-Item -ItemType File -Path $tmp -ErrorAction Stop | Out-Null
@@ -168,8 +169,11 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "icacls failed (exit $LASTEXITCODE); no token was written" }
 
   $secure = Read-Host -AsSecureString 'Cloudways Access Token'
-  $plain  = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(
-              [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+  # SecureStringToBSTR allocates an UNMANAGED cleartext copy. Keep the pointer so the finally
+  # block can zero and free it - dropping it inline would leave the token in this process's
+  # memory for as long as the session lives.
+  $bstr  = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+  $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
   Set-Content -LiteralPath $tmp -Encoding ascii -ErrorAction Stop -Value @(
     'X-Mcp-Host: claude-desktop'
     "X-Access-Token: $plain"
@@ -180,10 +184,16 @@ try {
   Move-Item -LiteralPath $tmp -Destination $file -Force -ErrorAction Stop
 }
 finally {
+  # Zero and free the unmanaged copy on every path, including a throw between the two.
+  if ($bstr -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
   # Anything that threw above leaves no half-written token behind.
   if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
 }
 ```
+
+(The managed `$plain` string cannot be zeroed — .NET strings are immutable, so setting the
+variable to `$null` only drops the reference and leaves the value for the garbage collector.
+Run this in a shell you then close, not in a long-lived session you keep around.)
 
 (Written from Microsoft's documented behaviour for `icacls` and `Read-Host`; like the rest of
 the Windows path here, it has not been exercised on a Windows machine.)

@@ -115,8 +115,11 @@ curl -sH "Authorization: Bearer $TOKEN" \
 >
 > Three shapes that actually work, in order of preference:
 >
-> 1. **A plain script** — cron + `curl` + `jq`, the shape used by the daily-summary job below.
->    The projection happens in the same process; nothing is persisted anywhere.
+> 1. **A plain script** — cron + `curl` + `jq`, doing its own requests and printing only the
+>    allowlisted fields. The projection happens in the same process; nothing is persisted
+>    anywhere. Note that this means a **script**, not `claude -p`: the daily-summary job below
+>    delivers its report with `curl`, but its body is an agent, and an agent asked for expiry
+>    dates has only the credential-bearing `app_get` to get them with.
 > 2. **One n8n Code node** that performs the requests itself (`this.helpers.httpRequest`) and
 >    returns only the allowlisted fields. One node, one output, and that output is the filtered
 >    one.
@@ -220,15 +223,22 @@ OUT=$(mktemp "${TMPDIR:-/tmp}/cw-summary.md.XXXXXX")
 trap 'rm -f "$OUT"' EXIT
 
 # Here Claude calls the MCP tools itself and generates a summary
+# Certificate expiry is deliberately NOT asked for here. The only tool that returns it is
+# app_get, which also returns that application's database credentials - so an agent asked for
+# expiry dates across the fleet has no way to answer except the sweep this skill refuses
+# (workflows-monitoring.md section 5). SSL runs as its own direct-API job above, which projects
+# the response before anything reads it. Ask an agent only for what a credential-free tool
+# answers.
 claude -p "
 Generate today's Cloudways health summary.
 Check all servers (server_list), get alerts (copilot_insights_list), and identify:
 1. Any server not in Running status
 2. Any disk > 80%
-3. Any SSL expiring within 30 days
-4. Top 3 apps by traffic in the past 24h
+3. Top 3 apps by traffic in the past 24h
 
-Do NOT include credentials, IP addresses or tokens in the summary.
+Call no credential-returning tool: not server_get, not app_get, not app_credentials.
+Telling you to leave secrets out of the summary would not help - by then they are in this
+transcript, and the transcript outlives the summary.
 
 Output in Hebrew, markdown format, written to $OUT
 "

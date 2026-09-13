@@ -116,7 +116,9 @@ loop under conditions; they should not have. Collect the dates **outside the con
 - a direct `GET /server` / app call piped through a field filter on your side, so only
   `label`, `app_fqdn` and the certificate fields come back. `workflows-automation.md`
   § “SSL expiry monitoring” already runs exactly this as a Sunday cron, outside any agent
-  session — add the field filter there and it is the collector this step wants.
+  session — that is the collector this step wants. It must be a **script**, not a headless
+  agent: an agent asked for expiry dates has only `app_get` to get them with, which is the
+  sweep this section exists to prevent.
 
 Then bring the resulting list — names and dates, no payloads — to the agent for the triage
 below. **In the agent, `app_get` is for one certificate the user named**, never a roster walk.

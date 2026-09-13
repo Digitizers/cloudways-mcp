@@ -23,7 +23,12 @@ mine from 1.5.1.
   the whole `/app/{id}` payload has already retained every app's DB password, and a filter node
   after it cannot take that back. The three shapes that actually work are named (a plain
   `curl`+`jq` script, one n8n Code node that performs its own requests, or a platform whose
-  execution logging is off and verified off), along with when not to run the job at all. The onboarding note that named §5 as
+  execution logging is off and verified off), along with when not to run the job at all. The
+  headless daily summary in the same file **stopped asking for certificate expiry**: the only
+  tool that answers it is `app_get`, so an agent given that line had no way to comply except
+  the sweep this release removes — and its prompt no longer says “don’t include credentials in
+  the summary”, which was the same too-late instruction in miniature. It now names the three
+  tools not to call, and says why leaving them out of the summary would not have helped. The onboarding note that named §5 as
   the one legitimate exception is gone: there is no exception any more.
 - **The Access Token leaves both the Desktop config and the command line** (T09, High). The
   bridge config passed `--header X-Access-Token:<token>`, so the token sat in
