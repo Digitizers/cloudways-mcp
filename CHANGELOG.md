@@ -129,6 +129,14 @@ stayed clean. The Medium is fair and this release takes it whole.
   the change is scoped to one application, but its app-level steps still said "each application
   from step 2" — read literally, no app summary or traffic was captured at all. They now name
   the known target app for the app-scoped case and the step-2 roster for the server-wide one.
+- **An app-scoped baseline never falls through to `server_get`.** Its step 1 wanted the server's
+  row and offered the ladder held `server_list` → UI → one `server_get`, so a known
+  `(server_id, app_id)` with no held row ended in a `server_get` — the master credentials plus
+  the very roster step 2 refuses to fetch for that case — for a row no later step reads: steps
+  3–5 take the server id and steps 6 and 8 the pair. The app-scoped case now proceeds from the
+  ids, with the descriptive fields taken from a held response or the UI if the record wants
+  them; the ladder, `server_get` rung included, is stated for the server-wide case only, where a
+  `server_get` also supplies the step-2 roster so no `app_list` follows it.
 
 ## 1.5.2 - 2026-09-13
 

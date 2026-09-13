@@ -39,23 +39,30 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 
 1. The target server's row — status, size, provider, region, IP, app **count** (the app
    *roster* is step 2; the row does not carry app ids). That is the "current state" a baseline
-   needs. Where the row comes from follows the same ladder as an app target: the `server_list`
-   response you **already hold** from this conversation (the usual case — zero calls); else the
-   server's page in the Cloudways UI; else, if it must be the API from here, **one `server_get`
-   for that server** — and know its full scope before choosing it: it returns that server's
-   **master credentials** *and* every hosted application's row, which rule 7 says may carry
-   each application's database credentials. Narrower than an account-wide `server_list`,
-   wider than "one credential" — which is why, for a baseline, the UI page is the better rung.
-   Do **not** call `server_list` to pick one row you know the id of: rule 7 describes its payload,
-   and it covers every server in the account, so it exposes strictly more than the `server_get`
-   it would be standing in for. `server_list` is for the fleet question, not the single-server
-   one.
+   records. **Nothing below needs it to run**: steps 3–5 take the `server_id`, steps 6 and 8
+   take the `(server_id, app_id)` pair, and the ids are what you already have. So for an
+   **app-scoped** change with a known pair, proceed from the ids; if the descriptive fields
+   are wanted in the record, take them from the `server_list` response you **already hold**
+   from this conversation (zero calls) or from the server's page in the Cloudways UI — and
+   never from `server_get`, which would import the server's **master credentials** *and* every
+   hosted application's row (rule 7: may carry each application's database credentials) for
+   a row no later step reads. That is the exact roster step 2 refuses to fetch for this case,
+   plus the master credentials on top. For a **server-wide** change the ladder is: the held
+   `server_list` response; else the UI page; else, if it must be the API from here, **one
+   `server_get` for that server** — knowing its full scope as just stated, and knowing it
+   also supplies the step-2 roster, so step 2 then makes no `app_list` call. Narrower than an
+   account-wide `server_list`, wider than "one credential" — which is why the UI page is the
+   better rung. Do **not** call `server_list` to pick one row you know the id of: rule 7
+   describes its payload, and it covers every server in the account, so it exposes strictly
+   more than the `server_get` it would be standing in for. `server_list` is for the fleet
+   question, not the single-server one.
 2. The roster — **only if the change is server-wide.** If the significant change is scoped
    to one application whose `(server_id, app_id)` you already know, steps 6 and 8 take that id
    and nothing else: **make no roster call**, since `app_list` would import every application's
    row (credentials included, per rule 7) for no benefit. For a server-wide baseline —
    a PHP upgrade, a migration, a DNS change affecting every site — you need every app id:
-   the roster you already hold from this conversation, else one `app_list` on that server
+   the roster you already hold from this conversation (a step-1 `server_get`, if one was
+   made, already returned it), else one `app_list` on that server
    (`server_list` gives a *count*; `monitoring_app_summary` / `analytics_app_traffic` take an
    app id beside the server id; `server_get` used to supply this roster implicitly, beside
    the master credentials). One call, whose payload rule 7 describes.
