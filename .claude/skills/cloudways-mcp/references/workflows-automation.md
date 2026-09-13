@@ -208,14 +208,25 @@ Do NOT include credentials, IP addresses or tokens in the summary.
 Output in Hebrew, markdown format, written to $OUT
 "
 
+# Failing on an HTTP error is the point: without one of these flags curl exits
+# 0 on a rejected webhook (bad URL, payload too large), so the cron looks like
+# it succeeded - and the trap below has already deleted the only copy of the
+# report. --fail-with-body keeps the server's reason in the output, but it is
+# curl >= 7.76.0; Ubuntu 20.04 ships 7.68, where it is an unknown option, curl
+# exits 2 having posted NOTHING, and every run fails the same silent way. So
+# ask the installed curl rather than assuming: an unsupported option makes curl
+# exit non-zero before it ever reaches --version.
+if curl --fail-with-body --version >/dev/null 2>&1; then
+  CURL_FAIL=--fail-with-body          # curl >= 7.76.0: status AND the reason
+else
+  CURL_FAIL=--fail                    # older curl: status only, body discarded
+fi
+
 # Build the JSON with a real encoder. Interpolating the file into a JSON
 # string breaks on the first quote, backslash or newline in the report - and a
 # report is generated text, so it WILL contain them.
-# --fail-with-body matters: without it curl exits 0 on an HTTP error, so a
-# rejected webhook (bad URL, payload too large) looks like a successful cron
-# run - and the trap below has already deleted the only copy of the report.
 jq -Rs '{text: .}' < "$OUT" \
-  | curl --fail-with-body --silent --show-error \
+  | curl "$CURL_FAIL" --silent --show-error \
          -X POST -H 'Content-type: application/json' --data-binary @- "$SLACK_WEBHOOK_URL"
 ```
 
