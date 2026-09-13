@@ -97,14 +97,28 @@ Claude Desktop does not natively support remote HTTP MCP servers, so it uses the
 > **Pin `mcp-remote`.** Unpinned, `npx` resolves whatever the registry serves at launch and
 > executes it — and this config hands that package a live Access Token on its command line, so
 > a compromised release, maintainer account or transitive dependency would receive it. The
-> version above is pinned deliberately; bump it after reading the upstream release notes. The
-> digest npm publishes for it, if you want to check what you were served
-> (`npm pack mcp-remote@0.14.0` and compare):
+> version above is pinned deliberately; bump it after reading the upstream release notes, and
+> record the new digest here in the same commit.
 >
 > ```
 > mcp-remote@0.14.0
 > sha512-QBYGz02kc2AhhM6RNDzNyoA/FlzwJCNYPFF+o3opSvwfo5lnp8mcVIj/Zqw92dPuoafyLBKQZkpaEJdzlB/png==
 > ```
+>
+> To check what the registry served you, compute the digest from the bytes — **do not compare
+> against the line `npm pack` prints**, which elides the middle
+> (`sha512-QBYGz02kc2Ahh[...]kpaEJdzlB/png==`), so a comparison against it only ever checks a
+> prefix and a suffix:
+>
+> ```bash
+> npm pack mcp-remote@0.14.0
+> printf 'sha512-%s\n' "$(openssl dgst -sha512 -binary mcp-remote-0.14.0.tgz | openssl base64 -A)"
+> ```
+>
+> (`npm pack --json` also emits the full value, if you would rather read npm's own figure than
+> compute one.) A digest **recorded here, out of band** is what makes this worth running: npm
+> forbids republishing a version with different content, so it catches a registry that later
+> serves different bytes for 0.14.0.
 
 > **This config file holds the literal token.** The `${VAR}` expansion used above is
 > Claude Code's; do not assume the Desktop bridge performs it — treat that file as holding

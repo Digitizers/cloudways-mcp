@@ -11,8 +11,11 @@ went from `suspicious` to `clean`. All four findings are real and all four are f
 - **`mcp-remote` is pinned** (High). The Claude Desktop bridge config launched
   `npx mcp-remote` with no version, so `npx` resolved and executed whatever the registry
   served at launch — and that config hands the package a live Access Token on its command
-  line. Pinned to `0.14.0`, with npm's published digest recorded beside it for anyone who
-  wants to check what they were served. Same class as the `hostinger-api-mcp` pin, in the
+  line. Pinned to `0.14.0`, with npm's published digest recorded beside it and the
+  command to check what the registry actually served — computed from the bytes with
+  `openssl`, because the line `npm pack` prints elides the middle of the value
+  (`sha512-QBYGz02kc2Ahh[...]kpaEJdzlB/png==`), so comparing against it checks only a prefix
+  and a suffix. Same class as the `hostinger-api-mcp` pin, in the
   repo next door.
 - **Discovery no longer collects credentials** (High). The onboarding sweep called
   `app_credentials` for every application and summarised the master/database credentials that
