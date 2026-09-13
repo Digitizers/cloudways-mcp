@@ -32,7 +32,7 @@ stayed clean. The Medium is fair and this release takes it whole.
   Flexible mode is a redirect loop. Renewals are verified at the origin for the same reason. An
   app id with no server is stated to be unresolvable — `app_list` and `app_get` both take a
   `server_id`, and so does every app-scoped read — so the answer is to ask, never to walk every
-  roster. Whether a CDN or proxy sits in front is decided by DNS against the server's IP, not by
+  roster. Whether a CDN or proxy sits in front is decided by DNS — A and AAAA both — against the server's own addresses, not by
   comparing certificate issuers (edge and origin can both be Let's Encrypt). The one field
   `app_get` alone returns that a routine job can need — the application's folder name, for
   attributing a large directory in a disk investigation — keeps a targeted call for the one app

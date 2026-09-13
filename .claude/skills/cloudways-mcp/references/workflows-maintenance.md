@@ -53,8 +53,11 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > by pinning the name to the server's IP (from `server_list`):
 > `curl -sS -o /dev/null --max-time 15 --resolve <domain>:443:<server-ip> https://<domain>/` — `--resolve` keeps the hostname for SNI and verification and only changes where the
 > connection goes. **Whether something is in front is a DNS question, not a certificate one**:
-> `dig +short <domain> A` against the server IP from `server_list` — any answer that is not the
-> server is a CDN or proxy, whatever certificate it shows. Comparing issuers proves nothing,
+> `dig +short <domain> A; dig +short <domain> AAAA` against the server's addresses from `server_list` — **every** routable answer, both
+> record types, must be the server. Any other address is a CDN or proxy, whatever certificate
+> it shows; and a proxy reachable only over IPv6 (an A record at the origin, an AAAA at the
+> edge) is still a proxy for every IPv6 client, so an A-only check is not a check. Comparing
+> issuers proves nothing,
 > because the edge and the origin can both hold Let's Encrypt certificates and still be two
 > different machines with a Flexible-mode HTTP hop between them. Let's Encrypt renewals happen
 > at the origin, so a renewal is verified there; and enforcing HTTPS at the origin behind a
@@ -95,8 +98,8 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 1. Domain from the roster you hold, server IP from `server_list`. The certificate being renewed
    lives on the **origin**, so check that one: `curl -sS -o /dev/null --max-time 15 --resolve <domain>:443:<server-ip> https://<domain>/` for the verdict (exit 0 / 60), and
    `openssl s_client -servername <domain> -connect <server-ip>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates`
-   for the issuer and `notAfter` on record. If `dig +short <domain> A` does not answer with
-   the server's IP, a proxy is in front — the renewal still happens here, at the origin, and
+   for the issuer and `notAfter` on record. If `dig +short <domain> A; dig +short <domain> AAAA` answers with anything that is not one
+   of the server's own addresses, a proxy is in front — the renewal still happens here, at the origin, and
    the browser will keep showing you the proxy's certificate afterwards.
    Nothing in this step needs the database credentials `app_get` would add.
 2. Check that the DNS still points to the server (critical for LE validation)
@@ -248,10 +251,12 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    hostname + dates against the OS trust store, at the Cloudways server itself. Exit 60
    (expired, self-signed, wrong host) means **stop**: enforcing HTTPS now redirects production
    traffic onto a certificate browsers reject. Then ask whether anything sits in front:
-   `dig +short <domain> A` must answer with the server's IP from `server_list`. Any other
-   address is a CDN or reverse proxy — regardless of what certificate it presents, and even if
-   its issuer matches the origin's — and its origin mode has to be **Full (strict)**, or at
-   least Full, confirmed in that proxy's own settings before this write. In Flexible mode the
+   `dig +short <domain> A; dig +short <domain> AAAA` — every answer, A and AAAA both, must be one of the server's own addresses from
+   `server_list`. Any other address is a CDN or reverse proxy — regardless of what certificate
+   it presents, even if its issuer matches the origin's, and even if only the AAAA record
+   points at it (IPv6 clients would take that path into the loop) — and its origin mode has to
+   be **Full (strict)**, or at least Full, confirmed in that proxy's own settings before this
+   write. In Flexible mode the
    proxy reaches the origin over HTTP, the origin's new redirect sends it back to HTTPS, and
    the site loops. Do not read any of this off `openssl x509 -dates`, which prints dates for a
    broken certificate just as happily.
