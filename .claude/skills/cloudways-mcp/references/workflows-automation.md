@@ -189,7 +189,9 @@ command -v jq >/dev/null || { echo "this job needs jq (brew install jq / apt ins
 # The X's must be at the END of the template. BSD mktemp (macOS) does not
 # substitute them anywhere else - and it does not fail either: it creates a file
 # called literally "cw-summary.XXXXXX.md", which is exactly the predictable name
-# this line exists to avoid, with a successful exit status hiding it.
+# this line exists to avoid, with a successful exit status hiding it. Measured,
+# not assumed: on macOS 26.3, `mktemp ./cw-summary.XXXXXX.md` exits 0 and leaves
+# a 0600 file of that literal name, so `set -e` never fires and nothing warns.
 umask 077
 OUT=$(mktemp "${TMPDIR:-/tmp}/cw-summary.md.XXXXXX")
 trap 'rm -f "$OUT"' EXIT
