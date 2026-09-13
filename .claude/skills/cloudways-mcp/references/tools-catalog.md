@@ -189,7 +189,7 @@ Flags: **R** = read-only · **W** = write (requires confirmation) · **W!** = de
 | `monitoring_server_summary` | R | Server bandwidth and disk usage. |
 | `monitoring_server_usage` | R | Refresh server usage statistics. |
 | `monitoring_server_graph` | R | Monitoring graphs (CPU, memory…). |
-| `monitoring_app_summary` | R | Application-level usage metrics. |
+| `monitoring_app_summary` | R | Application-level usage: `type: bw` for bandwidth, `type: db` for **disk** size (not the database — the live tool's own wording). |
 | `analytics_app_traffic` | R | Traffic patterns and sources. |
 | `analytics_app_traffic_details` | R | Detailed traffic data for custom ranges. |
 | `analytics_app_php` | R | PHP performance / slow pages. |

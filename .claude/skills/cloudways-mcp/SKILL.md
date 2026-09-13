@@ -1,6 +1,6 @@
 ---
 name: cloudways-mcp
-version: 1.5.2
+version: 1.5.3
 license: MIT
 description: |
   Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the official Cloudways MCP server (Cloudways' hosted MCP / Remote MCP, per their support docs).
@@ -219,9 +219,25 @@ Example tagging in the response:
 
 ### Checking an app's details
 ```
-1. app_list                  → find the app
-2. app_get                   → details, FQDN, config
+1. app_list                  → find the app: id, label, type, version, domain
+2. app_settings_get          → its setting flags (XML-RPC, GEO-IP, password protection, …)
+3. monitoring_app_summary    → what it is doing right now
 ```
+
+(`app_get` is not in this list on purpose: it returns the application's **database
+credentials** beside fields the three calls above already give you. Step 1 is the roster you
+usually already hold from this conversation. Every app-scoped call takes a `server_id` beside
+the app id — `app_settings_get` and `monitoring_app_summary` included — so an app id on its own
+runs **nothing**, read or write; if you do not know the server, ask for it or for the app's
+name/URL. What differs between a read and a write is confirmation: a read on a known
+server/app pair can simply run, while a **write** needs name + URL from the roster first — a
+mistyped id that belongs to another app is still a valid id. When you hold no roster: for a
+**name** you are looking up, `app_list` on the server is the one API route (one call; rule 7
+says what its payload may carry — take the one row, paste none of it); for an **id** you already
+know, `app_list` is the wrong tool, because it covers every app on the server, and one
+`app_get` for that app — or the app's page in the UI — exposes strictly less. Reach for
+`app_get` otherwise only for a field none of these return, and accept what comes with
+it.)
 
 (SSL / Let's Encrypt **is** an MCP tool as of v1.2 — `security_lets_encrypt_install` / `_renew` / `_auto_renewal` / `_revoke`, via the security toolset. Install/renew are W; revoke is W!.)
 

@@ -1,5 +1,146 @@
 # Changelog
 
+## 1.5.3 - 2026-09-13
+
+From the ClawHub audit of 1.5.2. AIG went from three Highs to **one Medium**, and `static-analysis`
+stayed clean. The Medium is fair and this release takes it whole.
+
+- **`app_get` and `server_get` leave every step that only needed metadata** (Medium — "credential-
+  bearing API calls exceed the metadata requirements of routine workflows"). Eight maintenance
+  and monitoring sequences opened with `app_get — confirm target` or `server_get — current
+  state`: a cache purge, a backup, a restore, a custom-cert install, a change baseline, a
+  multi-server comparison, a "why is this server not Running". None of them used the database
+  or master credentials those calls return beside the label; they were the habit of reaching for
+  the richest tool. Each now names the **narrowest** call that answers the actual question —
+  narrowest, not credential-free: rules 7–8 say `server_list` and `app_list` are built from the
+  same credential-bearing payloads, and the ladder below still ends in one `app_get` — so this
+  release reduces the exposure to what the question needs and does not eliminate it —
+  the held roster for identity (an id alone is not a confirmed target — the confirmation block
+  needs name + URL, and a mistyped id that belongs to another app is still valid), `service_status`
+  and that server's insights for "why" (`operation_status` only for an operation id you already
+  hold — it takes no server id), the `server_list`
+  row for a baseline, `monitoring_app_summary` and `app_settings_get` for what an app is doing —
+  and `workflows-maintenance.md` states the rule once at the top as a ladder, narrowest exposure
+  first: the roster you already hold (no call), then an external lookup or one `app_get` for an
+  id you already know — narrower than `app_list`, which covers every app on the server — then
+  `app_list` for a name, then ask. What `app_get` is never for is habit. The same ladder governs a
+  known server: the `server_list` response already held, else the UI, else one `server_get` for
+  that server, with its full scope stated (master credentials *and* every hosted application's
+  row, per rule 7) — never a fresh account-wide `server_list` to read one row. The three places that read **certificate state** through `app_get` read it from the
+  outside instead, as two commands with two jobs: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert ~/.config/cloudways-mcp/cacert.pem -sS -o /dev/null --noproxy '*' https://<domain>/`
+  (`-q` first, so a `~/.curlrc` saying `insecure` cannot weaken it, and the `env -u` prefix so a CA
+  override in the environment — which `-q` does not touch — cannot either; both measured, the second
+  by pointing `CURL_CA_BUNDLE` at `self-signed.badssl.com`'s own certificate and watching exit 60
+  become exit 0; and `--cacert` pinned to a copy of Mozilla's public roots fetched from curl.se's **dated** URL for that revision (the undated name moves with every Mozilla update and would stop matching), downloaded to a temporary name and moved into place only after it verifies against a digest **recorded in the skill** (a same-origin `.sha256` proves only that the transfer was intact, and whatever can replace the bundle can replace it), because a
+  corporate CA in the OS store is beyond `env -u`'s reach — an empty bundle exits 77, proof the file
+  is the trust source)
+  is the **verdict** — exit 0 means chain, hostname and validity passed the OS trust store, exit
+  60 means one did not — and `openssl s_client … | openssl x509 -noout -issuer -dates` supplies
+  the dates for a report and decides nothing. Measured: the openssl line prints issuer and dates
+  and exits 0 for `expired.badssl.com`, `self-signed.badssl.com` and `wrong.host.badssl.com`
+  alike, while `curl` exits 60 for each. The "enforce HTTPS" step gates its write on the
+  verdict, because redirecting production onto a certificate browsers reject is the failure the
+  step exists to prevent — and it is the **origin** it checks, `--resolve`d to the server's IP:
+  through public DNS the same command validates a CDN's edge certificate, which says nothing
+  about the certificate on the Cloudways app, and enforcing HTTPS at an origin behind a proxy in
+  Flexible mode is a redirect loop. Renewals are verified at the origin for the same reason, and the origin
+  checks carry `--noproxy '*'`: with `HTTPS_PROXY` in the environment curl hands the request to
+  the proxy, which reaches the edge, and the origin check silently becomes an edge check (measured). And before the redirect is enabled,
+  the HTTPS answer itself is inspected (`-w '%{http_code} %{redirect_url}'`): an application that
+  answers `https://` with a redirect to `http://` — WordPress with `home`/`siteurl` still on HTTP —
+  passes every certificate check and loops the moment the server redirect goes on, so the
+  WordPress fix moved from a note *after* the write to a gate *before* it, and verification now
+  follows the whole chain (`-L --max-redirs 5`; `curl: (47)` is the loop) instead of one hop —
+  the preflight too, since a harmless `https://www.` first hop can hide an `http://` second one —
+  and both chain checks pass on curl's exit status and an `https://` effective URL, not on a `200`,
+  because a `401` behind Basic Auth or a `403` from a WAF is a perfectly good answer over HTTPS — but
+  never on a 5xx, since Cloudflare's 525/526 are the edge reporting a failed TLS handshake to the
+  origin and arrive as `exit 0` (measured),
+  and with `--noproxy '*'` like the origin checks, so an intercepting proxy's own page cannot pass
+  them —
+  and with `--proto-redir '=https'` so a chain that dips to HTTP and climbs back — invisible to
+  `%{url_effective}` — is refused at the hop (`curl: (1) Protocol "http" disabled (in redirect)`,
+  measured). Taking the redirect back off after a failed verification is named as the second
+  production write it is, with its own **CONFIRM** — the confirmation that enabled it does not carry. An
+  app id with no server is stated to be unresolvable — `app_list` and `app_get` both take a
+  `server_id`, and so does every app-scoped read — so the answer is to ask, never to walk every
+  roster. Whether a CDN or proxy sits in front is decided by DNS — A and AAAA both, address lines only, asked of a **public resolver** (`dig @1.1.1.1`) so split-horizon DNS on a VPN cannot hide a CDN behind a local answer, filtered with `awk` rather than `grep` — and guarded so that an empty answer (resolver blocked or erroring: `dig` exits 9, the pipeline exits 0 and prints nothing, measured) fails the gate instead of vacuously passing it, and each family's lookup is checked on its own exit status so one failed family cannot hide behind the other's good answer, and on its RCODE, since `dig
+  +short` is silent and exits 0 on a `SERVFAIL` (measured against `dnssec-failed.org`), so a name with no AAAA record does not
+  exit 1 under `set -e`, since `dig +short` prints a CNAME's canonical name on its own line — against the server's own addresses, not by
+  comparing certificate issuers (edge and origin can both be Let's Encrypt). The one field
+  `app_get` alone returns that a routine job can need — the application's folder name, for
+  attributing a large directory in a disk investigation — keeps a targeted call for the one app
+  in question, named as the rule-7 case; the first pass ranks by `monitoring_app_summary`
+  `type: db`, which is **disk** size per the live tool's own description — not the database — and
+  the catalog row now says so, since reading it as the database would misattribute a media-heavy
+  site with a small one, and the disk step no longer calls its path credential-free: the roster
+  is what costs, it follows the same ladder, and the size calls add nothing on top of it. In the
+  enforce-HTTPS sequence, a missing certificate routes to the
+  install step and back rather than to a dead stop; the stop is only on the write itself. The
+  preflight runs once per **served hostname** — the write covers the whole application, and an
+  alias with no matching certificate or behind a Flexible proxy breaks the moment the redirect goes
+  on; aliases come from the UI or a filtered direct call, since `app_list` carries the primary
+  domain only and the alias tools are all writes. The resolution ladder says the same for a user
+  who names a site by a secondary domain: an alias lookup through `app_list` would pay the
+  roster's cost and find nothing. The WordPress `home`/`siteurl` repair that the preflight can call
+  for reads the current values and changes only the scheme — writing `https://<hostname>` from the
+  step's placeholder would have promoted an alias to canonical — and is its own confirmed write with a
+  backup first, ahead of the redirect's own confirmation; and the post-write verification runs per
+  hostname like the preflight. `curl: (47)` is diagnosed apart from an HTTP downgrade: with
+  `--proto-redir '=https'` an HTTP hop is never followed, so 47 is an HTTPS-only loop or an over-long
+  chain, and the WordPress scheme repair is reserved for the protocol-disabled error or an observed
+  `http://` `Location`. The change baseline makes no roster call for an app-scoped change whose
+  target is already known — `app_list` for one known id imports every application's row for nothing. The DNS/proxy gate now comes before the certificate check and
+  decides which certificate matters: a site visitors reach directly must pass the OS trust store
+  at the origin, while a site behind a proxy in Full / Full (strict) is judged by the proxy's own
+  origin policy (a Cloudflare Origin CA certificate is correct there, and the local check would
+  have called it invalid) with the edge certificate as the one that must pass — and proxying is judged per DNS answer, not
+  per hostname: an origin A record beside a proxied AAAA record puts the hostname on both
+  branches, because the direct family's browsers are handed the origin certificate no matter what
+  the proxy trusts. And "confirm the target" means the roster you already hold or the id
+  you were given — `app_list` only when you have neither, as one call whose payload rule 7
+  describes; the first draft of this release called that sequence credential-free, which is
+  the claim 1.5.1 removed, and it is gone again. The
+  "checking an app's details" pattern in SKILL.md, the one most likely to be copied, no longer
+  ends in `app_get` either. After this, three bounded in-agent `app_get` calls remain, each named where it is
+  used: one for an app id you already know when no roster is held (narrower than `app_list`,
+  which covers every app on the server); one per candidate, bounded by the size ranking, when a
+  disk investigation cannot attribute a folder from sizes alone; and one for a single
+  certificate the user named. None of them is a sweep, and none of them is a habit.
+- **Every public answer is checked, not the first one curl reaches.** The edge handshake, the
+  redirect-chain preflight and the post-write verification in "enforce HTTPS" each ran one curl
+  request against the hostname, and one request exercises **one** address: curl races the A and
+  AAAA answers and keeps the first connection to succeed (measured on a dual-stack hostname —
+  three plain requests all connected to the same IPv6 address and never touched IPv4). A proxied
+  hostname whose IPv6 edge serves an expired certificate therefore passed on its IPv4 edge, and
+  the write sent that family's visitors onto the broken path. All three checks now loop over the
+  DNS gate's `$A` with `--resolve <hostname>:443:<answer>` per answer (IPv6 accepted as is, with
+  or without brackets — measured), print `<ip> <status> …` per line and `<ip> FAILED (curl exit N)`
+  on failure, and pass only when every line passes. The post-write check, which starts from
+  `http://`, pins `:80` as well as `:443` — `--resolve` is per host:port, and pinning `:443`
+  alone left the `http://` hop, the one the write changed, on whichever address curl reached
+  first (measured). The pin covers the hostname under test only: a `www.` hop resolves publicly
+  and is checked in its own turn, since every served hostname is in step 0's list.
+- **The post-write chain check allows one more hop than the preflight.** The preflight in
+  "enforce HTTPS" starts at `https://` with `--max-redirs 5`; the verification after the write
+  starts at `http://`, one hop earlier — the `http→https` hop the write adds — and kept the same
+  limit, so a healthy five-hop chain that passed the preflight was called a loop after the write
+  and routed to rollback (measured: a six-hop chain exits 47 at `--max-redirs 5` and 0 at 6). It
+  now uses `--max-redirs 6`, exactly one more than the preflight, and reads 47 as a chain that no
+  longer settles or grew by more than that hop.
+- **An app-scoped baseline measures the known app.** The change baseline skips the roster when
+  the change is scoped to one application, but its app-level steps still said "each application
+  from step 2" — read literally, no app summary or traffic was captured at all. They now name
+  the known target app for the app-scoped case and the step-2 roster for the server-wide one.
+- **An app-scoped baseline never falls through to `server_get`.** Its step 1 wanted the server's
+  row and offered the ladder held `server_list` → UI → one `server_get`, so a known
+  `(server_id, app_id)` with no held row ended in a `server_get` — the master credentials plus
+  the very roster step 2 refuses to fetch for that case — for a row no later step reads: steps
+  3–5 take the server id and steps 6 and 8 the pair. The app-scoped case now proceeds from the
+  ids, with the descriptive fields taken from a held response or the UI if the record wants
+  them; the ladder, `server_get` rung included, is stated for the server-wide case only, where a
+  `server_get` also supplies the step-2 roster so no `app_list` follows it.
+
 ## 1.5.2 - 2026-09-13
 
 From the ClawHub audit of 1.5.1. `static-analysis` went `suspicious` → **clean** (the
