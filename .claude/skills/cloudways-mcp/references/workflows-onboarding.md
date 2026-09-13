@@ -86,9 +86,19 @@ For each application in it:
 > transcript is kept, scrolled back through, and sometimes pasted somewhere. The only way to
 > keep a credential out of a conversation is not to fetch it.
 >
-> So this pass uses `server_list` and `app_list`, which do not carry credentials, and gets its
-> detail from `server_settings_get`, `service_status`, `app_settings_get`, the monitoring and
-> analytics tools and `app_vulnerabilities_list` — none of which return secrets.
+> So this pass uses `server_list` and `app_list` — **one call per account and one per server**,
+> instead of a credential payload per app — and gets its detail from `server_settings_get`,
+> `service_status`, `app_settings_get`, the monitoring and analytics tools and
+> `app_vulnerabilities_list`, none of which is documented to return credentials.
+>
+> That is a reduction, not a guarantee, and it is worth being exact about which: the live server
+> describes `app_list` itself as returning “… domain, **and credentials**” (safety rule 7). This
+> MCP exposes no roster endpoint documented to exclude them, so an app-level audit costs one such
+> payload per server. **If the engagement requires that no credential enter the transcript at
+> all, build the roster outside the conversation** — the Cloudways Platform UI, or a direct
+> `GET /server` piped through a field filter on your side — and hand the agent only the ids and
+> labels. What is not acceptable is the shape this release removed: one credential payload per
+> application, fetched by the agent, for an inventory that needed none of it.
 >
 > Three tools are deliberately NOT here:
 >

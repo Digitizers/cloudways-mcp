@@ -28,7 +28,11 @@ went from `suspicious` to `clean`. All four findings are real and all four are f
   server describes `app_list` itself as returning “ID, label, application type, version,
   domain, and credentials”, and both list tools are built from the same `GET /server` payload
   that makes `server_get` a credential tool. Safety rule 7 now says so rather than calling them
-  credential-free, because “inventory” is not a synonym for “safe to paste” — and takes its detail from
+  credential-free, because “inventory” is not a synonym for “safe to paste”. That is a reduction and not a
+  guarantee: this MCP exposes no roster endpoint documented to exclude credentials, so an app-level
+  audit costs one such payload per server, and a job that can tolerate none at all is told to build
+  the roster outside the conversation (UI, or a direct `GET /server` through a field filter) and
+  bring back only ids and labels. The pass takes its detail from
   `server_settings_get`, `service_status`, `app_settings_get`, the monitoring/analytics tools
   and `app_vulnerabilities_list`. All three credential-returning tools are named as
   deliberately absent, with what each is for and when calling it is legitimate — **in every
