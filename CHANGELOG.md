@@ -39,7 +39,11 @@ stayed clean. The Medium is fair and this release takes it whole.
   passes every certificate check and loops the moment the server redirect goes on, so the
   WordPress fix moved from a note *after* the write to a gate *before* it, and verification now
   follows the whole chain (`-L --max-redirs 5`; `curl: (47)` is the loop) instead of one hop —
-  the preflight too, since a harmless `https://www.` first hop can hide an `http://` second one. An
+  the preflight too, since a harmless `https://www.` first hop can hide an `http://` second one,
+  and with `--proto-redir '=https'` so a chain that dips to HTTP and climbs back — invisible to
+  `%{url_effective}` — is refused at the hop (`curl: (1) Protocol "http" disabled (in redirect)`,
+  measured). Taking the redirect back off after a failed verification is named as the second
+  production write it is, with its own **CONFIRM** — the confirmation that enabled it does not carry. An
   app id with no server is stated to be unresolvable — `app_list` and `app_get` both take a
   `server_id`, and so does every app-scoped read — so the answer is to ask, never to walk every
   roster. Whether a CDN or proxy sits in front is decided by DNS — A and AAAA both, address lines only, since `dig +short` prints a CNAME's canonical name on its own line — against the server's own addresses, not by

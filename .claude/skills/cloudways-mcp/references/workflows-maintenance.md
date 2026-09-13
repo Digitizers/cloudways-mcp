@@ -284,10 +284,16 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    handshake and nothing after it: a valid certificate in front of an application that answers
    `https://` with `301 Location: http://…` still exits 0, and so does one whose first hop is a
    harmless `https://www.` canonical redirect while the **second** hop goes back to `http://`.
-   So follow the whole chain, the way a browser will, **before** the write:
-   `curl -q -sS -o /dev/null --max-time 15 -L --max-redirs 5 -w '%{http_code} %{url_effective} %{num_redirects}\n' https://<domain>/`.
-   Pass is `200`, an effective URL that still begins `https://`, and a small hop count. An
-   effective URL beginning `http://` — or `curl: (47) Maximum (5) redirects followed` — means
+   So follow the whole chain, the way a browser will, **before** the write — and refuse
+   **any** hop to HTTP, not just an HTTP ending, because `%{url_effective}` reports only the
+   final URL and a chain that dips to `http://` and climbs back to `https://` would otherwise
+   pass:
+   `curl -q -sS -o /dev/null --max-time 15 -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' https://<domain>/`.
+   (Quote `'=https'` — in zsh, macOS's default shell, a bare `=https` is expanded as a
+   command lookup and the line fails with `https not found`.) Pass is `200`, an `https://`
+   effective URL, and a small hop count. `curl: (1) Protocol "http" disabled (in redirect)`
+   (measured: exit 1, before curl ever connects to the HTTP target), an effective URL
+   beginning `http://`, or `curl: (47) Maximum (5) redirects followed` — any of these means
    the app itself is pushing HTTPS visitors back to HTTP somewhere in its chain; on WordPress
    that is `WP_HOME` / `WP_SITEURL` still set to `http://`, the usual cause on a site that has
    never had HTTPS enforced. Enforcing now produces the loop the audit warned about: the server
@@ -300,11 +306,18 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 3. If there's no SSL: install one first — `security_lets_encrypt_install` (W, see sections 2 and 3). Enforcing HTTPS without a valid cert will break the site.
 4. **CONFIRM:** `app_enforce_https_update` (W) — toggles the HTTP→HTTPS redirect (this is separate from installing the cert)
 5. Verify the **whole chain** the way a browser walks it, not the first hop:
-   `curl -q -sS -o /dev/null --max-time 15 -L --max-redirs 5 -w '%{http_code} %{url_effective} %{num_redirects}\n' http://<domain>/`.
-   Expect `200 https://<domain>/ 1` (or a small count if the app adds a `www` or trailing-slash
-   hop). `curl: (47) Maximum (5) redirects followed` **is the loop** — turn the redirect back
-   off with `app_enforce_https_update` and return to step 2. Through public DNS on purpose:
-   this is the path visitors take, proxy included.
+   `curl -q -sS -o /dev/null --max-time 15 -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' http://<domain>/`.
+   The start is `http://` on purpose — that is what the new redirect acts on — and
+   `--proto-redir` governs only the hops after it, so every one of those must be HTTPS. Expect
+   `200 https://<domain>/ 1` (or a small count if the app adds a `www` or trailing-slash hop).
+   `curl: (47) Maximum (5) redirects followed` **is the loop**, and `curl: (1) Protocol "http"
+   disabled (in redirect)` is a downgrade somewhere past the first hop. Either way the fix is
+   to take the server redirect back off and return to step 2 — and that is a **second
+   production write**: **CONFIRM:** `app_enforce_https_update` (W) with the standard block, the
+   `target` and `expected impact` now describing the rollback. The confirmation given in step 4
+   authorised enabling the redirect; safety rule 2 does not let it carry to disabling it, and a
+   transient failure that looks like a loop must not roll production back to HTTP on nobody's
+   say-so. Through public DNS on purpose: this is the path visitors take, proxy included.
 
 > **WordPress, after:** with `home`/`siteurl` already on `https://` (step 2), what can remain is
 > mixed content from hard-coded `http://` URLs inside posts and options — a search-replace job

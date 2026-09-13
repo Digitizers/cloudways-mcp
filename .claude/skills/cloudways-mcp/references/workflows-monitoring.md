@@ -39,16 +39,17 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 
 1. The target server's row from `server_list` — status, size, provider, region, app count.
    That is the "current state" a baseline needs; `server_get` adds master credentials to it.
-   Then the roster steps 5 and 7 need — `app_list` on that server, unless you already hold it
-   from this conversation: `server_list` gives a *count*, and `monitoring_app_summary` /
-   `analytics_app_traffic` take an app id beside the server id. One call, whose payload rule 7
-   describes; `server_get` used to supply this roster implicitly, beside the master credentials.
-2. `monitoring_server_graph` — CPU, RAM, disk I/O over the last 5 minutes
-3. `service_status` — verify all the services are running
-4. `monitoring_server_summary` — free space (run `server_disk_usage_fetch` first to initialize the data, then read with `monitoring_server_summary`)
-5. `monitoring_app_summary` (for each relevant application) — bandwidth, response time
-6. `copilot_insights_list` — no active surprises
-7. `analytics_app_traffic` (last 24h) — to know what the normal traffic is
+2. `app_list` on that server — **the roster steps 6 and 8 need**, unless you already hold it
+   from this conversation. `server_list` gives a *count*, and `monitoring_app_summary` /
+   `analytics_app_traffic` take an app id beside the server id; `server_get` used to supply
+   this roster implicitly, beside the master credentials. One call, whose payload rule 7
+   describes.
+3. `monitoring_server_graph` — CPU, RAM, disk I/O over the last 5 minutes
+4. `service_status` — verify all the services are running
+5. `monitoring_server_summary` — free space (run `server_disk_usage_fetch` first to initialize the data, then read with `monitoring_server_summary`)
+6. `monitoring_app_summary` (for each application from step 2) — bandwidth, response time
+7. `copilot_insights_list` — no active surprises
+8. `analytics_app_traffic` (last 24h, per application from step 2) — to know what the normal traffic is
 
 **Save the output before starting the change.** After the change, repeat the same sequence and compare.
 
