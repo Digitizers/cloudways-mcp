@@ -26,21 +26,31 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 ---
 
-> **Confirming a target is never `app_get`, and it needs two things you may not have.** Every
-> sequence below starts by making sure the right application is in hand. Resolving one takes
-> (1) a **server you know** and (2) a **roster of it** — the one you already hold from this
-> conversation, or one `app_list` on that server, a single call whose payload rule 7 describes
-> (built from the same `/server` response as the credential tools, covering every app on that
-> server; take the one row you came for and paste none of it). **If you lack (1), stop and
-> ask** — which server, or the app's name or URL. There is no lookup from an app id to its
-> server: `app_list` and `app_get` both take a `server_id`, and the only API route from a bare
-> id to a server is reading every server's roster, which is the sweep this skill refuses. And
-> **an id alone is never a confirmation even when the server is known**: the confirmation
-> block above requires name + URL, and a mistyped id that happens to belong to another
-> application is still a valid id, so a write confirmed against nothing but a number can land
-> on the wrong site (`app_restore` is the one that cannot be undone). `app_get` resolves a
-> target too, and returns that application's **database credentials** beside the label, which
-> a cache purge, a backup or a restore has no use for.
+> **Confirming a target: the narrowest fetch that gives you name + URL, and often no fetch at
+> all.** Every sequence below starts by making sure the right application is in hand, and the
+> confirmation block above requires its name + URL — **an id alone is never a confirmation**: a
+> mistyped id that happens to belong to another application is still a valid id, so a write
+> confirmed against nothing but a number can land on the wrong site (`app_restore` is the one
+> that cannot be undone). Resolve in this order, and stop at the first rung you can use:
+>
+> 1. **The roster you already hold** from this conversation — zero calls. This is the usual case.
+> 2. **You know the server and the app id, hold no roster** — read the name + URL **outside the
+>    conversation** (the application's page in the Cloudways UI, or a direct API call through a
+>    field filter): zero secrets in the transcript. If it has to be the API from here, **one
+>    `app_get` for that one app** is the narrowest call there is — it returns that app's
+>    database credentials, and nothing else's. Do **not** reach for `app_list` to confirm one
+>    known id: rule 7 describes its payload, and it covers **every** application on the server,
+>    so it exposes strictly more than the `app_get` it would be standing in for.
+> 3. **You know the server and only a name or URL** — `app_list` on that server is the one API
+>    route (a single call; take the one row you came for and paste none of it), or the same
+>    external filtered roster as rung 2.
+> 4. **You do not know the server** — stop and ask which server, or for the name/URL. There is
+>    no lookup from an app id to its server: `app_list` and `app_get` both take a `server_id`,
+>    and the only API route from a bare id is reading every server's roster, which is the sweep
+>    this skill refuses.
+>
+> What `app_get` is never for is **habit**: reaching for it as the opening step of every job,
+> for a label a held roster already gives you, was the finding this section exists to close.
 >
 > **Certificate state is read from the outside, and the verdict and the dates are two different
 > commands.** The verdict is `curl -q -sS -o /dev/null --max-time 15 https://<domain>/`: exit **0** means the chain, the hostname and the validity
@@ -54,8 +64,13 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > answers for the name — behind Cloudflare or any reverse proxy, that is the **edge**
 > certificate, not the one installed on the Cloudways application. The **origin** is checked
 > by pinning the name to the server's IP (from `server_list`):
-> `curl -q -sS -o /dev/null --max-time 15 --resolve <domain>:443:<server-ip> https://<domain>/` — `--resolve` keeps the hostname for SNI and verification and only changes where the
-> connection goes. **Whether something is in front is a DNS question, not a certificate one**:
+> `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` — `--resolve` keeps the hostname for SNI and verification and only changes where the
+> connection goes. `--noproxy '*'` is part of the command: with `HTTPS_PROXY` / `https_proxy` /
+> `ALL_PROXY` set in the environment, curl hands the request to that proxy, which resolves
+> `<domain>` through its own DNS and reaches the CDN edge — so the "origin" check would be
+> validating the edge certificate after all (measured: with a proxy variable set, the
+> `--resolve` form connects to the proxy address, not the server, until `--noproxy '*'` is
+> added). **Whether something is in front is a DNS question, not a certificate one**:
 > `dig +short <domain> A | grep -E '^[0-9.]+$'; dig +short <domain> AAAA | grep ':'` against the server's addresses from `server_list` — **every** routable answer, both
 > record types, must be the server. The `grep`s keep only addresses: for a CNAME — an ordinary
 > `www` alias — `dig +short` prints the canonical name on its own line before the address
@@ -80,7 +95,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. Confirm the target — name + URL, resolved from the roster you hold, or from one `app_list` on a server you know (if you know neither the server nor the name, ask); an id alone is not a confirmation (never `app_get` — see above)
+1. Confirm the target — name + URL, from the first rung of the ladder at the top you can use (held roster → external lookup or one `app_get` for a known id → `app_list` for a name → ask); an id alone is not a confirmation
 2. `app_varnish_settings_get` — see if Varnish is active
 3. **CONFIRM:** `app_purge_cache` (W)
 4. If Varnish is active: **CONFIRM:** `varnish_app_manage` with action=purge (W)
@@ -102,7 +117,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 **Sequence:**
 
 1. Domain from the roster you hold, server IP from `server_list`. The certificate being renewed
-   lives on the **origin**, so check that one: `curl -q -sS -o /dev/null --max-time 15 --resolve <domain>:443:<server-ip> https://<domain>/` for the verdict (exit 0 / 60), and
+   lives on the **origin**, so check that one: `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` for the verdict (exit 0 / 60), and
    `openssl s_client -servername <domain> -connect <server-ip>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates`
    for the issuer and `notAfter` on record. If `dig +short <domain> A | grep -E '^[0-9.]+$'; dig +short <domain> AAAA | grep ':'` answers with anything that is not one
    of the server's own addresses, a proxy is in front — the renewal still happens here, at the origin, and
@@ -143,7 +158,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    ```
 
    Keep `privkey.pem` — a bare `openssl req -new` writes an encrypted key to whatever path the local OpenSSL config picks, and losing it makes the issued certificate unusable.
-2. Confirm the target — name + URL, resolved from the roster you hold or one `app_list` (see the note at the top)
+2. Confirm the target — name + URL, by the ladder at the top (held roster first; an id alone is not a confirmation)
 3. **Install the custom cert in the Cloudways UI** (paste cert + key) — manual by necessity; no MCP tool covers this step.
 4. Check SSL from the browser (SSL Labs grade A+ preferred)
 5. If Let's Encrypt was active — decide: keep as backup or revoke (`security_lets_encrypt_revoke`, W! — double-confirm)
@@ -158,7 +173,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. Confirm the target — name + URL, resolved from the roster you hold or one `app_list` (see the note at the top)
+1. Confirm the target — name + URL, by the ladder at the top (held roster first; an id alone is not a confirmation)
 2. `monitoring_app_summary` — before: snapshot of state
 3. **CONFIRM:** `app_backup` (W)
 4. Check that the backup is progressing (`app_backup_status_get` for in-progress state, or via the UI). Note: there is no general "list backups" tool — the available restore points are visible in the Cloudways UI.
@@ -177,10 +192,9 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 **Sequence — critical to follow in order:**
 
 1. **STOP** — don't do anything until you understand the scope of the problem.
-2. The app's identity — name + URL — resolved from the roster you hold (one `app_list` if you
-   hold none; a bare id is not an identity, and step 5 below has to be checked against
-   something), then `monitoring_app_summary` for what it is doing right now — the current
-   state a restore decision needs, without the credentials `app_get` would bring along
+2. The app's identity — name + URL — by the ladder at the top (a bare id is not an identity,
+   and step 5 below has to be checked against something), then `monitoring_app_summary` for
+   what it is doing right now — the current state a restore decision needs
 3. Check the list of available backups (via the Cloudways UI — there is no MCP "list backups" tool; `app_backup_status_get` only reports in-progress backup status)
 4. **CONFIRM step 1:** "Is the backup from date X the point you want to roll back to?"
 5. **CONFIRM step 2:** Type the app name to confirm restore
@@ -253,7 +267,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. Check that the **origin** serves a valid certificate: `curl -q -sS -o /dev/null --max-time 15 --resolve <domain>:443:<server-ip> https://<domain>/` must exit **0** — chain +
+1. Check that the **origin** serves a valid certificate: `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` must exit **0** — chain +
    hostname + dates against the OS trust store, at the Cloudways server itself. Exit 60
    (expired, self-signed, wrong host) means **stop**: enforcing HTTPS now redirects production
    traffic onto a certificate browsers reject. Then ask whether anything sits in front:

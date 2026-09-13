@@ -17,8 +17,10 @@ stayed clean. The Medium is fair and this release takes it whole.
   and that server's insights for "why" (`operation_status` only for an operation id you already
   hold — it takes no server id), the `server_list`
   row for a baseline, `monitoring_app_summary` and `app_settings_get` for what an app is doing —
-  and `workflows-maintenance.md` states the rule once at the top: confirming a target is never
-  `app_get`. The three places that read **certificate state** through `app_get` read it from the
+  and `workflows-maintenance.md` states the rule once at the top as a ladder, narrowest exposure
+  first: the roster you already hold (no call), then an external lookup or one `app_get` for an
+  id you already know — narrower than `app_list`, which covers every app on the server — then
+  `app_list` for a name, then ask. What `app_get` is never for is habit. The three places that read **certificate state** through `app_get` read it from the
   outside instead, as two commands with two jobs: `curl -q -sS -o /dev/null https://<domain>/` (`-q` first, so a `~/.curlrc` saying `insecure` cannot weaken it — measured)
   is the **verdict** — exit 0 means chain, hostname and validity passed the OS trust store, exit
   60 means one did not — and `openssl s_client … | openssl x509 -noout -issuer -dates` supplies
@@ -29,7 +31,9 @@ stayed clean. The Medium is fair and this release takes it whole.
   step exists to prevent — and it is the **origin** it checks, `--resolve`d to the server's IP:
   through public DNS the same command validates a CDN's edge certificate, which says nothing
   about the certificate on the Cloudways app, and enforcing HTTPS at an origin behind a proxy in
-  Flexible mode is a redirect loop. Renewals are verified at the origin for the same reason. An
+  Flexible mode is a redirect loop. Renewals are verified at the origin for the same reason, and the origin
+  checks carry `--noproxy '*'`: with `HTTPS_PROXY` in the environment curl hands the request to
+  the proxy, which reaches the edge, and the origin check silently becomes an edge check (measured). An
   app id with no server is stated to be unresolvable — `app_list` and `app_get` both take a
   `server_id`, and so does every app-scoped read — so the answer is to ask, never to walk every
   roster. Whether a CDN or proxy sits in front is decided by DNS — A and AAAA both, address lines only, since `dig +short` prints a CNAME's canonical name on its own line — against the server's own addresses, not by

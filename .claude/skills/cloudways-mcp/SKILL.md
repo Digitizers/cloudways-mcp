@@ -231,9 +231,12 @@ the app id — `app_settings_get` and `monitoring_app_summary` included — so a
 runs **nothing**, read or write; if you do not know the server, ask for it or for the app's
 name/URL. What differs between a read and a write is confirmation: a read on a known
 server/app pair can simply run, while a **write** needs name + URL from the roster first — a
-mistyped id that belongs to another app is still a valid id. `app_list` is one call for the whole server, and rule 7 says what a list payload
-may carry: reach for it when you hold no roster, take the one row you came for, and paste none
-of it. Reach for `app_get` only for a field none of these return, and accept what comes with
+mistyped id that belongs to another app is still a valid id. When you hold no roster: for a
+**name** you are looking up, `app_list` on the server is the one API route (one call; rule 7
+says what its payload may carry — take the one row, paste none of it); for an **id** you already
+know, `app_list` is the wrong tool, because it covers every app on the server, and one
+`app_get` for that app — or the app's page in the UI — exposes strictly less. Reach for
+`app_get` otherwise only for a field none of these return, and accept what comes with
 it.)
 
 (SSL / Let's Encrypt **is** an MCP tool as of v1.2 — `security_lets_encrypt_install` / `_renew` / `_auto_renewal` / `_revoke`, via the security toolset. Install/renew are W; revoke is W!.)
