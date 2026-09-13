@@ -37,8 +37,9 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 
 **Call sequence:**
 
-1. The target server's row from `server_list` — status, size, provider, region, app count.
-   That is the "current state" a baseline needs; `server_get` adds master credentials to it.
+1. The target server's row from `server_list` — status, size, provider, region, app **count**
+   (the app *roster* is step 2; `server_list` does not carry ids). That is the "current state"
+   a baseline needs; `server_get` adds master credentials to it.
 2. `app_list` on that server — **the roster steps 6 and 8 need**, unless you already hold it
    from this conversation. `server_list` gives a *count*, and `monitoring_app_summary` /
    `analytics_app_traffic` take an app id beside the server id; `server_get` used to supply
@@ -63,12 +64,17 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 
 1. `server_disk_usage_fetch` (init) then `monitoring_server_summary` (read) — where is the space?
 2. If application folders are large: `app_list` for the roster (`server_list` returns only an
-   app count), then `monitoring_app_summary` (`type: db`) per app for its size — that maps a
-   size to a label without any credential payload. The breakdown from step 1 names **folders**
+   app count), then `monitoring_app_summary` (`type: db`) per app for its **disk** size — the
+   live tool describes its two types as `bw` for bandwidth and `db` for disk size; `db` is not
+   the database, and a media-heavy site with a small database is exactly the case where
+   reading it as one would misattribute. That maps a disk size to a label without any
+   credential payload. The breakdown from step 1 names **folders**
    (`/home/master/applications/<folder>/`), and the folder name is a field `app_get` returns
-   and nothing else does. Usually the sizes settle it: the largest folder belongs to the app
-   whose `monitoring_app_summary` size is the largest, and that is an attribution with no
-   credential payload. When they do not — two or three apps of similar size — the folder name
+   and nothing else does. Usually the disk sizes settle it: the largest folder belongs to the
+   app whose `type: db` figure is the largest, and that is an attribution with no credential
+   payload — with the caveat that this figure is the application's storage as Cloudways
+   accounts it, which has not been verified here to equal the folder byte-for-byte, so treat a
+   near-tie as a tie. When they do not settle it — two or three apps of similar size — the folder name
    has to be read for **those candidates only**: from each one's page in the Cloudways UI
    (nothing enters the transcript), or with `app_get` on each candidate, which is the rule-7
    case of a specific field nothing else returns, accepting the database credentials that come

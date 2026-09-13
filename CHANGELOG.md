@@ -50,7 +50,11 @@ stayed clean. The Medium is fair and this release takes it whole.
   comparing certificate issuers (edge and origin can both be Let's Encrypt). The one field
   `app_get` alone returns that a routine job can need — the application's folder name, for
   attributing a large directory in a disk investigation — keeps a targeted call for the one app
-  in question, named as the rule-7 case. And "confirm the target" means the roster you already hold or the id
+  in question, named as the rule-7 case; the first pass ranks by `monitoring_app_summary`
+  `type: db`, which is **disk** size per the live tool's own description — not the database — and
+  the catalog row now says so, since reading it as the database would misattribute a media-heavy
+  site with a small one. In the enforce-HTTPS sequence, a missing certificate routes to the
+  install step and back rather than to a dead stop; the stop is only on the write itself. And "confirm the target" means the roster you already hold or the id
   you were given — `app_list` only when you have neither, as one call whose payload rule 7
   describes; the first draft of this release called that sequence credential-free, which is
   the claim 1.5.1 removed, and it is gone again. The

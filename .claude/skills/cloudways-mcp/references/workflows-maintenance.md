@@ -267,10 +267,17 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. Check that the **origin** serves a valid certificate: `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` must exit **0** — chain +
-   hostname + dates against the OS trust store, at the Cloudways server itself. Exit 60
-   (expired, self-signed, wrong host) means **stop**: enforcing HTTPS now redirects production
-   traffic onto a certificate browsers reject. Then ask whether anything sits in front:
+1. Check that the **origin** serves a valid certificate — the handshake only; what the
+   application answers *after* the handshake is step 2's job, and both must pass before step 4:
+   `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` must exit **0** — chain +
+   hostname + dates against the OS trust store, at the Cloudways server itself. Exit 60 means
+   there is no certificate browsers accept here **yet**, and which of two things that is
+   decides where you go: if none was ever issued (a fresh app answers with Cloudways'
+   self-signed default), go to step 3 and **install one**, then come back and re-run this
+   check; if one is installed and failing (expired, wrong host), fix or reissue it first
+   (sections 2 and 3) and re-run. What exit 60 never permits is step 4 — enforcing HTTPS now
+   would redirect production traffic onto a certificate browsers reject. Then ask whether
+   anything sits in front:
    `dig +short <domain> A | grep -E '^[0-9.]+$'; dig +short <domain> AAAA | grep ':'` — every answer, A and AAAA both, must be one of the server's own addresses from
    `server_list`. Any other address is a CDN or reverse proxy — regardless of what certificate
    it presents, even if its issuer matches the origin's, and even if only the AAAA record
