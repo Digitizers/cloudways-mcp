@@ -99,12 +99,20 @@ curl -sH "Authorization: Bearer $TOKEN" \
 ├─ HTTP: GET /api/v2/server  (Authorization: Bearer <access-token>)  → all servers
 ├─ Loop servers → Loop apps:
 │   ├─ HTTP: GET /app/{id}           → including SSL info
+│   ├─ Function: SELECT label, app_fqdn, ssl fields ONLY  ← see the note below
 │   ├─ Function: parse SSL expiry date
 │   ├─ IF expiry < 30 days:
 │   │   └─ Add to "needs attention" list
 ├─ Aggregate
 └─ Send report
 ```
+
+> **Filter the app payload in the first function, not in the report.** `GET /app/{id}` returns
+> that application's database credentials beside the certificate fields. In a cron that is
+> survivable — nothing is in a transcript — but the response is still logged by most
+> automation platforms, so drop everything except `label`, `app_fqdn` and the SSL fields at the
+> step that receives it. This job is also what `workflows-monitoring.md` §5 now points at: the
+> agent gets names and dates from here, never the payloads.
 
 ### Workflow: Disk space alerting
 

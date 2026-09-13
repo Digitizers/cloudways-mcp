@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.5.2 - 2026-09-13
+
+From the ClawHub audit of 1.5.1. `static-analysis` went `suspicious` → **clean** (the
+`exposed_secret_literal` false positive is gone with the line it pointed at) and VirusTotal is
+clean. AIG returned three Highs, all three real, all three fixed here — and two of them are
+mine from 1.5.1.
+
+- **The weekly SSL sweep no longer runs through the agent** (T05, High). `workflows-monitoring.md`
+  §5 walked the fleet with `app_get` to read certificate expiry dates — a tool that returns that
+  application's **database credentials** in the same payload. 1.5.1 authorized that loop under
+  conditions ("on a READ-role token, do not paste the responses anywhere"); that was the wrong
+  call, and conditions on a fetch do not unfetch anything. The dates are now collected **outside
+  the conversation** — the Cloudways UI, or a direct call through a field filter — and only names
+  and dates come back to the agent for triage. In the agent, `app_get` is for one certificate
+  somebody named. `workflows-automation.md` already ran exactly this as a Sunday cron, so §5 now
+  points at it, and that cron drops everything but `label`, `app_fqdn` and the SSL fields at the
+  step that receives the payload rather than in the report. The onboarding note that named §5 as
+  the one legitimate exception is gone: there is no exception any more.
+- **The Access Token leaves both the Desktop config and the command line** (T09, High). The
+  bridge config passed `--header X-Access-Token:<token>`, so the token sat in
+  `claude_desktop_config.json` as a literal **and** in the process's argument list, where any
+  other user on the machine can read it from `ps`. It now lives in
+  `~/.cloudways-mcp-bridge/headers.txt` at mode 600, written with `umask 077` and `read -rs` so
+  it never reaches the terminal or the shell history, and the config carries `--header-file`
+  pointing at it. `mcp-remote` treats an unreadable header file as **fatal**, so a wrong path
+  fails at startup instead of connecting unauthenticated. Verified against `mcp-remote@0.14.0`
+  installed from the shipped lockfile: it logs `Loaded 2 header(s)` and the header **names**,
+  never the value.
+- **The `npx` fallback is removed** (T08, High). It pinned `mcp-remote` and nothing underneath
+  it: ~80 transitive dependencies re-resolved whenever the npx cache is empty, executing in the
+  process that holds the Access Token. Anyone who can run `npx` can run the `npm ci` above it,
+  against a lockfile that ships with the skill — the fallback bought convenience that was never
+  worth its exposure. The troubleshooting row that sent people to check `npx` on PATH now sends
+  them to re-run the install.
+
+Not changed: the token is still a secret at rest, now in `headers.txt` rather than in the
+Desktop config — a file that can be pasted into an issue or a screen share no longer carries it,
+but the header file still must not be. ClawScan's `persistence_privilege` and `purpose_capability`
+concerns are the skill's nature — an operations skill for a hosting account reaches production
+servers, DNS and billing — and are answered by token role, not by documentation.
+
 ## 1.5.1 - 2026-09-13
 
 From the ClawHub audit of 1.5.0. Context first, because the headline moved the wrong way: the

@@ -115,7 +115,25 @@ if ($LASTEXITCODE -ne 0) { throw "npm ci failed - the bridge is not installed" }
 > whole section exists to prevent, arriving through the update path. The directory is ours and
 > holds nothing but the copied files and `node_modules`, so removing it costs nothing.
 
-Then point Claude Desktop at the installed executable:
+**Then put the token in a header file, not in the config.** Claude Desktop performs no
+`${VAR}` expansion, so a token written into `claude_desktop_config.json` is a literal secret in
+a file people screenshot and paste; and a token passed as `--header` is in the process's
+argument list, which every other user on the machine can read from `ps`. `mcp-remote`'s
+`--header-file` avoids both — one `Name: value` per line, `#` starts a comment, whitespace
+after the colon is trimmed:
+
+```bash
+umask 077                                  # 600 before anything is written to it
+printf 'X-Mcp-Host: claude-desktop\n' > ~/.cloudways-mcp-bridge/headers.txt
+printf 'X-Access-Token: '               >> ~/.cloudways-mcp-bridge/headers.txt
+read -rs TOKEN && printf '%s\n' "$TOKEN" >> ~/.cloudways-mcp-bridge/headers.txt && unset TOKEN
+```
+
+`read -rs` keeps the value off the terminal and out of shell history — paste at the silent
+prompt and press Return. Check it afterwards with `ls -l` (expect `-rw-------`) and
+`cut -d: -f1 ~/.cloudways-mcp-bridge/headers.txt` (prints the header **names** only).
+
+Then point Claude Desktop at the installed executable and that file:
 
 ```json
 {
@@ -124,48 +142,36 @@ Then point Claude Desktop at the installed executable:
       "command": "/Users/<you>/.cloudways-mcp-bridge/node_modules/.bin/mcp-remote",
       "args": [
         "https://mcp.cloudways.com/mcp/",
-        "--header", "X-Access-Token:<your-cloudways-access-token>",
-        "--header", "X-Mcp-Host:claude-desktop"
+        "--header-file", "/Users/<you>/.cloudways-mcp-bridge/headers.txt"
       ]
     }
   }
 }
 ```
+
+A header file it cannot read is a **fatal** error, not a warning, so a wrong path fails at
+startup instead of connecting unauthenticated. Verified against `mcp-remote@0.14.0` installed
+from the shipped lockfile: it logs `Loaded 2 header(s)` and `Using custom headers:
+X-Mcp-Host, X-Access-Token` — the names, never the value.
 
 On Windows the launcher is `C:\\Users\\<you>\\.cloudways-mcp-bridge\\node_modules\\.bin\\mcp-remote.cmd`
 — the extensionless shim beside it is POSIX-only. (That path is npm's documented layout; it
 has not been exercised on a Windows machine.)
 
-<details>
-<summary><b>Fallback: <code>npx</code>, if you cannot run the install above</b></summary>
+> **There is deliberately no `npx` alternative here any more.** Earlier versions offered one as
+> a collapsed fallback. `npx mcp-remote@0.14.0` pins the named package and **nothing underneath
+> it**: the ~80 transitive dependencies are resolved fresh whenever the npx cache is empty, so a
+> version published inside one of their ranges between now and your next launch executes in the
+> process holding your Access Token. Anyone who can run `npx` can run the `npm ci` above — it is
+> one command more against a lockfile that ships with this skill — so the fallback bought
+> convenience that was never worth its exposure. If `npm ci` fails, fix that (registry, proxy,
+> Node version) rather than reaching for a path that resolves at launch.
 
-```json
-{
-  "mcpServers": {
-    "cloudways": {
-      "command": "npx",
-      "args": [
-        "mcp-remote@0.14.0",
-        "https://mcp.cloudways.com/mcp/",
-        "--header", "X-Access-Token:<your-cloudways-access-token>",
-        "--header", "X-Mcp-Host:claude-desktop"
-      ]
-    }
-  }
-}
-```
-
-This pins `mcp-remote` itself but **not its ~80 dependencies**, which npx re-resolves whenever
-its cache is empty — so a newly published version inside one of their ranges executes with
-your Access Token. Use it knowing that; the locked install above is why it is the fallback.
-
-</details>
-
-> **Pin `mcp-remote`.** Unpinned, `npx` resolves whatever the registry serves at launch and
-> executes it — and this config hands that package a live Access Token on its command line, so
-> a compromised release, maintainer account or transitive dependency would receive it. The
-> version above is pinned deliberately; bump it after reading the upstream release notes, and
-> record the new digest here in the same commit.
+> **Pin `mcp-remote`.** A launcher that resolves at run time executes whatever the registry
+> serves at that moment, into a process that reads your Access Token from `headers.txt` — so a
+> compromised release, maintainer account or transitive dependency would receive it. The
+> version is pinned deliberately, in `bridge/package.json` and the lockfile beside it; bump it
+> after reading the upstream release notes, and record the new digest here in the same commit.
 >
 > ```
 > mcp-remote@0.14.0
@@ -188,9 +194,10 @@ your Access Token. Use it knowing that; the locked install above is why it is th
 > serves different bytes for 0.14.0.
 >
 > **What the pin does NOT cover: everything underneath it.** `mcp-remote@0.14.0` fixes one
-> package, and the digest above covers one tarball; its ~80 dependencies are resolved fresh
-> whenever npx has nothing cached, so a newly published version inside one of their ranges
-> runs with your Access Token even though the digest still matches.
+> package, and the digest above covers one tarball; its ~80 dependencies would be resolved
+> fresh by any launcher that resolves at run time, so a newly published version inside one of
+> their ranges would run with your Access Token even though the digest still matches. That is
+> what the shipped lockfile and `npm ci` exist to prevent, and why no `npx` recipe remains.
 >
 > **`npm ci` against the shipped lockfile has to be the first command that touches the
 > registry.** Generating your own lockfile with `npm install` resolves the graph at that moment
@@ -203,13 +210,19 @@ your Access Token. Use it knowing that; the locked install above is why it is th
 > packages' source has been read. Bumping `mcp-remote` means regenerating the lockfile in the
 > same commit.
 
-> **This config file holds the literal token.** The `${VAR}` expansion used above is
-> Claude Code's; do not assume the Desktop bridge performs it — treat that file as holding
-> the real value, keep it at mode 600 (`chmod 600 ~/Library/Application\ Support/Claude/claude_desktop_config.json`),
-> and give it the **smallest role that works** (READ for monitoring-only), since it is a
-> credential at rest rather than one held in an environment.
+> **The secret is now in `headers.txt`, and it is still a secret at rest.** Keep it at mode
+> 600, back it up nowhere, and give the token the **smallest role that works** (READ for
+> monitoring-only). `claude_desktop_config.json` no longer contains it — that file can be
+> pasted into an issue or a screen share without leaking anything — but the header file can't.
+> The `${VAR}` expansion used in the Claude Code section above is Claude Code's own; Claude
+> Desktop performs none, which is why the file exists. (`mcp-remote` does expand `${VAR}` inside
+> a header **value** from its own environment, if you have somewhere better than a file to keep
+> it — a launcher that exports it from a keychain, say.)
 
-> **No spaces around the colon** in `--header` values for the bridge: use `X-Access-Token:abc123`, not `X-Access-Token: abc123`. After saving, **fully quit** Claude Desktop (Cmd-Q / tray → Quit — closing the window is not enough) and reopen.
+> **Header-file format:** `Name: value`, one per line; `#` starts a comment; whitespace after
+> the colon is trimmed, and CRLF line endings are handled. Header names are case-sensitive.
+> After saving either file, **fully quit** Claude Desktop (Cmd-Q / tray → Quit — closing the
+> window is not enough) and reopen.
 
 > Keep real credentials out of version control. For Claude Code, put the token in the `CLOUDWAYS_ACCESS_TOKEN` env var (the committed `.mcp.json` reads it, and so does the user-scope form above) — never edit a real token into `.mcp.json`, which is a **tracked** file. See `.mcp.json.example` in the repo root for the per-account shape. Header names are case-sensitive.
 
@@ -346,7 +359,7 @@ In Claude, ask: **"Show me all my Cloudways servers"** → calls `server_list` a
 | Write tool fails but reads work | token role too narrow | the connection uses a READ (or too-narrow LIMITED) token; use a token whose role covers the operation |
 | No `mcp__cloudways*__*` tools | not connected / stale cache | restart the client (see "Tools not appearing" below) |
 | Timeout | transient network | retry after a moment |
-| `mcp-remote not found` (Desktop) | Node missing | install Node.js v24+, ensure `npx` is on PATH |
+| `mcp-remote not found` (Desktop) | bridge not installed, or Node missing | install Node.js v24+, then re-run the `npm ci` install above; the config points at `~/.cloudways-mcp-bridge/node_modules/.bin/mcp-remote`, not at a PATH lookup |
 
 To test credentials directly against the public Cloudways API, independent of the MCP layer (useful to isolate "bad credentials" from "MCP connection problem"):
 

@@ -105,17 +105,30 @@ Next action requires confirmation: app_purge_cache (W)
 
 **When:** weekly review of clients' SSL expiry dates
 
-**Sequence for each application:**
+**A fleet-wide sweep does not run through the agent.** Certificate provider and expiry come
+back only inside `app_get`, which returns that application's **database credentials** in the
+same payload. Looping it over every app therefore pulls every app's DB password into the
+transcript to learn a date — the credentials are not needed for the question being asked, and
+once fetched they cannot be taken back out. Earlier versions of this playbook authorized that
+loop under conditions; they should not have. Collect the dates **outside the conversation**:
 
-1. `server_list`
-2. For each server: `app_list` → the application roster (one call per server; rule 7 on the payload)
-3. For each app: `app_get` → the SSL/expiry detail, which no other read tool returns at all.
-   **This is a fleet-wide loop over a tool that also returns database credentials**, so it
-   pulls every app's DB password into the conversation. Run it when an SSL sweep is what the
-   user asked for, on a READ-role token, and do not paste the responses anywhere; for a single
-   certificate, call it for that one app instead.
-4. Filter: SSL expiring within the next 30 days → flag for renewal
-5. For each flagged app: confirm whether Let's Encrypt auto-renewal is enabled. **There is no MCP read tool for auto-renewal status** — check it in the Cloudways Platform UI (Application → SSL Certificate) or via the direct API; `security_lets_encrypt_auto_renewal` is a W **toggle**, never call it just to inspect the setting. If auto-renewal is off — double flag and report it; the fix (enable auto-renewal / renew) is a write — hand it to `workflows-maintenance.md` §2 (`security_lets_encrypt_auto_renewal` / `security_lets_encrypt_renew`, both W with confirmation), don't execute it from this read-only playbook.
+- the Cloudways Platform UI (Application → SSL Certificate), or
+- a direct `GET /server` / app call piped through a field filter on your side, so only
+  `label`, `app_fqdn` and the certificate fields come back. `workflows-automation.md`
+  § “SSL expiry monitoring” already runs exactly this as a Sunday cron, outside any agent
+  session — add the field filter there and it is the collector this step wants.
+
+Then bring the resulting list — names and dates, no payloads — to the agent for the triage in
+steps 3-5 below. **In the agent, `app_get` is for one certificate the user named**, never a
+roster walk.
+
+**Sequence:**
+
+1. `server_list` → the fleet, and `app_list` per server if you need the app labels
+2. Certificate provider + expiry per app: **UI or filtered direct API** (above). For a single
+   app the user asked about, `app_get` on that one app is the right call.
+3. Filter: SSL expiring within the next 30 days → flag for renewal
+4. For each flagged app: confirm whether Let's Encrypt auto-renewal is enabled. **There is no MCP read tool for auto-renewal status** — check it in the Cloudways Platform UI (Application → SSL Certificate) or via the direct API; `security_lets_encrypt_auto_renewal` is a W **toggle**, never call it just to inspect the setting. If auto-renewal is off — double flag and report it; the fix (enable auto-renewal / renew) is a write — hand it to `workflows-maintenance.md` §2 (`security_lets_encrypt_auto_renewal` / `security_lets_encrypt_renew`, both W with confirmation), don't execute it from this read-only playbook.
 
 > If Let's Encrypt auto-renewal is active, Cloudways renews 30 days before expiry. If it fails to renew (DNS issue) — you'll get an alert. It's still worth reviewing manually once every two weeks.
 
