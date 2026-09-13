@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.5.1 - 2026-09-13
+
+From the ClawHub audit of 1.5.0. Context first, because the headline moved the wrong way: the
+verdict went from `benign` to `suspicious`, but **AIG returned nothing at all for 1.4.1** (its
+export was null) and returned four findings here — this is a scanner reporting for the first
+time, not a regression introduced by 1.5.0. What 1.5.0 did change, the static-analysis pass
+went from `suspicious` to `clean`. All four findings are real and all four are fixed.
+
+- **`mcp-remote` is pinned** (High). The Claude Desktop bridge config launched
+  `npx mcp-remote` with no version, so `npx` resolved and executed whatever the registry
+  served at launch — and that config hands the package a live Access Token on its command
+  line. Pinned to `0.14.0`, with npm's published digest recorded beside it for anyone who
+  wants to check what they were served. Same class as the `hostinger-api-mcp` pin, in the
+  repo next door.
+- **Discovery no longer collects credentials** (High). The onboarding sweep called
+  `app_credentials` for every application and summarised the master/database credentials that
+  `server_get` and `app_get` return anyway. An inventory does not need any of it.
+  `app_credentials` is out of the pass entirely, the credential fields are explicitly excluded
+  from the deliverables table and anything pasted into a ticket or chat, and the text says
+  when to fetch them instead: when a specific task the user asked for needs them.
+- **The daily-summary example uses `mktemp`, not a fixed `/tmp` path** (Medium), with
+  `umask 077` and a `trap` that removes the file even when `curl` fails. A predictable name in
+  a shared `/tmp` can be pre-created as a symlink by another user.
+- **…and builds its JSON with `jq -Rs`** rather than interpolating the file into a string. The
+  audit called this output encoding; it is also a plain bug — the first quote, backslash or
+  newline in a generated report breaks the payload.
+- **The Airtable state store gets an explicit field allowlist** (Medium). Syncing a response
+  wholesale carries credentials into a third-party store with its own sharing and retention,
+  where they outlive both rotation and the engagement. Same note applied to the Slack and
+  email destinations.
+
+No tool, endpoint, auth-header, or safety-rule changes.
+
 ## 1.5.0 - 2026-09-13
 
 From the ClawHub audit of 1.4.1. ClawScan rates the skill **benign**; this is the

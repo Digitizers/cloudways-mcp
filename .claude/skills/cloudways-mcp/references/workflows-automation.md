@@ -174,6 +174,14 @@ In automation via `claude -p` (headless mode), the MCP server keeps working as u
 ```bash
 #!/bin/bash
 # scripts/cw-daily-summary.sh
+set -euo pipefail
+
+# A private temp file, not a fixed path. /tmp is shared: a fixed name can be
+# pre-created by another user as a symlink, so the report either overwrites
+# whatever it points at or is read back by whoever owns it.
+umask 077
+OUT=$(mktemp "${TMPDIR:-/tmp}/cw-summary.XXXXXX.md")
+trap 'rm -f "$OUT"' EXIT
 
 # Here Claude calls the MCP tools itself and generates a summary
 claude -p "
@@ -184,14 +192,21 @@ Check all servers (server_list), get alerts (copilot_insights_list), and identif
 3. Any SSL expiring within 30 days
 4. Top 3 apps by traffic in the past 24h
 
-Output in Hebrew, markdown format, sent to /tmp/cw-summary.md
+Do NOT include credentials, IP addresses or tokens in the summary.
+
+Output in Hebrew, markdown format, written to $OUT
 "
 
-# Send the summary to Slack
-curl -X POST -H 'Content-type: application/json' \
-     --data "{\"text\":\"$(cat /tmp/cw-summary.md)\"}" \
-     "$SLACK_WEBHOOK_URL"
+# Build the JSON with a real encoder. Interpolating the file into a JSON
+# string breaks on the first quote, backslash or newline in the report - and a
+# report is generated text, so it WILL contain them.
+jq -Rs '{text: .}' < "$OUT" \
+  | curl -X POST -H 'Content-type: application/json' --data-binary @- "$SLACK_WEBHOOK_URL"
 ```
+
+> **What leaves the machine.** The summary goes to a channel with its own membership and
+> retention, so keep infrastructure detail out of it: status, counts and names are the point;
+> credentials, IPs and tokens are not. The `trap` removes the file even if `curl` fails.
 
 **Note:** Headless requires Claude Code to have the Cloudways MCP connection configured. Make sure the MCP config is set in the `~/.claude.json` of the user running the cron.
 
@@ -228,6 +243,16 @@ For automations that generate a lot of data (audit results, alerts log, deployme
 | resolution_notes | Long text |
 
 **Sync:** n8n / Make scenario every hour: pull state from Cloudways → upsert to Airtable. The team gets a live view.
+
+> **Map an explicit field allowlist — never the whole API response.** The tables above are the
+> allowlist: `cw_id`, `label`, `provider`, `region`, `size`, `status`, `last_check`. Copying a
+> response wholesale carries master credentials, database passwords and SFTP access out of
+> Cloudways into a third-party store with its own sharing, export and retention — and
+> `server_get` / `app_get` return those fields whether or not the sync asked for them. Pick
+> fields by name in the mapping step; do not pass the object through. The same applies to the
+> Slack and email destinations elsewhere in this file, and to anything that keeps history: a
+> credential written to a state store is still there after it has been rotated, and after the
+> engagement has ended.
 
 ---
 

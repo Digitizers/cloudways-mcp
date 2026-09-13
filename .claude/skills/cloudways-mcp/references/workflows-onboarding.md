@@ -45,7 +45,7 @@ Confirm with the client:
 For each server in the list:
 
 ```
-1. server_get                  → label, size, IP, master credentials, app list
+1. server_get                  → label, size, IP, app list (it ALSO returns master credentials — see below)
 2. server_settings_get         → PHP timeout, memory, upload limit, custom PHP
 3. service_status              → what's running (Apache/Nginx/MySQL/Memcached/Varnish/Redis)
 4. server_disk_usage_fetch     → optional: trigger a fresh disk-usage calculation (W — benign refresh, but may be blocked on a READ token; skip and use the cached data if so), then:
@@ -69,16 +69,28 @@ For each server in the list:
 For each application (per the app list from the previous stage):
 
 ```
-1. app_get                     → URL, FQDN, app folder, DB credentials
+1. app_get                     → URL, FQDN, app folder (it ALSO returns DB credentials — see below)
 2. app_settings_get            → app-level overrides + security flags (XML-RPC, password protection, etc.)
-3. app_credentials             → SFTP/additional access
-4. monitoring_app_summary      → bandwidth, requests (to get a sense of scale)
-5. analytics_app_traffic       → visitors at least last 7 days (drill in with analytics_app_traffic_details)
-6. analytics_app_php           → slow scripts? memory issues?
-7. analytics_app_mysql         → slow queries?
-8. app_varnish_settings_get    → cache configured?
-9. app_vulnerabilities_list    → (WordPress) known plugin/theme/core vulnerabilities
+3. monitoring_app_summary      → bandwidth, requests (to get a sense of scale)
+4. analytics_app_traffic       → visitors at least last 7 days (drill in with analytics_app_traffic_details)
+5. analytics_app_php           → slow scripts? memory issues?
+6. analytics_app_mysql         → slow queries?
+7. app_varnish_settings_get    → cache configured?
+8. app_vulnerabilities_list    → (WordPress) known plugin/theme/core vulnerabilities
 ```
+
+> **Do not collect credentials during discovery.** `app_credentials` (SFTP and additional
+> access) is **not** part of this pass — an inventory does not need it. `server_get` and
+> `app_get` return master and database credentials as part of their payload whether you want
+> them or not, so when you summarise: record what the audit is for (label, size, IP, domains,
+> versions, limits) and **leave the credential fields out of the deliverables table, the
+> report, and anything you paste into a ticket, chat or state store.** They are the most
+> valuable thing in the response and the least useful thing in an audit.
+>
+> Fetch `app_credentials` when a specific task needs it — an SFTP deploy the user asked for —
+> and not a moment earlier. Onboarding an unfamiliar fleet is exactly when a broad sweep feels
+> harmless and is not: one report can end up carrying every server's root and every app's
+> database password into a channel that outlives the engagement.
 
 > **SSL status is not exposed by an MCP tool.** Check certificate provider + expiry in the Cloudways Platform UI or via the direct Cloudways API.
 

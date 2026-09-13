@@ -84,7 +84,7 @@ Claude Desktop does not natively support remote HTTP MCP servers, so it uses the
     "cloudways": {
       "command": "npx",
       "args": [
-        "mcp-remote",
+        "mcp-remote@0.14.0",
         "https://mcp.cloudways.com/mcp/",
         "--header", "X-Access-Token:<your-cloudways-access-token>",
         "--header", "X-Mcp-Host:claude-desktop"
@@ -93,6 +93,18 @@ Claude Desktop does not natively support remote HTTP MCP servers, so it uses the
   }
 }
 ```
+
+> **Pin `mcp-remote`.** Unpinned, `npx` resolves whatever the registry serves at launch and
+> executes it — and this config hands that package a live Access Token on its command line, so
+> a compromised release, maintainer account or transitive dependency would receive it. The
+> version above is pinned deliberately; bump it after reading the upstream release notes. The
+> digest npm publishes for it, if you want to check what you were served
+> (`npm pack mcp-remote@0.14.0` and compare):
+>
+> ```
+> mcp-remote@0.14.0
+> sha512-QBYGz02kc2AhhM6RNDzNyoA/FlzwJCNYPFF+o3opSvwfo5lnp8mcVIj/Zqw92dPuoafyLBKQZkpaEJdzlB/png==
+> ```
 
 > **This config file holds the literal token.** The `${VAR}` expansion used above is
 > Claude Code's; do not assume the Desktop bridge performs it — treat that file as holding
