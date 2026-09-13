@@ -118,6 +118,17 @@ stayed clean. The Medium is fair and this release takes it whole.
   alone left the `http://` hop, the one the write changed, on whichever address curl reached
   first (measured). The pin covers the hostname under test only: a `www.` hop resolves publicly
   and is checked in its own turn, since every served hostname is in step 0's list.
+- **The post-write chain check allows one more hop than the preflight.** The preflight in
+  "enforce HTTPS" starts at `https://` with `--max-redirs 5`; the verification after the write
+  starts at `http://`, one hop earlier — the `http→https` hop the write adds — and kept the same
+  limit, so a healthy five-hop chain that passed the preflight was called a loop after the write
+  and routed to rollback (measured: a six-hop chain exits 47 at `--max-redirs 5` and 0 at 6). It
+  now uses `--max-redirs 6`, exactly one more than the preflight, and reads 47 as a chain that no
+  longer settles or grew by more than that hop.
+- **An app-scoped baseline measures the known app.** The change baseline skips the roster when
+  the change is scoped to one application, but its app-level steps still said "each application
+  from step 2" — read literally, no app summary or traffic was captured at all. They now name
+  the known target app for the app-scoped case and the step-2 roster for the server-wide one.
 
 ## 1.5.2 - 2026-09-13
 

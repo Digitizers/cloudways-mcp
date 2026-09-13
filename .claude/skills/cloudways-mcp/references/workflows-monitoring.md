@@ -62,9 +62,12 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 3. `monitoring_server_graph` — CPU, RAM, disk I/O over the last 5 minutes
 4. `service_status` — verify all the services are running
 5. `monitoring_server_summary` — free space (run `server_disk_usage_fetch` first to initialize the data, then read with `monitoring_server_summary`)
-6. `monitoring_app_summary` (for each application from step 2) — bandwidth, response time
+6. `monitoring_app_summary` — bandwidth, response time — for the **known target app** when the
+   change is app-scoped (its `(server_id, app_id)` is the id step 2 said to use, and there is
+   no roster), or for each application in the step-2 roster when the change is server-wide
 7. `copilot_insights_list` — no active surprises
-8. `analytics_app_traffic` (last 24h, per application from step 2) — to know what the normal traffic is
+8. `analytics_app_traffic` (last 24h) — to know what the normal traffic is — for the same
+   application set as step 6: the known target app, or the step-2 roster
 
 **Save the output before starting the change.** After the change, repeat the same sequence and compare.
 

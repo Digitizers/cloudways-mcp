@@ -489,11 +489,16 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 5. Verify the **whole chain** the way a browser walks it, not the first hop — **for every
    hostname from step 0**, since an alias can loop for host-specific CDN or origin reasons
    while the primary passes:
-   `printf '%s\n' "$A" | while read -r ip; do env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' --resolve "<hostname>:80:$ip" --resolve "<hostname>:443:$ip" -L --max-redirs 5 --proto-redir '=https' -w "$ip %{http_code} %{url_effective} %{num_redirects}\n" http://<hostname>/ || echo "$ip FAILED (curl exit $?)"; done`
+   `printf '%s\n' "$A" | while read -r ip; do env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' --resolve "<hostname>:80:$ip" --resolve "<hostname>:443:$ip" -L --max-redirs 6 --proto-redir '=https' -w "$ip %{http_code} %{url_effective} %{num_redirects}\n" http://<hostname>/ || echo "$ip FAILED (curl exit $?)"; done`
    — per public answer, `$A` from this hostname's gate (re-run the gate line if the shell has
    moved on), and **both** ports pinned: `--resolve` is per host:port, so pinning `:443` alone
    leaves the `http://` hop — the one this write changed — free to land on whichever address
-   curl reaches first (measured).
+   curl reaches first (measured). The limit is **6**, not step 2's 5, on purpose: step 2
+   passed a chain of up to five hops starting at `https://`, and this check starts one hop
+   earlier — the `http→https` hop the write just added — so a chain that was exactly five
+   hops and healthy would be six here, and `--max-redirs 5` would call it a loop (measured:
+   a six-hop chain exits 47 at `--max-redirs 5` and 0 at 6). One more than the preflight
+   allowed, and no more.
    The start is `http://` on purpose — that is what the new redirect acts on — and
    `--proto-redir` governs only the hops after it, so every one of those must be HTTPS. Expect, on
    **every** line: no `FAILED`, an `https://` effective URL, and a hop count of at least 1 — the
@@ -502,7 +507,9 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    Basic Auth, a `403` from a WAF) — but **not 5xx**: a 525/526 here means the proxy cannot
    reach the origin over TLS and every visitor is now redirected onto that failure; treat it
    exactly like the loop below.
-   `curl: (47) Maximum (5) redirects followed` **is the loop**, and `curl: (1) Protocol "http"
+   `curl: (47) Maximum (6) redirects followed` **is the loop** — the chain step 2 passed plus
+   the one hop this write adds fits inside six, so exceeding it means the chain no longer
+   settles, or grew by more than that hop — and `curl: (1) Protocol "http"
    disabled (in redirect)` is a downgrade somewhere past the first hop. Either way the fix is
    to take the server redirect back off and return to step 2 — and that is a **second
    production write**: **CONFIRM:** `app_enforce_https_update` (W) with the standard block, the
