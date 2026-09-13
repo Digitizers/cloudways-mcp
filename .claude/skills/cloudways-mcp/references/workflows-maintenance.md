@@ -297,8 +297,8 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    step 4 waits until every hostname has passed both.
 1. Check that the **origin** serves a valid certificate — the handshake only; what the
    application answers *after* the handshake is step 2's job, and both must pass, **for every
-   hostname from step 0**, before step 4:
-   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` must exit **0** — chain +
+   hostname from step 0** (`<hostname>` below is each of them in turn), before step 4:
+   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <hostname>:443:<server-ip> https://<hostname>/` must exit **0** — chain +
    hostname + dates against the OS trust store, at the Cloudways server itself. Exit 60 means
    there is no certificate browsers accept here **yet**, and which of two things that is
    decides where you go: if none was ever issued (a fresh app answers with Cloudways'
@@ -307,7 +307,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    (sections 2 and 3) and re-run. What exit 60 never permits is step 4 — enforcing HTTPS now
    would redirect production traffic onto a certificate browsers reject. Then ask whether
    anything sits in front:
-   `dig +short <domain> A | awk '/^[0-9.]+$/'; dig +short <domain> AAAA | awk '/:/'` — every answer, A and AAAA both, must be one of the server's own addresses from
+   `dig +short <hostname> A | awk '/^[0-9.]+$/'; dig +short <hostname> AAAA | awk '/:/'` — every answer, A and AAAA both, must be one of the server's own addresses from
    `server_list`. Any other address is a CDN or reverse proxy — regardless of what certificate
    it presents, even if its issuer matches the origin's, and even if only the AAAA record
    points at it (IPv6 clients would take that path into the loop) — and its origin mode has to
@@ -324,7 +324,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    **any** hop to HTTP, not just an HTTP ending, because `%{url_effective}` reports only the
    final URL and a chain that dips to `http://` and climbs back to `https://` would otherwise
    pass:
-   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' https://<domain>/`.
+   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' https://<hostname>/`.
    (Quote `'=https'` — in zsh, macOS's default shell, a bare `=https` is expanded as a
    command lookup and the line fails with `https not found`. `--noproxy '*'` is here for the
    same reason as on the origin check: with `HTTPS_PROXY` set, an intercepting proxy's block
@@ -343,17 +343,31 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    never had HTTPS enforced. Enforcing now produces the loop the audit warned about: the server
    redirects `http→https`, the app redirects `https→http`, and every browser bounces between
    them until it gives up. **Fix the application first**, then re-run this step until it
-   passes: `wp option update home https://<domain> && wp option update siteurl https://<domain>`
-   (or the two constants in `wp-config.php`). Through public DNS on purpose — hops to other
+   passes — and that repair is a write of its own, on the site's database, with its own
+   confirmation:
+   - Read before writing: `wp option get home; wp option get siteurl`. The hostname in those
+     values is the site's canonical host and **stays**; only the scheme changes. Never write
+     `https://<hostname>` from this step's placeholder — when `<hostname>` is an alias, that
+     would promote the alias to canonical and change every generated URL on the site.
+   - Back up first (§4, `app_backup`, confirmed) — a wrong `siteurl` locks `wp-admin` out
+     immediately.
+   - **CONFIRM:** with the standard block (`tool: wp option update`, `target`: the app and its
+     current `home`/`siteurl`, `expected impact`: scheme `http://` → `https://`, hostname
+     unchanged), then:
+     `wp option update home "$(wp option get home | sed 's#^http://#https://#')" && wp option update siteurl "$(wp option get siteurl | sed 's#^http://#https://#')"`
+     (or edit the two constants in `wp-config.php` the same way). This confirmation is for this
+     write; step 4 has its own. Through public DNS on purpose — hops to other
    hostnames cannot be pinned with `--resolve`, and this is the path visitors take; the origin
    itself was already checked in step 1.
 3. If there's no SSL: install one first — `security_lets_encrypt_install` (W, see sections 2 and 3). Enforcing HTTPS without a valid cert will break the site.
 4. **CONFIRM:** `app_enforce_https_update` (W) — toggles the HTTP→HTTPS redirect (this is separate from installing the cert)
-5. Verify the **whole chain** the way a browser walks it, not the first hop:
-   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' http://<domain>/`.
+5. Verify the **whole chain** the way a browser walks it, not the first hop — **for every
+   hostname from step 0**, since an alias can loop for host-specific CDN or origin reasons
+   while the primary passes:
+   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' http://<hostname>/`.
    The start is `http://` on purpose — that is what the new redirect acts on — and
    `--proto-redir` governs only the hops after it, so every one of those must be HTTPS. Expect
-   **curl exit 0**, an `https://<domain>/…` effective URL, and a hop count of at least 1 — the
+   **curl exit 0**, an `https://` effective URL, and a hop count of at least 1 — the
    `http→https` hop you just enabled — or a little more if the app adds a `www` or
    trailing-slash hop. The status is whatever the application answers (`200`, a `401` behind
    Basic Auth, a `403` from a WAF); it is not what this step is checking.
@@ -364,7 +378,8 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    `target` and `expected impact` now describing the rollback. The confirmation given in step 4
    authorised enabling the redirect; safety rule 2 does not let it carry to disabling it, and a
    transient failure that looks like a loop must not roll production back to HTTP on nobody's
-   say-so. Through public DNS on purpose: this is the path visitors take, proxy included.
+   say-so. Through public DNS on purpose: this is the path visitors take, proxy included. The
+   application is healthy when every hostname from step 0 has passed this step, not when one has.
 
 > **WordPress, after:** with `home`/`siteurl` already on `https://` (step 2), what can remain is
 > mixed content from hard-coded `http://` URLs inside posts and options — a search-replace job

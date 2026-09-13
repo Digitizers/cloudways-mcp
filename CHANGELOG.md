@@ -73,7 +73,11 @@ stayed clean. The Medium is fair and this release takes it whole.
   on; aliases come from the UI or a filtered direct call, since `app_list` carries the primary
   domain only and the alias tools are all writes. The resolution ladder says the same for a user
   who names a site by a secondary domain: an alias lookup through `app_list` would pay the
-  roster's cost and find nothing. And "confirm the target" means the roster you already hold or the id
+  roster's cost and find nothing. The WordPress `home`/`siteurl` repair that the preflight can call
+  for reads the current values and changes only the scheme — writing `https://<hostname>` from the
+  step's placeholder would have promoted an alias to canonical — and is its own confirmed write with a
+  backup first, ahead of the redirect's own confirmation; and the post-write verification runs per
+  hostname like the preflight. And "confirm the target" means the roster you already hold or the id
   you were given — `app_list` only when you have neither, as one call whose payload rule 7
   describes; the first draft of this release called that sequence credential-free, which is
   the claim 1.5.1 removed, and it is gone again. The
