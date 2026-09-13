@@ -84,16 +84,28 @@ packages, 82 with integrity hashes**. `npm ci` installs exactly what that lockfi
 resolves nothing of its own:
 
 ```bash
-rm -rf ~/.cloudways-mcp-bridge                       # see the note below
-cp -R <skill-dir>/bridge ~/.cloudways-mcp-bridge
-cd ~/.cloudways-mcp-bridge && npm ci
+# && throughout: a failed delete or copy must not reach npm ci, which would
+# then install from whatever lockfile is still there.
+rm -rf ~/.cloudways-mcp-bridge &&                    # see the note below
+  cp -R <skill-dir>/bridge ~/.cloudways-mcp-bridge &&
+  cd ~/.cloudways-mcp-bridge && npm ci
 ```
 
 ```powershell
-# Windows
-Remove-Item -Recurse -Force $HOME\.cloudways-mcp-bridge -ErrorAction SilentlyContinue
-Copy-Item -Recurse <skill-dir>\bridge $HOME\.cloudways-mcp-bridge
-cd $HOME\.cloudways-mcp-bridge; npm ci
+# Windows. -ErrorAction Stop on every step: PowerShell's default is Continue,
+# which REPORTS a failed delete or copy and then carries on - so a locked file
+# or a permissions error would leave the old tree in place and run npm ci
+# against the stale lockfile, or run it in the caller's own directory. Only a
+# missing directory is expected here, and Test-Path handles that case without
+# silencing the others.
+$bridge = "$HOME\.cloudways-mcp-bridge"
+if (Test-Path -LiteralPath $bridge) {
+  Remove-Item -LiteralPath $bridge -Recurse -Force -ErrorAction Stop
+}
+Copy-Item -LiteralPath <skill-dir>\bridge -Destination $bridge -Recurse -ErrorAction Stop
+Set-Location -LiteralPath $bridge -ErrorAction Stop
+npm ci
+if ($LASTEXITCODE -ne 0) { throw "npm ci failed - the bridge is not installed" }
 ```
 
 > **The delete is load-bearing when you re-run this after a lockfile update.** `cp -R src dst`
