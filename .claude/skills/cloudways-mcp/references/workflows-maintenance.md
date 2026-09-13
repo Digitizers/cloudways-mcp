@@ -117,7 +117,11 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > edge) is still a proxy for every IPv6 client, so an A-only check is not a check. Comparing
 > issuers proves nothing,
 > because the edge and the origin can both hold Let's Encrypt certificates and still be two
-> different machines with a Flexible-mode HTTP hop between them. Let's Encrypt renewals happen
+> different machines with a Flexible-mode HTTP hop between them. And the origin check is for a
+> site visitors reach **directly**: behind a proxy in Full or Full (strict) mode the origin may
+> hold a certificate only the proxy trusts (Cloudflare Origin CA is the ordinary case), the
+> local trust store calls it invalid, and the certificate that has to pass is the edge's — see
+> §9 step 1 for the branching. Let's Encrypt renewals happen
 > at the origin, so a renewal is verified there; and enforcing HTTPS at the origin behind a
 > proxy in **Flexible** mode (proxy speaks HTTPS to the browser, HTTP to the origin) makes the
 > origin redirect every proxied request back to HTTPS — a loop. Both checks are measured below
@@ -315,27 +319,37 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    certificate, or one behind a Flexible-mode proxy while the primary is not, passes nothing
    and breaks — certificate errors, or the loop — the moment the redirect goes on. The write in
    step 4 waits until every hostname has passed both.
-1. Check that the **origin** serves a valid certificate — the handshake only; what the
-   application answers *after* the handshake is step 2's job, and both must pass, **for every
-   hostname from step 0** (`<hostname>` below is each of them in turn), before step 4:
-   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <hostname>:443:<server-ip> https://<hostname>/` must exit **0** — chain +
-   hostname + dates against the OS trust store, at the Cloudways server itself. Exit 60 means
-   there is no certificate browsers accept here **yet**, and which of two things that is
-   decides where you go: if none was ever issued (a fresh app answers with Cloudways'
-   self-signed default), go to step 3 and **install one**, then come back and re-run this
-   check; if one is installed and failing (expired, wrong host), fix or reissue it first
-   (sections 2 and 3) and re-run. What exit 60 never permits is step 4 — enforcing HTTPS now
-   would redirect production traffic onto a certificate browsers reject. Then ask whether
-   anything sits in front:
-   `A4=$(dig @1.1.1.1 +short <hostname> A) && A6=$(dig @1.1.1.1 +short <hostname> AAAA) && A=$(printf '%s\n%s\n' "$A4" "$A6" | awk '/^[0-9.]+$/ || /:/') && [ -n "$A" ] && printf '%s\n' "$A" || { echo 'DNS gate FAILED: a lookup errored, or no address came back' >&2; false; }` — every answer, A and AAAA both, must be one of the server's own addresses from
-   `server_list`. Any other address is a CDN or reverse proxy — regardless of what certificate
-   it presents, even if its issuer matches the origin's, and even if only the AAAA record
-   points at it (IPv6 clients would take that path into the loop) — and its origin mode has to
-   be **Full (strict)**, or at least Full, confirmed in that proxy's own settings before this
-   write. In Flexible mode the
-   proxy reaches the origin over HTTP, the origin's new redirect sends it back to HTTPS, and
-   the site loops. Do not read any of this off `openssl x509 -dates`, which prints dates for a
-   broken certificate just as happily.
+1. **Is anything in front, and does the certificate visitors will meet pass?** The handshake
+   only — what the application answers *after* it is step 2's job — and both must pass, **for
+   every hostname from step 0** (`<hostname>` below is each of them in turn), before step 4.
+   The DNS gate comes **first**, because it decides which certificate matters:
+   `A4=$(dig @1.1.1.1 +short <hostname> A) && A6=$(dig @1.1.1.1 +short <hostname> AAAA) && A=$(printf '%s\n%s\n' "$A4" "$A6" | awk '/^[0-9.]+$/ || /:/') && [ -n "$A" ] && printf '%s\n' "$A" || { echo 'DNS gate FAILED: a lookup errored, or no address came back' >&2; false; }`
+   — every answer, A and AAAA both, must be one of the server's own addresses (from the
+   `server_list` row you hold). Any other address is a CDN or reverse proxy, regardless of
+   what certificate it presents, even if its issuer matches the origin's, and even if only the
+   AAAA record points at it (IPv6 clients would take that path).
+   - **No proxy — visitors reach the origin directly.** Then the origin's certificate is the
+     one browsers will be handed, and it must pass the OS trust store: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <hostname>:443:<server-ip> https://<hostname>/` must exit
+     **0** — chain + hostname + dates, at the Cloudways server itself. Exit 60 means there is
+     no certificate browsers accept here **yet**, and which of two things that is decides where
+     you go: if none was ever issued (a fresh app answers with Cloudways' self-signed default),
+     go to step 3 and **install one**, then come back and re-run; if one is installed and
+     failing (expired, wrong host), fix or reissue it first (sections 2 and 3) and re-run. What
+     exit 60 never permits is step 4 — enforcing HTTPS now would redirect production traffic
+     onto a certificate browsers reject.
+   - **A proxy is in front.** Its origin mode has to be **Full (strict)**, or at least Full,
+     confirmed in that proxy's own settings before this write; in Flexible mode the proxy
+     reaches the origin over HTTP, the origin's new redirect sends it back to HTTPS, and the
+     site loops. The origin's certificate is then judged by **the proxy's origin policy, not by
+     this machine's trust store**: in Full it may be anything the proxy accepts, an
+     origin-CA certificate included; in Full (strict) it must be publicly trusted **or** issued
+     by that proxy's own origin CA — a Cloudflare Origin CA certificate is the normal, correct
+     case here, and the origin command above would call it invalid (exit 60) while the proxy
+     trusts it and visitors never see it. Do not run the origin check against a proxied site
+     and read exit 60 as "replace the certificate". The certificate visitors **will** be handed
+     is the edge's, so that is what must pass the trust store: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' https://<hostname>/` must exit **0**.
+   Do not read any of this off `openssl x509 -dates`, which prints dates for a broken
+   certificate just as happily.
 2. **The HTTPS answer must not send anyone back to HTTP — at any hop.** Step 1 validated the
    handshake and nothing after it: a valid certificate in front of an application that answers
    `https://` with `301 Location: http://…` still exits 0, and so does one whose first hop is a

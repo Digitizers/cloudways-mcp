@@ -77,7 +77,11 @@ stayed clean. The Medium is fair and this release takes it whole.
   for reads the current values and changes only the scheme — writing `https://<hostname>` from the
   step's placeholder would have promoted an alias to canonical — and is its own confirmed write with a
   backup first, ahead of the redirect's own confirmation; and the post-write verification runs per
-  hostname like the preflight. And "confirm the target" means the roster you already hold or the id
+  hostname like the preflight. The DNS/proxy gate now comes before the certificate check and
+  decides which certificate matters: a site visitors reach directly must pass the OS trust store
+  at the origin, while a site behind a proxy in Full / Full (strict) is judged by the proxy's own
+  origin policy (a Cloudflare Origin CA certificate is correct there, and the local check would
+  have called it invalid) with the edge certificate as the one that must pass. And "confirm the target" means the roster you already hold or the id
   you were given — `app_list` only when you have neither, as one call whose payload rule 7
   describes; the first draft of this release called that sequence credential-free, which is
   the claim 1.5.1 removed, and it is gone again. The
