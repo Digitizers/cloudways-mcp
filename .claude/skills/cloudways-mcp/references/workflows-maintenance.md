@@ -53,12 +53,18 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > for a label a held roster already gives you, was the finding this section exists to close.
 >
 > **Certificate state is read from the outside, and the verdict and the dates are two different
-> commands.** The verdict is `curl -q -sS -o /dev/null --max-time 15 https://<domain>/`: exit **0** means the chain, the hostname and the validity
+> commands.** The verdict is `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 https://<domain>/`: exit **0** means the chain, the hostname and the validity
 > period all passed the OS trust store — what a browser checks — and exit **60** means one of
-> them did not. `-q` is not optional and must come **first**: it stops curl reading `~/.curlrc`,
-> and a machine whose curlrc says `insecure` would otherwise pass an expired, self-signed or
-> wrong-host certificate with exit 0 — measured: against `expired.badssl.com` with such a file,
-> exit 0 without `-q`, exit 60 with it.
+> them did not. Two guards on that command are not optional. `-q`, which must come **first**,
+> stops curl reading `~/.curlrc`: a machine whose curlrc says `insecure` would otherwise pass
+> an expired, self-signed or wrong-host certificate with exit 0 — measured against
+> `expired.badssl.com` with such a file, exit 0 without `-q`, exit 60 with it. And the
+> `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR` prefix clears curl's environment
+> equivalents of `--cacert`/`--capath`, which `-q` does not touch: measured against
+> `self-signed.badssl.com` with `CURL_CA_BUNDLE` pointed at its own certificate, exit 0 — the
+> gate passes a certificate no browser trusts — and exit 60 again under `env -u`. The verdict
+> has to come from the **system** trust store, because that is what the browsers being
+> redirected here will use.
 >
 > **And there may be two certificates.** Through public DNS that command validates whatever
 > answers for the name — behind Cloudflare or any reverse proxy, that is the **edge**
@@ -66,18 +72,21 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > by pinning the name to the server's IP (from the `server_list` row you already hold, the
 > server's page in the UI, or one `server_get` for that server — never a fresh `server_list`
 > to read one address):
-> `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` — `--resolve` keeps the hostname for SNI and verification and only changes where the
+> `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` — `--resolve` keeps the hostname for SNI and verification and only changes where the
 > connection goes. `--noproxy '*'` is part of the command: with `HTTPS_PROXY` / `https_proxy` /
 > `ALL_PROXY` set in the environment, curl hands the request to that proxy, which resolves
 > `<domain>` through its own DNS and reaches the CDN edge — so the "origin" check would be
 > validating the edge certificate after all (measured: with a proxy variable set, the
 > `--resolve` form connects to the proxy address, not the server, until `--noproxy '*'` is
 > added). **Whether something is in front is a DNS question, not a certificate one**:
-> `dig +short <domain> A | grep -E '^[0-9.]+$'; dig +short <domain> AAAA | grep ':'` against the server's addresses (same source as the IP above) — **every** routable answer, both
-> record types, must be the server. The `grep`s keep only addresses: for a CNAME — an ordinary
+> `dig +short <domain> A | awk '/^[0-9.]+$/'; dig +short <domain> AAAA | awk '/:/'` against the server's addresses (same source as the IP above) — **every** routable answer, both
+> record types, must be the server. The `awk`s keep only addresses: for a CNAME — an ordinary
 > `www` alias — `dig +short` prints the canonical name on its own line before the address
 > (`github.com.` then `20.217.135.5`, measured), and comparing that line against a server IP
-> would call every alias a proxy. Any other address is a CDN or proxy, whatever certificate
+> would call every alias a proxy. `awk` rather than `grep` because a name with no AAAA record
+> is normal, and `grep` with nothing to select exits 1 — under `set -e`, or a runner that
+> surfaces non-zero commands, that would fail the check on a perfectly valid setup; `awk`
+> prints the same lines and exits 0 with nothing to print (measured on an IPv4-only name). Any other address is a CDN or proxy, whatever certificate
 > it shows; and a proxy reachable only over IPv6 (an A record at the origin, an AAAA at the
 > edge) is still a proxy for every IPv6 client, so an A-only check is not a check. Comparing
 > issuers proves nothing,
@@ -120,9 +129,9 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 1. Domain from the roster you hold, server IP from the `server_list` row you hold (or the UI, or
    one `server_get` for that server — see the note at the top). The certificate being renewed
-   lives on the **origin**, so check that one: `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` for the verdict (exit 0 / 60), and
+   lives on the **origin**, so check that one: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` for the verdict (exit 0 / 60), and
    `openssl s_client -servername <domain> -connect <server-ip>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates`
-   for the issuer and `notAfter` on record. If `dig +short <domain> A | grep -E '^[0-9.]+$'; dig +short <domain> AAAA | grep ':'` answers with anything that is not one
+   for the issuer and `notAfter` on record. If `dig +short <domain> A | awk '/^[0-9.]+$/'; dig +short <domain> AAAA | awk '/:/'` answers with anything that is not one
    of the server's own addresses, a proxy is in front — the renewal still happens here, at the origin, and
    the browser will keep showing you the proxy's certificate afterwards.
    Nothing in this step needs the database credentials `app_get` would add.
@@ -272,7 +281,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 1. Check that the **origin** serves a valid certificate — the handshake only; what the
    application answers *after* the handshake is step 2's job, and both must pass before step 4:
-   `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` must exit **0** — chain +
+   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` must exit **0** — chain +
    hostname + dates against the OS trust store, at the Cloudways server itself. Exit 60 means
    there is no certificate browsers accept here **yet**, and which of two things that is
    decides where you go: if none was ever issued (a fresh app answers with Cloudways'
@@ -281,7 +290,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    (sections 2 and 3) and re-run. What exit 60 never permits is step 4 — enforcing HTTPS now
    would redirect production traffic onto a certificate browsers reject. Then ask whether
    anything sits in front:
-   `dig +short <domain> A | grep -E '^[0-9.]+$'; dig +short <domain> AAAA | grep ':'` — every answer, A and AAAA both, must be one of the server's own addresses from
+   `dig +short <domain> A | awk '/^[0-9.]+$/'; dig +short <domain> AAAA | awk '/:/'` — every answer, A and AAAA both, must be one of the server's own addresses from
    `server_list`. Any other address is a CDN or reverse proxy — regardless of what certificate
    it presents, even if its issuer matches the origin's, and even if only the AAAA record
    points at it (IPv6 clients would take that path into the loop) — and its origin mode has to
@@ -298,7 +307,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    **any** hop to HTTP, not just an HTTP ending, because `%{url_effective}` reports only the
    final URL and a chain that dips to `http://` and climbs back to `https://` would otherwise
    pass:
-   `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' https://<domain>/`.
+   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' https://<domain>/`.
    (Quote `'=https'` — in zsh, macOS's default shell, a bare `=https` is expanded as a
    command lookup and the line fails with `https not found`. `--noproxy '*'` is here for the
    same reason as on the origin check: with `HTTPS_PROXY` set, an intercepting proxy's block
@@ -324,7 +333,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 3. If there's no SSL: install one first — `security_lets_encrypt_install` (W, see sections 2 and 3). Enforcing HTTPS without a valid cert will break the site.
 4. **CONFIRM:** `app_enforce_https_update` (W) — toggles the HTTP→HTTPS redirect (this is separate from installing the cert)
 5. Verify the **whole chain** the way a browser walks it, not the first hop:
-   `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' http://<domain>/`.
+   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' http://<domain>/`.
    The start is `http://` on purpose — that is what the new redirect acts on — and
    `--proto-redir` governs only the hops after it, so every one of those must be HTTPS. Expect
    **curl exit 0**, an `https://<domain>/…` effective URL, and a hop count of at least 1 — the

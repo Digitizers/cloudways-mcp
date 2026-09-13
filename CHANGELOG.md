@@ -23,7 +23,11 @@ stayed clean. The Medium is fair and this release takes it whole.
   `app_list` for a name, then ask. What `app_get` is never for is habit. The same ladder governs a
   known server: the `server_list` response already held, else the UI, else one `server_get` for
   that server — never a fresh account-wide `server_list` to read one row. The three places that read **certificate state** through `app_get` read it from the
-  outside instead, as two commands with two jobs: `curl -q -sS -o /dev/null https://<domain>/` (`-q` first, so a `~/.curlrc` saying `insecure` cannot weaken it — measured)
+  outside instead, as two commands with two jobs: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null https://<domain>/`
+  (`-q` first, so a `~/.curlrc` saying `insecure` cannot weaken it, and the `env -u` prefix so a CA
+  override in the environment — which `-q` does not touch — cannot either; both measured, the second
+  by pointing `CURL_CA_BUNDLE` at `self-signed.badssl.com`'s own certificate and watching exit 60
+  become exit 0)
   is the **verdict** — exit 0 means chain, hostname and validity passed the OS trust store, exit
   60 means one did not — and `openssl s_client … | openssl x509 -noout -issuer -dates` supplies
   the dates for a report and decides nothing. Measured: the openssl line prints issuer and dates
@@ -52,7 +56,8 @@ stayed clean. The Medium is fair and this release takes it whole.
   production write it is, with its own **CONFIRM** — the confirmation that enabled it does not carry. An
   app id with no server is stated to be unresolvable — `app_list` and `app_get` both take a
   `server_id`, and so does every app-scoped read — so the answer is to ask, never to walk every
-  roster. Whether a CDN or proxy sits in front is decided by DNS — A and AAAA both, address lines only, since `dig +short` prints a CNAME's canonical name on its own line — against the server's own addresses, not by
+  roster. Whether a CDN or proxy sits in front is decided by DNS — A and AAAA both, address lines only, filtered with `awk` rather than `grep` so a name with no AAAA record does not
+  exit 1 under `set -e`, since `dig +short` prints a CNAME's canonical name on its own line — against the server's own addresses, not by
   comparing certificate issuers (edge and origin can both be Let's Encrypt). The one field
   `app_get` alone returns that a routine job can need — the application's folder name, for
   attributing a large directory in a disk investigation — keeps a targeted call for the one app
