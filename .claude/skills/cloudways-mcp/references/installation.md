@@ -84,15 +84,24 @@ packages, 82 with integrity hashes**. `npm ci` installs exactly what that lockfi
 resolves nothing of its own:
 
 ```bash
+rm -rf ~/.cloudways-mcp-bridge                       # see the note below
 cp -R <skill-dir>/bridge ~/.cloudways-mcp-bridge
 cd ~/.cloudways-mcp-bridge && npm ci
 ```
 
 ```powershell
 # Windows
+Remove-Item -Recurse -Force $HOME\.cloudways-mcp-bridge -ErrorAction SilentlyContinue
 Copy-Item -Recurse <skill-dir>\bridge $HOME\.cloudways-mcp-bridge
 cd $HOME\.cloudways-mcp-bridge; npm ci
 ```
+
+> **The delete is load-bearing when you re-run this after a lockfile update.** `cp -R src dst`
+> copies *into* `dst` when `dst` already exists, giving you
+> `~/.cloudways-mcp-bridge/bridge/package-lock.json` while the old lockfile stays where it was
+> — so `npm ci` reinstalls the **stale** graph and reports success. That is the failure this
+> whole section exists to prevent, arriving through the update path. The directory is ours and
+> holds nothing but the copied files and `node_modules`, so removing it costs nothing.
 
 Then point Claude Desktop at the installed executable:
 
