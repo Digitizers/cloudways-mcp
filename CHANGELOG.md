@@ -33,7 +33,12 @@ stayed clean. The Medium is fair and this release takes it whole.
   about the certificate on the Cloudways app, and enforcing HTTPS at an origin behind a proxy in
   Flexible mode is a redirect loop. Renewals are verified at the origin for the same reason, and the origin
   checks carry `--noproxy '*'`: with `HTTPS_PROXY` in the environment curl hands the request to
-  the proxy, which reaches the edge, and the origin check silently becomes an edge check (measured). An
+  the proxy, which reaches the edge, and the origin check silently becomes an edge check (measured). And before the redirect is enabled,
+  the HTTPS answer itself is inspected (`-w '%{http_code} %{redirect_url}'`): an application that
+  answers `https://` with a redirect to `http://` — WordPress with `home`/`siteurl` still on HTTP —
+  passes every certificate check and loops the moment the server redirect goes on, so the
+  WordPress fix moved from a note *after* the write to a gate *before* it, and verification now
+  follows the whole chain (`-L --max-redirs 5`; `curl: (47)` is the loop) instead of one hop. An
   app id with no server is stated to be unresolvable — `app_list` and `app_get` both take a
   `server_id`, and so does every app-scoped read — so the answer is to ask, never to walk every
   roster. Whether a CDN or proxy sits in front is decided by DNS — A and AAAA both, address lines only, since `dig +short` prints a CNAME's canonical name on its own line — against the server's own addresses, not by

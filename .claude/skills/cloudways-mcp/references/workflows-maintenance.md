@@ -280,11 +280,31 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    proxy reaches the origin over HTTP, the origin's new redirect sends it back to HTTPS, and
    the site loops. Do not read any of this off `openssl x509 -dates`, which prints dates for a
    broken certificate just as happily.
-2. If there's no SSL: install one first — `security_lets_encrypt_install` (W, see sections 2 and 3). Enforcing HTTPS without a valid cert will break the site.
-3. **CONFIRM:** `app_enforce_https_update` (W) — toggles the HTTP→HTTPS redirect (this is separate from installing the cert)
-4. Check that the redirect works: `curl -I http://example.com` → 301 to HTTPS
+2. **The HTTPS answer must not send anyone back to HTTP.** Step 1 validated the handshake and
+   nothing after it — a valid certificate in front of an application that answers `https://`
+   with `301 Location: http://…` still exits 0. Look at the first hop:
+   `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> -w '%{http_code} %{redirect_url}\n' https://<domain>/`.
+   Expect `200 ` (empty `redirect_url`) or a redirect **to an `https://` URL**. A
+   `redirect_url` beginning `http://` means the app itself is pushing HTTPS visitors back to
+   HTTP — on WordPress that is `WP_HOME` / `WP_SITEURL` still set to `http://`, the usual
+   cause — and enforcing now produces the loop the audit warned about: the server redirects
+   `http→https`, the app redirects `https→http`, and every browser bounces between them until
+   it gives up. **Fix the application first**, then re-run this step until it passes:
+   `wp option update home https://<domain> && wp option update siteurl https://<domain>` (or
+   the two constants in `wp-config.php`).
+3. If there's no SSL: install one first — `security_lets_encrypt_install` (W, see sections 2 and 3). Enforcing HTTPS without a valid cert will break the site.
+4. **CONFIRM:** `app_enforce_https_update` (W) — toggles the HTTP→HTTPS redirect (this is separate from installing the cert)
+5. Verify the **whole chain** the way a browser walks it, not the first hop:
+   `curl -q -sS -o /dev/null --max-time 15 -L --max-redirs 5 -w '%{http_code} %{url_effective} %{num_redirects}\n' http://<domain>/`.
+   Expect `200 https://<domain>/ 1` (or a small count if the app adds a `www` or trailing-slash
+   hop). `curl: (47) Maximum (5) redirects followed` **is the loop** — turn the redirect back
+   off with `app_enforce_https_update` and return to step 2. Through public DNS on purpose:
+   this is the path visitors take, proxy included.
 
-> **WordPress quirk:** After enforcing HTTPS, you may need to update `WP_HOME` and `WP_SITEURL` in `wp-config.php` or via WP-CLI: `wp option update home https://example.com && wp option update siteurl https://example.com`. Otherwise — mixed content errors.
+> **WordPress, after:** with `home`/`siteurl` already on `https://` (step 2), what can remain is
+> mixed content from hard-coded `http://` URLs inside posts and options — a search-replace job
+> (`wp search-replace 'http://<domain>' 'https://<domain>' --dry-run` first), not a Cloudways
+> setting.
 
 ---
 
