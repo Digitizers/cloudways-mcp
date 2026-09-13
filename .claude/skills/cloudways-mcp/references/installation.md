@@ -148,33 +148,40 @@ prompt and press Return. Check it afterwards with `ls -l ~/.config/cloudways-mcp
 **names** only).
 
 ```powershell
-# Windows equivalent. Read-Host -AsSecureString keeps the value off the console;
-# it is still written to disk in cleartext, which is what the ACL is for.
-$dir = "$HOME\.config\cloudways-mcp"
+# Windows equivalent, in the same order the POSIX recipe achieves with umask: a NEW file,
+# restricted BEFORE the secret goes into it, then moved into place.
+# Read-Host -AsSecureString keeps the value off the console; it still lands on disk in
+# cleartext, which is what the ACL is for.
+$dir  = "$HOME\.config\cloudways-mcp"
 New-Item -ItemType Directory -Force -Path $dir -ErrorAction Stop | Out-Null
 $file = Join-Path $dir 'headers.txt'
-# Same reason as the mv above: an existing file keeps its own ACL, and /grant:r below replaces
-# only THIS user's entry, so an explicit grant to anyone else would survive the rewrite.
-if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force -ErrorAction Stop }
-$secure = Read-Host -AsSecureString 'Cloudways Access Token'
-$plain  = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(
-            [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
-Set-Content -LiteralPath $file -Encoding ascii -ErrorAction Stop -Value @(
-  'X-Mcp-Host: claude-desktop'
-  "X-Access-Token: $plain"
-)
-$plain = $null
+$tmp  = Join-Path $dir ('headers.' + [IO.Path]::GetRandomFileName())
+$me   = [Security.Principal.WindowsIdentity]::GetCurrent().Name   # DOMAIN\user, always resolvable
 
-# Break inheritance and grant only the current user - the NTFS equivalent of chmod 600.
-# icacls is a NATIVE command: PowerShell does not raise on its exit status, and piping it to
-# Out-Null hides what it said - so a failure here (an unresolvable name, a filesystem that
-# cannot hold the ACL) would leave the cleartext token sitting under inherited permissions
-# while the recipe appeared to finish. Check it, and delete the file rather than keep it.
-$me = [Security.Principal.WindowsIdentity]::GetCurrent().Name   # DOMAIN\user, always resolvable
-icacls $file /inheritance:r /grant:r "${me}:(R,W)" > $null
-if ($LASTEXITCODE -ne 0) {
-  Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
-  throw "icacls failed (exit $LASTEXITCODE); removed $file rather than leave the token readable - delete it by hand if it is still there, and fix the ACL before retrying"
+try {
+  New-Item -ItemType File -Path $tmp -ErrorAction Stop | Out-Null
+
+  # Break inheritance and grant only the current user - the NTFS equivalent of chmod 600 -
+  # while the file is still EMPTY. icacls is a NATIVE command: PowerShell does not raise on
+  # its exit status, so check it, and fail before any token exists on disk.
+  icacls $tmp /inheritance:r /grant:r "${me}:(R,W)" > $null
+  if ($LASTEXITCODE -ne 0) { throw "icacls failed (exit $LASTEXITCODE); no token was written" }
+
+  $secure = Read-Host -AsSecureString 'Cloudways Access Token'
+  $plain  = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(
+              [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+  Set-Content -LiteralPath $tmp -Encoding ascii -ErrorAction Stop -Value @(
+    'X-Mcp-Host: claude-desktop'
+    "X-Access-Token: $plain"
+  )
+  $plain = $null
+
+  # The move carries this file's ACL over the old one, whatever the old one was.
+  Move-Item -LiteralPath $tmp -Destination $file -Force -ErrorAction Stop
+}
+finally {
+  # Anything that threw above leaves no half-written token behind.
+  if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
 }
 ```
 
@@ -222,22 +229,10 @@ used, which also escapes the backslashes for you:
 } | ConvertTo-Json
 ```
 
-Paste the result as the `"cloudways"` entry under `"mcpServers"`. It looks like this, with your
-own profile path in place of `C:\\Users\\<you>`:
+Paste the result as the `"cloudways"` entry under `"mcpServers"`. No hard-coded
+`C:\Users\<you>` appears here on purpose: on a relocated, network or non-C-drive profile that
+path is simply wrong, and an example carrying it is the thing people copy.
 
-```json
-{
-  "mcpServers": {
-    "cloudways": {
-      "command": "C:\\Users\\<you>\\.cloudways-mcp-bridge\\node_modules\\.bin\\mcp-remote.cmd",
-      "args": [
-        "https://mcp.cloudways.com/mcp/",
-        "--header-file", "C:\\Users\\<you>\\.config\\cloudways-mcp\\headers.txt"
-      ]
-    }
-  }
-}
-```
 
 A header file it cannot read is a **fatal** error, not a warning, so a wrong path fails at
 startup instead of connecting unauthenticated. Verified against `mcp-remote@0.14.0` installed
