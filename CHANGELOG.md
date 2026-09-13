@@ -23,7 +23,7 @@ stayed clean. The Medium is fair and this release takes it whole.
   `app_list` for a name, then ask. What `app_get` is never for is habit. The same ladder governs a
   known server: the `server_list` response already held, else the UI, else one `server_get` for
   that server — never a fresh account-wide `server_list` to read one row. The three places that read **certificate state** through `app_get` read it from the
-  outside instead, as two commands with two jobs: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null https://<domain>/`
+  outside instead, as two commands with two jobs: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --noproxy '*' https://<domain>/`
   (`-q` first, so a `~/.curlrc` saying `insecure` cannot weaken it, and the `env -u` prefix so a CA
   override in the environment — which `-q` does not touch — cannot either; both measured, the second
   by pointing `CURL_CA_BUNDLE` at `self-signed.badssl.com`'s own certificate and watching exit 60
@@ -86,8 +86,11 @@ stayed clean. The Medium is fair and this release takes it whole.
   describes; the first draft of this release called that sequence credential-free, which is
   the claim 1.5.1 removed, and it is gone again. The
   "checking an app's details" pattern in SKILL.md, the one most likely to be copied, no longer
-  ends in `app_get` either. After this, the only in-agent `app_get` left in the skill is the one
-  the SSL section explicitly reserves for a single certificate the user named.
+  ends in `app_get` either. After this, three bounded in-agent `app_get` calls remain, each named where it is
+  used: one for an app id you already know when no roster is held (narrower than `app_list`,
+  which covers every app on the server); one per candidate, bounded by the size ranking, when a
+  disk investigation cannot attribute a folder from sizes alone; and one for a single
+  certificate the user named. None of them is a sweep, and none of them is a habit.
 
 ## 1.5.2 - 2026-09-13
 

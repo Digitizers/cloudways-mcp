@@ -59,7 +59,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > for a label a held roster already gives you, was the finding this section exists to close.
 >
 > **Certificate state is read from the outside, and the verdict and the dates are two different
-> commands.** The verdict is `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 https://<domain>/`: exit **0** means the chain, the hostname and the validity
+> commands.** The verdict is `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' https://<domain>/`: exit **0** means the chain, the hostname and the validity
 > period all passed the OS trust store — what a browser checks — and exit **60** means one of
 > them did not. Two guards on that command are not optional. `-q`, which must come **first**,
 > stops curl reading `~/.curlrc`: a machine whose curlrc says `insecure` would otherwise pass
