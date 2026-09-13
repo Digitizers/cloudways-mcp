@@ -30,7 +30,10 @@ mine from 1.5.1.
   `claude_desktop_config.json` as a literal **and** in the process's argument list, where any
   other user on the machine can read it from `ps`. It now lives in
   `~/.config/cloudways-mcp/headers.txt` at mode 600, written with `umask 077` and `read -rs` so
-  it never reaches the terminal or the shell history, and the config carries `--header-file`
+  it never reaches the terminal or the shell history — and written as a **new** file moved into
+  place, because `umask` applies only at creation, so rotating a token by redirecting over an
+  existing `headers.txt` would have kept whatever mode that file already had. The config carries
+  `--header-file`
   pointing at it. The path is **outside** `~/.cloudways-mcp-bridge` deliberately: that directory
   is deleted and recreated by every re-install, so a token kept inside it would disappear on the
   next lockfile bump. Windows gets its own recipe (`Read-Host -AsSecureString` plus an `icacls`

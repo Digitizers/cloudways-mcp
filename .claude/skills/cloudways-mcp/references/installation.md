@@ -127,12 +127,20 @@ recreated by every re-install above, which would take the token with it and leav
 failing at startup until you typed it again:
 
 ```bash
-umask 077                                   # 600 before anything is written to it
+umask 077                                   # applies to files this shell CREATES
 mkdir -p ~/.config/cloudways-mcp
-printf 'X-Mcp-Host: claude-desktop\n' > ~/.config/cloudways-mcp/headers.txt
-printf 'X-Access-Token: '               >> ~/.config/cloudways-mcp/headers.txt
-read -rs TOKEN && printf '%s\n' "$TOKEN" >> ~/.config/cloudways-mcp/headers.txt && unset TOKEN
+TMP=$(mktemp ~/.config/cloudways-mcp/headers.XXXXXX)   # X's at the END; BSD mktemp ignores them elsewhere
+printf 'X-Mcp-Host: claude-desktop\n' > "$TMP"
+printf 'X-Access-Token: '               >> "$TMP"
+read -rs TOKEN && printf '%s\n' "$TOKEN" >> "$TMP" && unset TOKEN
+chmod 600 "$TMP" && mv -f "$TMP" ~/.config/cloudways-mcp/headers.txt || rm -f "$TMP"
 ```
+
+**Why a new file and a `mv` rather than `> headers.txt`:** `umask` applies only when a file is
+**created**. Rotating a token by redirecting over an existing `headers.txt` writes the new secret
+into whatever mode that file already had — group- or world-readable if it was ever created by
+hand, restored from a backup, or copied from another machine. Writing a fresh 600 file and moving
+it into place also means there is no moment when a half-written header file is the live one.
 
 `read -rs` keeps the value off the terminal and out of shell history — paste at the silent
 prompt and press Return. Check it afterwards with `ls -l ~/.config/cloudways-mcp/headers.txt`
@@ -145,6 +153,9 @@ prompt and press Return. Check it afterwards with `ls -l ~/.config/cloudways-mcp
 $dir = "$HOME\.config\cloudways-mcp"
 New-Item -ItemType Directory -Force -Path $dir -ErrorAction Stop | Out-Null
 $file = Join-Path $dir 'headers.txt'
+# Same reason as the mv above: an existing file keeps its own ACL, and /grant:r below replaces
+# only THIS user's entry, so an explicit grant to anyone else would survive the rewrite.
+if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force -ErrorAction Stop }
 $secure = Read-Host -AsSecureString 'Cloudways Access Token'
 $plain  = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(
             [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
