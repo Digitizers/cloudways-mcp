@@ -298,9 +298,14 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    **any** hop to HTTP, not just an HTTP ending, because `%{url_effective}` reports only the
    final URL and a chain that dips to `http://` and climbs back to `https://` would otherwise
    pass:
-   `curl -q -sS -o /dev/null --max-time 15 -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' https://<domain>/`.
+   `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' https://<domain>/`.
    (Quote `'=https'` — in zsh, macOS's default shell, a bare `=https` is expanded as a
-   command lookup and the line fails with `https not found`.) Pass is **curl exit 0**, an
+   command lookup and the line fails with `https not found`. `--noproxy '*'` is here for the
+   same reason as on the origin check: with `HTTPS_PROXY` set, an intercepting proxy's block
+   or login page would pass this check — any status, small hop count — without the
+   application's redirects ever being seen. It stops curl using a configured proxy and nothing
+   else: DNS still resolves publicly, so the check still reaches the site's CDN as a visitor
+   would.) Pass is **curl exit 0**, an
    `https://` effective URL, and a small hop count — **any** HTTP status. This check is about
    transport and protocol, not about what the application answers: a `401` from Basic Auth on
    the root, a `403` from a WAF, a `204`/`404` from an API root are all fine answers over HTTPS,
@@ -319,7 +324,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 3. If there's no SSL: install one first — `security_lets_encrypt_install` (W, see sections 2 and 3). Enforcing HTTPS without a valid cert will break the site.
 4. **CONFIRM:** `app_enforce_https_update` (W) — toggles the HTTP→HTTPS redirect (this is separate from installing the cert)
 5. Verify the **whole chain** the way a browser walks it, not the first hop:
-   `curl -q -sS -o /dev/null --max-time 15 -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' http://<domain>/`.
+   `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' http://<domain>/`.
    The start is `http://` on purpose — that is what the new redirect acts on — and
    `--proto-redir` governs only the hops after it, so every one of those must be HTTPS. Expect
    **curl exit 0**, an `https://<domain>/…` effective URL, and a hop count of at least 1 — the

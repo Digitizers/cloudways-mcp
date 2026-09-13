@@ -70,16 +70,20 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 **Sequence:**
 
 1. `server_disk_usage_fetch` (init) then `monitoring_server_summary` (read) — where is the space?
-2. If application folders are large: `app_list` for the roster (`server_list` returns only an
-   app count), then `monitoring_app_summary` (`type: db`) per app for its **disk** size — the
-   live tool describes its two types as `bw` for bandwidth and `db` for disk size; `db` is not
-   the database, and a media-heavy site with a small database is exactly the case where
-   reading it as one would misattribute. That maps a disk size to a label without any
-   credential payload. The breakdown from step 1 names **folders**
+2. If application folders are large, you need the roster, and the roster is what costs you:
+   the one you **already hold** from this conversation (zero calls); else an externally
+   filtered roster (the server's Applications tab in the UI, or a direct `GET /server` through
+   a field filter) when the attribution has to stay credential-free; else one `app_list` —
+   `server_list` returns only an app count — whose payload rule 7 describes: every app on the
+   server, credentials included per the live tool's own description. Then
+   `monitoring_app_summary` (`type: db`) per app for its **disk** size — the live tool
+   describes its two types as `bw` for bandwidth and `db` for disk size; `db` is not the
+   database, and a media-heavy site with a small database is exactly the case where reading
+   it as one would misattribute. The size calls add nothing on top of what the roster cost;
+   that is the only sense in which this pass is clean. The breakdown from step 1 names **folders**
    (`/home/master/applications/<folder>/`), and the folder name is a field `app_get` returns
    and nothing else does. Usually the disk sizes settle it: the largest folder belongs to the
-   app whose `type: db` figure is the largest, and that is an attribution with no credential
-   payload — with the caveat that this figure is the application's storage as Cloudways
+   app whose `type: db` figure is the largest — with the caveat that this figure is the application's storage as Cloudways
    accounts it, which has not been verified here to equal the folder byte-for-byte, so treat a
    near-tie as a tie. When they do not settle it — two or three apps of similar size — the folder name
    has to be read for **those candidates only**: from each one's page in the Cloudways UI

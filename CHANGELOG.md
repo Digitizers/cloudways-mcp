@@ -43,7 +43,9 @@ stayed clean. The Medium is fair and this release takes it whole.
   follows the whole chain (`-L --max-redirs 5`; `curl: (47)` is the loop) instead of one hop —
   the preflight too, since a harmless `https://www.` first hop can hide an `http://` second one —
   and both chain checks pass on curl's exit status and an `https://` effective URL, not on a `200`,
-  because a `401` behind Basic Auth or a `403` from a WAF is a perfectly good answer over HTTPS —
+  because a `401` behind Basic Auth or a `403` from a WAF is a perfectly good answer over HTTPS,
+  and with `--noproxy '*'` like the origin checks, so an intercepting proxy's own page cannot pass
+  them —
   and with `--proto-redir '=https'` so a chain that dips to HTTP and climbs back — invisible to
   `%{url_effective}` — is refused at the hop (`curl: (1) Protocol "http" disabled (in redirect)`,
   measured). Taking the redirect back off after a failed verification is named as the second
@@ -57,7 +59,9 @@ stayed clean. The Medium is fair and this release takes it whole.
   in question, named as the rule-7 case; the first pass ranks by `monitoring_app_summary`
   `type: db`, which is **disk** size per the live tool's own description — not the database — and
   the catalog row now says so, since reading it as the database would misattribute a media-heavy
-  site with a small one. In the enforce-HTTPS sequence, a missing certificate routes to the
+  site with a small one, and the disk step no longer calls its path credential-free: the roster
+  is what costs, it follows the same ladder, and the size calls add nothing on top of it. In the
+  enforce-HTTPS sequence, a missing certificate routes to the
   install step and back rather than to a dead stop; the stop is only on the write itself. And "confirm the target" means the roster you already hold or the id
   you were given — `app_list` only when you have neither, as one call whose payload rule 7
   describes; the first draft of this release called that sequence credential-free, which is
