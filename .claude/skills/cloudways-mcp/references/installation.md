@@ -78,6 +78,46 @@ Claude Desktop does not natively support remote HTTP MCP servers, so it uses the
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
+**First, install the bridge from the lockfile shipped with this skill.** `bridge/` (beside
+this `references/` directory) carries a `package.json` and a `package-lock.json` covering **83
+packages, 82 with integrity hashes**. `npm ci` installs exactly what that lockfile names and
+resolves nothing of its own:
+
+```bash
+cp -R <skill-dir>/bridge ~/.cloudways-mcp-bridge
+cd ~/.cloudways-mcp-bridge && npm ci
+```
+
+```powershell
+# Windows
+Copy-Item -Recurse <skill-dir>\bridge $HOME\.cloudways-mcp-bridge
+cd $HOME\.cloudways-mcp-bridge; npm ci
+```
+
+Then point Claude Desktop at the installed executable:
+
+```json
+{
+  "mcpServers": {
+    "cloudways": {
+      "command": "/Users/<you>/.cloudways-mcp-bridge/node_modules/.bin/mcp-remote",
+      "args": [
+        "https://mcp.cloudways.com/mcp/",
+        "--header", "X-Access-Token:<your-cloudways-access-token>",
+        "--header", "X-Mcp-Host:claude-desktop"
+      ]
+    }
+  }
+}
+```
+
+On Windows the launcher is `C:\\Users\\<you>\\.cloudways-mcp-bridge\\node_modules\\.bin\\mcp-remote.cmd`
+— the extensionless shim beside it is POSIX-only. (That path is npm's documented layout; it
+has not been exercised on a Windows machine.)
+
+<details>
+<summary><b>Fallback: <code>npx</code>, if you cannot run the install above</b></summary>
+
 ```json
 {
   "mcpServers": {
@@ -93,6 +133,12 @@ Claude Desktop does not natively support remote HTTP MCP servers, so it uses the
   }
 }
 ```
+
+This pins `mcp-remote` itself but **not its ~80 dependencies**, which npx re-resolves whenever
+its cache is empty — so a newly published version inside one of their ranges executes with
+your Access Token. Use it knowing that; the locked install above is why it is the fallback.
+
+</details>
 
 > **Pin `mcp-remote`.** Unpinned, `npx` resolves whatever the registry serves at launch and
 > executes it — and this config hands that package a live Access Token on its command line, so
@@ -125,41 +171,16 @@ Claude Desktop does not natively support remote HTTP MCP servers, so it uses the
 > whenever npx has nothing cached, so a newly published version inside one of their ranges
 > runs with your Access Token even though the digest still matches.
 >
-> To pin the whole graph, use the lockfile committed in this repo at
-> [`bridge/`](../../../../bridge) — `package.json` plus a `package-lock.json` covering **83
-> packages, 82 with integrity hashes**. Install it with `npm ci`, which resolves nothing of its
-> own: it installs exactly what the lockfile names.
+> **`npm ci` against the shipped lockfile has to be the first command that touches the
+> registry.** Generating your own lockfile with `npm install` resolves the graph at that moment
+> and then freezes whatever it found — so a first install during a compromise locks the bad
+> version in, and the `npm ci` after it faithfully reproduces it. The point of shipping
+> `bridge/package-lock.json` is that the resolution happened once, here, at a known date.
 >
-> ```bash
-> cp -R <this-repo>/bridge ~/.cloudways-mcp-bridge
-> cd ~/.cloudways-mcp-bridge && npm ci
-> ```
->
-> **`npm ci` has to be the first command that touches the registry.** Generating your own
-> lockfile with `npm install` resolves the graph at that moment and then freezes whatever it
-> found — so a first install during a compromise locks the bad version in, and the `npm ci`
-> after it faithfully reproduces it. The point of shipping the lockfile is that the resolution
-> happened once, here, at a known date.
->
-> Then in the config below, replace `"command": "npx"` and the `"mcp-remote@0.14.0"` argument
-> with the installed executable, keeping the URL and headers:
->
-> - macOS / Linux — `"command": "<home>/.cloudways-mcp-bridge/node_modules/.bin/mcp-remote"`
-> - Windows — `"command": "C:\\Users\\<you>\\.cloudways-mcp-bridge\\node_modules\\.bin\\mcp-remote.cmd"`
->   (npm installs a `.cmd` launcher there; the extensionless shim is POSIX-only). Set it up with
->   PowerShell rather than the Bash line above:
->
->   ```powershell
->   Copy-Item -Recurse <this-repo>\bridge $HOME\.cloudways-mcp-bridge
->   cd $HOME\.cloudways-mcp-bridge; npm ci
->   ```
->
->   The Windows form is written from npm's documented layout and has not been exercised on a
->   Windows machine.
->
-> To be exact about what "vetted" means here: the graph is **pinned and reproducible**, recorded
-> at a known date with integrity hashes for every package. It is not a claim that 83 packages'
-> source has been read. Bumping `mcp-remote` means regenerating the lockfile in the same commit.
+> To be exact about what that buys, because "vetted" does a lot of work: the graph is **pinned
+> and reproducible**, with integrity hashes for every package. It is not a claim that 83
+> packages' source has been read. Bumping `mcp-remote` means regenerating the lockfile in the
+> same commit.
 
 > **This config file holds the literal token.** The `${VAR}` expansion used above is
 > Claude Code's; do not assume the Desktop bridge performs it — treat that file as holding
