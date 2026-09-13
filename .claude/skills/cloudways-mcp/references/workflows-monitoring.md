@@ -51,7 +51,10 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 **Sequence:**
 
 1. `server_disk_usage_fetch` (init) then `monitoring_server_summary` (read) — where is the space?
-2. If application folders are large: for each suspect app `app_get` + `app_settings_get`
+2. If application folders are large: `app_list` for the roster (`server_list` returns only an
+   app count), then `app_get` + `app_settings_get` on the apps the disk numbers point at —
+   `app_get` returns database credentials in the same payload, so this stays a short list,
+   never a loop over the server
 3. Check logs via manual SSH (Cloudways MCP does not expose direct file system access): the administrator will need to connect via SSH to `/var/log/`, `/home/master/applications/<app>/logs/`
 4. Check MySQL slow logs: `analytics_app_mysql` — if there are a lot of slow queries, the bin logs can balloon
 

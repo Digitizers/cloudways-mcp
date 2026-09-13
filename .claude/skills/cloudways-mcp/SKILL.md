@@ -208,9 +208,12 @@ Example tagging in the response:
 ```
 1. server_list                  → the fleet (server_get would add master credentials)
 2. monitoring_server_graph      → metrics (CPU/mem/etc.)
-3. monitoring_app_summary       → for each application
-4. copilot_insights_list        → open insights/alerts
-5. monitoring_server_summary    → disk/bandwidth; if disk > 80% — red flag
+3. app_list                     → per server, the application roster. server_list returns an
+                                  app COUNT, not the IDs step 4 needs, and app_list is the
+                                  credential-free way to get them (server_get is not)
+4. monitoring_app_summary       → for each application from step 3
+5. copilot_insights_list        → open insights/alerts
+6. monitoring_server_summary    → disk/bandwidth; if disk > 80% — red flag
 ```
 
 ### Checking an app's details
