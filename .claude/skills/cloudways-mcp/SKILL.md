@@ -1,6 +1,6 @@
 ---
 name: cloudways-mcp
-version: 1.5.0
+version: 1.5.1
 license: MIT
 description: |
   Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the official Cloudways MCP server (Cloudways' hosted MCP / Remote MCP, per their support docs).
@@ -50,9 +50,12 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 
 6. **Credentials.** Each account authenticates with its own **Access Token** (case-sensitive `X-Access-Token` header; roles + legacy-key migration in the Authentication section below). Don't print tokens in responses. Don't mix credentials between accounts. If the user asks to see them, refer them to platform.cloudways.com → API section.
 
-7. **Read-only by default.** If the user just asks "show me / check / monitor" — always choose the appropriate read-only tool. Don't suggest a destructive operation unless the user explicitly asked for it.
+7. **Don't sweep the credential-returning tools.** `server_get`, `app_get` and `app_credentials` return master, database and SSH credentials inside their ordinary payloads. Running one of them over **every** server or **every** app pulls the account's secrets into the conversation, where they stay for the rest of it — and telling yourself to keep them out of the *report* comes too late to help. Use `server_list` / `app_list` for inventory; call the other three for a specific field nothing else returns, or for a task the user actually asked for.
+   **But do not read "inventory" as "credential-free."** The live server describes `app_list` as returning “ID, label, application type, version, domain, **and credentials**”, and both list tools are built from the same `GET /server` payload that makes `server_get` a credential tool. What makes them the right choice is that they answer the inventory question in **one call per account or per server** instead of one per app — not that their responses are known to be clean. Take the IDs and the fields you came for; never paste a raw list response into a report, a ticket or an automation. And when a job requires that no credential enter the transcript **at all**, build the roster outside the conversation — the Cloudways Platform UI, or a direct `GET /server` piped through a field filter on your side — and bring back only ids and labels.
 
-8. **`execute_tool` / toolset-proxy calls inherit their target tool's R/W/W! risk.** Most tools live in on-demand toolsets and are invoked through the `execute_tool` proxy (or surfaced via `get_toolset_tools`). Calling a write/destructive tool through the proxy is exactly as consequential as calling it directly — apply the **same** confirmation (and double-confirmation for W!) as you would for the named tool.
+8. **Read-only by default.** If the user just asks "show me / check / monitor" — always choose the appropriate read-only tool. Don't suggest a destructive operation unless the user explicitly asked for it.
+
+9. **`execute_tool` / toolset-proxy calls inherit their target tool's R/W/W! risk.** Most tools live in on-demand toolsets and are invoked through the `execute_tool` proxy (or surfaced via `get_toolset_tools`). Calling a write/destructive tool through the proxy is exactly as consequential as calling it directly — apply the **same** confirmation (and double-confirmation for W!) as you would for the named tool.
 
 ---
 
@@ -204,11 +207,14 @@ Example tagging in the response:
 
 ### Health check before a weekend (production client)
 ```
-1. server_get                   → CPU/RAM/disk
+1. server_list                  → the fleet (server_get would add master credentials)
 2. monitoring_server_graph      → metrics (CPU/mem/etc.)
-3. monitoring_app_summary       → for each application
-4. copilot_insights_list        → open insights/alerts
-5. monitoring_server_summary    → disk/bandwidth; if disk > 80% — red flag
+3. app_list                     → per server, the application roster. server_list returns an
+                                  app COUNT, not the IDs step 4 needs. One call per server,
+                                  and rule 7 on what that one payload may carry
+4. monitoring_app_summary       → for each application from step 3
+5. copilot_insights_list        → open insights/alerts
+6. monitoring_server_summary    → disk/bandwidth; if disk > 80% — red flag
 ```
 
 ### Checking an app's details

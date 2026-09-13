@@ -51,7 +51,10 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 **Sequence:**
 
 1. `server_disk_usage_fetch` (init) then `monitoring_server_summary` (read) — where is the space?
-2. If application folders are large: for each suspect app `app_get` + `app_settings_get`
+2. If application folders are large: `app_list` for the roster (`server_list` returns only an
+   app count), then `app_get` + `app_settings_get` on the apps the disk numbers point at —
+   `app_get` returns database credentials in the same payload, so this stays a short list,
+   never a loop over the server
 3. Check logs via manual SSH (Cloudways MCP does not expose direct file system access): the administrator will need to connect via SSH to `/var/log/`, `/home/master/applications/<app>/logs/`
 4. Check MySQL slow logs: `analytics_app_mysql` — if there are a lot of slow queries, the bin logs can balloon
 
@@ -105,8 +108,12 @@ Next action requires confirmation: app_purge_cache (W)
 **Sequence for each application:**
 
 1. `server_list`
-2. For each server: `server_get` → list of apps
-3. For each app: `app_get` → inspect the SSL/expiry detail returned for the app
+2. For each server: `app_list` → the application roster (one call per server; rule 7 on the payload)
+3. For each app: `app_get` → the SSL/expiry detail, which no other read tool returns at all.
+   **This is a fleet-wide loop over a tool that also returns database credentials**, so it
+   pulls every app's DB password into the conversation. Run it when an SSL sweep is what the
+   user asked for, on a READ-role token, and do not paste the responses anywhere; for a single
+   certificate, call it for that one app instead.
 4. Filter: SSL expiring within the next 30 days → flag for renewal
 5. For each flagged app: confirm whether Let's Encrypt auto-renewal is enabled. **There is no MCP read tool for auto-renewal status** — check it in the Cloudways Platform UI (Application → SSL Certificate) or via the direct API; `security_lets_encrypt_auto_renewal` is a W **toggle**, never call it just to inspect the setting. If auto-renewal is off — double flag and report it; the fix (enable auto-renewal / renew) is a write — hand it to `workflows-maintenance.md` §2 (`security_lets_encrypt_auto_renewal` / `security_lets_encrypt_renew`, both W with confirmation), don't execute it from this read-only playbook.
 

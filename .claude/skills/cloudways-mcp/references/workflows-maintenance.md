@@ -144,7 +144,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Before server_restart:**
 
-1. **Mandatory:** `server_get` → list of apps
+1. **Mandatory:** `app_list` → the applications about to go offline (`server_get` returns the same roster plus the server's master credentials; the roster is all this preflight needs)
 2. **Mandatory:** count active users (if relevant — a store site with open carts?)
 3. **Double CONFIRM:** "The server hosts X applications — Y, Z, W. Each of them will be offline for X minutes. Continue?"
 4. Execute

@@ -78,13 +78,51 @@ Claude Desktop does not natively support remote HTTP MCP servers, so it uses the
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
+**First, install the bridge from the lockfile shipped with this skill.** `bridge/` (beside
+this `references/` directory) carries a `package.json` and a `package-lock.json` covering **83
+packages, 82 with integrity hashes**. `npm ci` installs exactly what that lockfile names and
+resolves nothing of its own:
+
+```bash
+# && throughout: a failed delete or copy must not reach npm ci, which would
+# then install from whatever lockfile is still there.
+rm -rf ~/.cloudways-mcp-bridge &&                    # see the note below
+  cp -R <skill-dir>/bridge ~/.cloudways-mcp-bridge &&
+  cd ~/.cloudways-mcp-bridge && npm ci
+```
+
+```powershell
+# Windows. -ErrorAction Stop on every step: PowerShell's default is Continue,
+# which REPORTS a failed delete or copy and then carries on - so a locked file
+# or a permissions error would leave the old tree in place and run npm ci
+# against the stale lockfile, or run it in the caller's own directory. Only a
+# missing directory is expected here, and Test-Path handles that case without
+# silencing the others.
+$bridge = "$HOME\.cloudways-mcp-bridge"
+if (Test-Path -LiteralPath $bridge) {
+  Remove-Item -LiteralPath $bridge -Recurse -Force -ErrorAction Stop
+}
+Copy-Item -LiteralPath <skill-dir>\bridge -Destination $bridge -Recurse -ErrorAction Stop
+Set-Location -LiteralPath $bridge -ErrorAction Stop
+npm ci
+if ($LASTEXITCODE -ne 0) { throw "npm ci failed - the bridge is not installed" }
+```
+
+> **The delete is load-bearing when you re-run this after a lockfile update.** `cp -R src dst`
+> copies *into* `dst` when `dst` already exists, giving you
+> `~/.cloudways-mcp-bridge/bridge/package-lock.json` while the old lockfile stays where it was
+> — so `npm ci` reinstalls the **stale** graph and reports success. That is the failure this
+> whole section exists to prevent, arriving through the update path. The directory is ours and
+> holds nothing but the copied files and `node_modules`, so removing it costs nothing.
+
+Then point Claude Desktop at the installed executable:
+
 ```json
 {
   "mcpServers": {
     "cloudways": {
-      "command": "npx",
+      "command": "/Users/<you>/.cloudways-mcp-bridge/node_modules/.bin/mcp-remote",
       "args": [
-        "mcp-remote",
         "https://mcp.cloudways.com/mcp/",
         "--header", "X-Access-Token:<your-cloudways-access-token>",
         "--header", "X-Mcp-Host:claude-desktop"
@@ -93,6 +131,77 @@ Claude Desktop does not natively support remote HTTP MCP servers, so it uses the
   }
 }
 ```
+
+On Windows the launcher is `C:\\Users\\<you>\\.cloudways-mcp-bridge\\node_modules\\.bin\\mcp-remote.cmd`
+— the extensionless shim beside it is POSIX-only. (That path is npm's documented layout; it
+has not been exercised on a Windows machine.)
+
+<details>
+<summary><b>Fallback: <code>npx</code>, if you cannot run the install above</b></summary>
+
+```json
+{
+  "mcpServers": {
+    "cloudways": {
+      "command": "npx",
+      "args": [
+        "mcp-remote@0.14.0",
+        "https://mcp.cloudways.com/mcp/",
+        "--header", "X-Access-Token:<your-cloudways-access-token>",
+        "--header", "X-Mcp-Host:claude-desktop"
+      ]
+    }
+  }
+}
+```
+
+This pins `mcp-remote` itself but **not its ~80 dependencies**, which npx re-resolves whenever
+its cache is empty — so a newly published version inside one of their ranges executes with
+your Access Token. Use it knowing that; the locked install above is why it is the fallback.
+
+</details>
+
+> **Pin `mcp-remote`.** Unpinned, `npx` resolves whatever the registry serves at launch and
+> executes it — and this config hands that package a live Access Token on its command line, so
+> a compromised release, maintainer account or transitive dependency would receive it. The
+> version above is pinned deliberately; bump it after reading the upstream release notes, and
+> record the new digest here in the same commit.
+>
+> ```
+> mcp-remote@0.14.0
+> sha512-QBYGz02kc2AhhM6RNDzNyoA/FlzwJCNYPFF+o3opSvwfo5lnp8mcVIj/Zqw92dPuoafyLBKQZkpaEJdzlB/png==
+> ```
+>
+> To check what the registry served you, compute the digest from the bytes — **do not compare
+> against the line `npm pack` prints**, which elides the middle
+> (`sha512-QBYGz02kc2Ahh[...]kpaEJdzlB/png==`), so a comparison against it only ever checks a
+> prefix and a suffix:
+>
+> ```bash
+> npm pack mcp-remote@0.14.0
+> printf 'sha512-%s\n' "$(openssl dgst -sha512 -binary mcp-remote-0.14.0.tgz | openssl base64 -A)"
+> ```
+>
+> (`npm pack --json` also emits the full value, if you would rather read npm's own figure than
+> compute one.) A digest **recorded here, out of band** is what makes this worth running: npm
+> forbids republishing a version with different content, so it catches a registry that later
+> serves different bytes for 0.14.0.
+>
+> **What the pin does NOT cover: everything underneath it.** `mcp-remote@0.14.0` fixes one
+> package, and the digest above covers one tarball; its ~80 dependencies are resolved fresh
+> whenever npx has nothing cached, so a newly published version inside one of their ranges
+> runs with your Access Token even though the digest still matches.
+>
+> **`npm ci` against the shipped lockfile has to be the first command that touches the
+> registry.** Generating your own lockfile with `npm install` resolves the graph at that moment
+> and then freezes whatever it found — so a first install during a compromise locks the bad
+> version in, and the `npm ci` after it faithfully reproduces it. The point of shipping
+> `bridge/package-lock.json` is that the resolution happened once, here, at a known date.
+>
+> To be exact about what that buys, because "vetted" does a lot of work: the graph is **pinned
+> and reproducible**, with integrity hashes for every package. It is not a claim that 83
+> packages' source has been read. Bumping `mcp-remote` means regenerating the lockfile in the
+> same commit.
 
 > **This config file holds the literal token.** The `${VAR}` expansion used above is
 > Claude Code's; do not assume the Desktop bridge performs it — treat that file as holding

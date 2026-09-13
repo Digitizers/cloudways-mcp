@@ -174,6 +174,27 @@ In automation via `claude -p` (headless mode), the MCP server keeps working as u
 ```bash
 #!/bin/bash
 # scripts/cw-daily-summary.sh
+#
+# Needs: claude (Claude Code, with the Cloudways MCP connection configured for
+# the user running the cron) and jq. jq is NOT installed by default on macOS -
+# `brew install jq` - and set -e means the job would otherwise die at the
+# encode step after doing all the work.
+set -euo pipefail
+command -v jq >/dev/null || { echo "this job needs jq (brew install jq / apt install jq)" >&2; exit 1; }
+
+# A private temp file, not a fixed path. /tmp is shared: a fixed name can be
+# pre-created by another user as a symlink, so the report either overwrites
+# whatever it points at or is read back by whoever owns it.
+#
+# The X's must be at the END of the template. BSD mktemp (macOS) does not
+# substitute them anywhere else - and it does not fail either: it creates a file
+# called literally "cw-summary.XXXXXX.md", which is exactly the predictable name
+# this line exists to avoid, with a successful exit status hiding it. Measured,
+# not assumed: on macOS 26.3, `mktemp ./cw-summary.XXXXXX.md` exits 0 and leaves
+# a 0600 file of that literal name, so `set -e` never fires and nothing warns.
+umask 077
+OUT=$(mktemp "${TMPDIR:-/tmp}/cw-summary.md.XXXXXX")
+trap 'rm -f "$OUT"' EXIT
 
 # Here Claude calls the MCP tools itself and generates a summary
 claude -p "
@@ -184,14 +205,39 @@ Check all servers (server_list), get alerts (copilot_insights_list), and identif
 3. Any SSL expiring within 30 days
 4. Top 3 apps by traffic in the past 24h
 
-Output in Hebrew, markdown format, sent to /tmp/cw-summary.md
+Do NOT include credentials, IP addresses or tokens in the summary.
+
+Output in Hebrew, markdown format, written to $OUT
 "
 
-# Send the summary to Slack
-curl -X POST -H 'Content-type: application/json' \
-     --data "{\"text\":\"$(cat /tmp/cw-summary.md)\"}" \
-     "$SLACK_WEBHOOK_URL"
+# Failing on an HTTP error is the point: without one of these flags curl exits
+# 0 on a rejected webhook (bad URL, payload too large), so the cron looks like
+# it succeeded - and the trap below has already deleted the only copy of the
+# report. --fail-with-body keeps the server's reason in the output, but it is
+# curl >= 7.76.0; Ubuntu 20.04 ships 7.68, where it is an unknown option, curl
+# exits 2 having posted NOTHING, and every run fails the same silent way. So
+# ask the installed curl rather than assuming: an unsupported option makes curl
+# exit non-zero before it ever reaches --version.
+if curl --fail-with-body --version >/dev/null 2>&1; then
+  CURL_FAIL=--fail-with-body          # curl >= 7.76.0: status AND the reason
+else
+  CURL_FAIL=--fail                    # older curl: status only, body discarded
+fi
+
+# Build the JSON with a real encoder. Interpolating the file into a JSON
+# string breaks on the first quote, backslash or newline in the report - and a
+# report is generated text, so it WILL contain them.
+jq -Rs '{text: .}' < "$OUT" \
+  | curl "$CURL_FAIL" --silent --show-error \
+         -X POST -H 'Content-type: application/json' --data-binary @- "$SLACK_WEBHOOK_URL"
 ```
+
+> **No jq?** Any real JSON encoder will do — `python3 -c 'import json,sys; print(json.dumps({"text": sys.stdin.read()}))' < "$OUT"` is the same thing. What must not come back is
+> building the payload by interpolating the file into a string.
+
+> **What leaves the machine.** The summary goes to a channel with its own membership and
+> retention, so keep infrastructure detail out of it: status, counts and names are the point;
+> credentials, IPs and tokens are not. The `trap` removes the file even if `curl` fails.
 
 **Note:** Headless requires Claude Code to have the Cloudways MCP connection configured. Make sure the MCP config is set in the `~/.claude.json` of the user running the cron.
 
@@ -228,6 +274,23 @@ For automations that generate a lot of data (audit results, alerts log, deployme
 | resolution_notes | Long text |
 
 **Sync:** n8n / Make scenario every hour: pull state from Cloudways → upsert to Airtable. The team gets a live view.
+
+> **Map an explicit field allowlist per table — never the whole API response.** One list per
+> destination table, and nothing outside it:
+>
+> - `cloudways_servers`: `cw_id`, `label`, `provider`, `region`, `size`, `status`, `last_check`,
+>   `client`, `monthly_cost_usd`
+> - `cloudways_alerts`: `date`, `server`, `app`, `severity`, `issue`, `status`,
+>   `resolution_notes`
+>
+> Every field the tables above define, and no credential field from any payload. Copying a
+> response wholesale carries master credentials, database passwords and SFTP access out of
+> Cloudways into a third-party store with its own sharing, export and retention — and
+> `server_get` / `app_get` return those fields whether or not the sync asked for them. Pick
+> fields by name in the mapping step; do not pass the object through. The same applies to the
+> Slack and email destinations elsewhere in this file, and to anything that keeps history: a
+> credential written to a state store is still there after it has been rotated, and after the
+> engagement has ended.
 
 ---
 

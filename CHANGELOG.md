@@ -1,5 +1,78 @@
 # Changelog
 
+## 1.5.1 - 2026-09-13
+
+From the ClawHub audit of 1.5.0. Context first, because the headline moved the wrong way: the
+verdict went from `benign` to `suspicious`, but **AIG returned nothing at all for 1.4.1** (its
+export was null) and returned four findings here — this is a scanner reporting for the first
+time, not a regression introduced by 1.5.0. What 1.5.0 did change, the static-analysis pass
+went from `suspicious` to `clean`. All four findings are real and all four are fixed.
+
+- **`mcp-remote` is pinned** (High). The Claude Desktop bridge config launched
+  `npx mcp-remote` with no version, so `npx` resolved and executed whatever the registry
+  served at launch — and that config hands the package a live Access Token on its command
+  line. Pinned to `0.14.0`, with npm's published digest recorded beside it, and a **committed lockfile** at `.claude/skills/cloudways-mcp/bridge/` — inside the published skill, because the ClawHub workflow and the npm `files` list both ship only that directory, so a lockfile at the repo root would not reach anyone who installed the skill — for pinning the ~80 packages underneath it — a top-level pin and a one-tarball digest do not cover the dependency graph, and generating your own lockfile resolves it at that moment, so a first install during a compromise freezes the bad version in. `npm ci` against the shipped lockfile resolves nothing of its own. **That install is now the default Claude Desktop configuration**, with `npx` demoted to a collapsed fallback that states what it does not cover — a safe path offered as an optional alternative to the copy-paste one is not the path anybody takes. The install removes its target directory first: `cp -R src dst` copies *into* an existing `dst`, so re-running after a lockfile update would nest the new lockfile one level down and `npm ci` would reinstall the stale graph and report success. Windows gets its own `.cmd` path and PowerShell setup (documented from npm's layout, not exercised on Windows). Plus the
+  command to check what the registry actually served — computed from the bytes with
+  `openssl`, because the line `npm pack` prints elides the middle of the value
+  (`sha512-QBYGz02kc2Ahh[...]kpaEJdzlB/png==`), so comparing against it checks only a prefix
+  and a suffix. Same class as the `hostinger-api-mcp` pin, in the
+  repo next door.
+- **Discovery no longer CALLS the credential-returning tools** (High). The onboarding sweep
+  ran `app_credentials` for every application, plus `server_get` and `app_get`, which return
+  master and database credentials in the same payload. Telling the agent to leave them out of
+  the report does not help: by then they are in the transcript, and a transcript is kept,
+  scrolled back through and sometimes pasted somewhere. The only way to keep a credential out
+  of a conversation is not to fetch it. The pass now builds its inventory from `server_list`
+  and `app_list`, which answer the inventory question in one call per account or per server
+  instead of one per app — **not** because their payloads are known to be clean: the live
+  server describes `app_list` itself as returning “ID, label, application type, version,
+  domain, and credentials”, and both list tools are built from the same `GET /server` payload
+  that makes `server_get` a credential tool. Safety rule 7 now says so rather than calling them
+  credential-free, because “inventory” is not a synonym for “safe to paste”. That is a reduction and not a
+  guarantee: this MCP exposes no roster endpoint documented to exclude credentials, so an app-level
+  audit costs one such payload per server, and a job that can tolerate none at all is told to build
+  the roster outside the conversation (UI, or a direct `GET /server` through a field filter) and
+  bring back only ids and labels. The pass takes its detail from
+  `server_settings_get`, `service_status`, `app_settings_get`, the monitoring/analytics tools
+  and `app_vulnerabilities_list`. All three credential-returning tools are named as
+  deliberately absent, with what each is for and when calling it is legitimate — **in every
+  place the sweep is written down**: the stage instructions, the printable audit checklist at
+  the end of the same file, the fleet-wide SSL sweep in `workflows-monitoring.md`, and the
+  weekend health check in SKILL.md. A rule stated once and contradicted by the copy-pasteable
+  checklist below it is not a rule. SKILL.md also carries it as a numbered safety rule, so it
+  applies to sweeps nobody has written down yet. The restart preflight in
+  `workflows-maintenance.md` now takes its "which apps go offline" roster from `app_list`
+  rather than `server_get`, which returned the same list plus the server's master
+  credentials. And the SSL claim is reconciled across files: there is no dedicated read
+  tool, the detail rides inside `app_get` next to that app's database credentials, so the
+  audit reads it from the UI while the certificate sweep — the one job that cannot be done
+  another way — uses `app_get` under stated conditions. Removing `server_get` from the read
+  paths also removed the app roster and the domain fields two sequences had been taking from
+  it without saying so, so both are named again at their source: `app_list` for the roster
+  (`server_list` returns an app *count*, not IDs) and for the primary `domain`, and the UI or
+  direct API for additional domains/CNAMEs — every alias tool (`app_cname_update`,
+  `app_cname_delete`, `app_aliases_update`) is a **write**, and a value is never read by
+  calling a W tool.
+- **The daily-summary example uses `mktemp`, not a fixed `/tmp` path** (Medium), with
+  `umask 077` and a `trap` that removes the file even when `curl` fails. The template ends in
+  the `X`s: BSD `mktemp` does not substitute them anywhere else, and does not fail either — it
+  creates a file called literally `cw-summary.XXXXXX.md`, reinstating the predictable name
+  behind a successful exit. Measured on macOS 26.3 (`mktemp ./cw-summary.XXXXXX.md` → exit 0,
+  a 0600 file of that literal name), not inferred from the manual page. A predictable name in
+  a shared `/tmp` can be pre-created as a symlink by another user.
+- **…and builds its JSON with `jq -Rs`** rather than interpolating the file into a string. The
+  audit called this output encoding; it is also a plain bug — the first quote, backslash or
+  newline in a generated report breaks the payload. `jq` is declared as a dependency and
+  checked up front (it is not installed by default on macOS, and `set -e` would otherwise kill
+  the job at the encode step after all the work was done), with a `python3` one-liner given as
+  the equivalent for anyone without it.
+- **The Airtable state store gets an explicit field allowlist** (Medium). Syncing a response
+  wholesale carries credentials into a third-party store with its own sharing and retention,
+  where they outlive both rotation and the engagement. Same note applied to the Slack and
+  email destinations.
+
+No tool, endpoint, auth-header, or safety-rule changes.
+
 ## 1.5.0 - 2026-09-13
 
 From the ClawHub audit of 1.4.1. ClawScan rates the skill **benign**; this is the
