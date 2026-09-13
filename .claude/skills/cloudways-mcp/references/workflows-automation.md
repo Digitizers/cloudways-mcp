@@ -211,8 +211,12 @@ Output in Hebrew, markdown format, written to $OUT
 # Build the JSON with a real encoder. Interpolating the file into a JSON
 # string breaks on the first quote, backslash or newline in the report - and a
 # report is generated text, so it WILL contain them.
+# --fail-with-body matters: without it curl exits 0 on an HTTP error, so a
+# rejected webhook (bad URL, payload too large) looks like a successful cron
+# run - and the trap below has already deleted the only copy of the report.
 jq -Rs '{text: .}' < "$OUT" \
-  | curl -X POST -H 'Content-type: application/json' --data-binary @- "$SLACK_WEBHOOK_URL"
+  | curl --fail-with-body --silent --show-error \
+         -X POST -H 'Content-type: application/json' --data-binary @- "$SLACK_WEBHOOK_URL"
 ```
 
 > **No jq?** Any real JSON encoder will do — `python3 -c 'import json,sys; print(json.dumps({"text": sys.stdin.read()}))' < "$OUT"` is the same thing. What must not come back is

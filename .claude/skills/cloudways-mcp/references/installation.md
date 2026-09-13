@@ -119,6 +119,23 @@ Claude Desktop does not natively support remote HTTP MCP servers, so it uses the
 > compute one.) A digest **recorded here, out of band** is what makes this worth running: npm
 > forbids republishing a version with different content, so it catches a registry that later
 > serves different bytes for 0.14.0.
+>
+> **What the pin does NOT cover: everything underneath it.** `mcp-remote@0.14.0` fixes one
+> package, and the digest above covers one tarball; its ~80 dependencies are resolved fresh
+> whenever npx has nothing cached, so a newly published version inside one of their ranges
+> runs with your Access Token even though the digest still matches. To pin the whole graph,
+> install it once against a lockfile and point Claude Desktop at the installed executable:
+>
+> ```bash
+> mkdir -p ~/.cloudways-mcp-bridge && cd ~/.cloudways-mcp-bridge
+> npm install mcp-remote@0.14.0     # writes package-lock.json — the whole tree, with digests
+> npm ci                            # how you reproduce it later, exactly
+> ```
+>
+> Then in the config below, replace `"command": "npx"` and the `"mcp-remote@0.14.0"` argument
+> with `"command": "<home>/.cloudways-mcp-bridge/node_modules/.bin/mcp-remote"`, keeping the URL
+> and headers. Keep that `package-lock.json`; it is the pin. Re-running `npm install` rather
+> than `npm ci` after a dependency publishes a new version silently re-resolves it.
 
 > **This config file holds the literal token.** The `${VAR}` expansion used above is
 > Claude Code's; do not assume the Desktop bridge performs it — treat that file as holding

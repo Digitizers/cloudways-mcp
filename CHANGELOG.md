@@ -11,7 +11,7 @@ went from `suspicious` to `clean`. All four findings are real and all four are f
 - **`mcp-remote` is pinned** (High). The Claude Desktop bridge config launched
   `npx mcp-remote` with no version, so `npx` resolved and executed whatever the registry
   served at launch — and that config hands the package a live Access Token on its command
-  line. Pinned to `0.14.0`, with npm's published digest recorded beside it and the
+  line. Pinned to `0.14.0`, with npm's published digest recorded beside it, the lockfile recipe for pinning the ~80 packages **underneath** it (a top-level pin and a one-tarball digest do not cover the dependency graph, which npx re-resolves), and the
   command to check what the registry actually served — computed from the bytes with
   `openssl`, because the line `npm pack` prints elides the middle of the value
   (`sha512-QBYGz02kc2Ahh[...]kpaEJdzlB/png==`), so comparing against it checks only a prefix

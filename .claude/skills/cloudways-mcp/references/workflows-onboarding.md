@@ -23,7 +23,7 @@ Confirm with the client:
 3. copilot_insights_list       → insights, alerts, and recommendations currently open
 ```
 
-> **No MCP tool for:** account/plan/billing status (`customer_info`) or SSH-key listing. Plan/billing is checked in the Cloudways Platform UI; SSH keys are managed via `ssh_key_create` / `ssh_key_update` / `ssh_key_delete` but there is no read/list tool — confirm SSH access in the UI or via the direct Cloudways API (<https://developers.cloudways.com/>). The **team-member roster IS available** as of MCP v1.2: `team_member_list` (R) returns sub-users with roles and server/app access.
+> **No MCP tool for:** account/plan/billing status (`customer_info`) or SSH-key listing. Plan/billing is checked in the Cloudways Platform UI; SSH keys are managed via `ssh_key_create` / `ssh_key_update` / `ssh_key_delete` and there is no list tool; the roster does come back inside `server_get`, next to that server's master credentials, so for an audit confirm SSH access in the UI or via the direct Cloudways API instead (<https://developers.cloudways.com/>). The **team-member roster IS available** as of MCP v1.2: `team_member_list` (R) returns sub-users with roles and server/app access.
 
 **Deliverables you record:**
 
@@ -94,8 +94,8 @@ application in it:
 >   the user actually asked for needs it, such as an SFTP deploy.
 > - **`server_get`** — richer per-server configuration, and **master credentials** in the same
 >   payload. Reach for it only when you need something the list and settings tools do not
->   carry (the SSH-key roster, for one — see the note in `tools-catalog.md`), knowing the
->   secrets come with it.
+>   carry, knowing the secrets come with it. The SSH-key roster is the usual example, and for
+>   an AUDIT it is the wrong trade — see the note below.
 > - **`app_get`** — URL, FQDN and app folder, and **database credentials** in the same
 >   payload. Same rule: call it for a specific missing field, not for every app in a sweep.
 >
@@ -103,6 +103,12 @@ application in it:
 > pass over a 20-server account, done the old way, pulled every server's master password and
 > every application's database password into one conversation — and a report is not the only
 > thing that outlives an engagement.
+
+> **No dedicated SSH-key list tool either, and the same answer.** Keys are managed with
+> `ssh_key_create` / `_update` / `_delete`; the roster comes back inside `server_get`, next to
+> that server's **master credentials**. For an audit, read it in the Cloudways Platform UI or
+> via the direct API and record a count rather than the keys — the deliverables table already
+> asks for a count, not a list.
 
 > **No dedicated SSL read tool — and the one payload that carries the detail is not worth a
 > sweep.** There is no `ssl_get`; certificate provider and expiry come back inside `app_get`,
@@ -149,7 +155,7 @@ application in it:
 8. security_suite_server_incidents_list→ (v1.2) open security incidents on each server
 ```
 
-> **Still no MCP tool for SSH-key listing.** SSH keys are managed via `ssh_key_create` / `ssh_key_update` / `ssh_key_delete` but there is no read/list tool — audit the stored-key roster in the Cloudways Platform UI (Server → Security) or via the direct Cloudways API (<https://developers.cloudways.com/>).
+> **Still no SSH-key LIST tool.** Keys are managed via `ssh_key_create` / `ssh_key_update` / `ssh_key_delete`, and the roster rides inside `server_get` beside that server's master credentials — so for an audit read it in the Cloudways Platform UI (Server → Security) or via the direct Cloudways API (<https://developers.cloudways.com/>), and record a count rather than the keys.
 
 **Red flags (now readable via MCP; SSH-key roster still UI/API):**
 - [ ] SSH whitelist empty = open to the world (critical)
@@ -255,6 +261,6 @@ Auditor: [your name]
 - [ ] **Per server:** server_settings_get / service_status / monitoring_server_summary / monitoring_server_graph (optionally server_disk_usage_fetch first for fresh disk data — W, needs a token role that allows it)
 - [ ] **Per app:** app_list for the roster, then app_settings_get / monitoring_app_summary / analytics_app_traffic / analytics_app_php / analytics_app_mysql / app_varnish_settings_get / app_vulnerabilities_list (WP)
 - [ ] **NOT in a sweep:** `server_get`, `app_get`, `app_credentials` — each returns master, database or SSH credentials in its payload, so a per-server or per-app loop pulls the whole account's secrets into the conversation. Call one for a specific missing field, or for a task the user asked for. See Stage 2.
-- [ ] **Security:** app_settings_get (XML-RPC etc.) / app_vulnerabilities_list / copilot_insights_list / security_get_whitelisted_ips + security_get_whitelisted_ips_mysql / security_suite_server_incidents_list (if suite active)  (SSH-key roster = UI / API only)
+- [ ] **Security:** app_settings_get (XML-RPC etc.) / app_vulnerabilities_list / copilot_insights_list / security_get_whitelisted_ips + security_get_whitelisted_ips_mysql / security_suite_server_incidents_list (if suite active)  (SSH-key roster: no list tool; it rides inside `server_get` beside master credentials — UI / direct API for an audit, and record a count)
 - [ ] **Manual (UI):** Backup schedule + retention / SSL provider + expiry (no dedicated read tool; the detail rides inside `app_get`, which also returns DB credentials — UI or direct API for an audit) / SSH-key roster / Cloudflare integration (if any) / WP version (if WP) / Active plugins (if WP)
 - [ ] **Document:** Red flags / Recommendations / Quote / SLA
