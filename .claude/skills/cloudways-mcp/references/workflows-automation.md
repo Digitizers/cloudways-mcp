@@ -96,23 +96,38 @@ curl -sH "Authorization: Bearer $TOKEN" \
 
 ```
 ┌─ Cron (Sunday 09:00)
-├─ HTTP: GET /api/v2/server  (Authorization: Bearer <access-token>)  → all servers
-├─ Loop servers → Loop apps:
-│   ├─ HTTP: GET /app/{id}           → including SSL info
-│   ├─ Function: SELECT label, app_fqdn, ssl fields ONLY  ← see the note below
-│   ├─ Function: parse SSL expiry date
-│   ├─ IF expiry < 30 days:
-│   │   └─ Add to "needs attention" list
+├─ ONE step — request AND projection together:
+│   ├─ GET /api/v2/server                        → servers
+│   ├─ for each app: GET /app/{id}               → certificate fields + DB credentials
+│   └─ return ONLY { label, app_fqdn, ssl_* }    ← nothing else leaves this step
+├─ IF expiry < 30 days → "needs attention"
 ├─ Aggregate
 └─ Send report
 ```
 
-> **Filter the app payload in the first function, not in the report.** `GET /app/{id}` returns
-> that application's database credentials beside the certificate fields. In a cron that is
-> survivable — nothing is in a transcript — but the response is still logged by most
-> automation platforms, so drop everything except `label`, `app_fqdn` and the SSL fields at the
-> step that receives it. This job is also what `workflows-monitoring.md` §5 now points at: the
-> agent gets names and dates from here, never the payloads.
+> **The projection has to happen inside the step that makes the request.** `GET /app/{id}`
+> returns that application's database credentials beside the certificate fields, and on n8n or
+> Make **every node's output is persisted in the execution record** — so an HTTP node that emits
+> the whole payload has already retained every app's DB password, and a filter node after it
+> cannot take that back. A later "select these fields" step protects the *report*, not the
+> platform's own log; this is the same mistake as telling an agent to keep secrets out of its
+> summary.
+>
+> Three shapes that actually work, in order of preference:
+>
+> 1. **A plain script** — cron + `curl` + `jq`, the shape used by the daily-summary job below.
+>    The projection happens in the same process; nothing is persisted anywhere.
+> 2. **One n8n Code node** that performs the requests itself (`this.helpers.httpRequest`) and
+>    returns only the allowlisted fields. One node, one output, and that output is the filtered
+>    one.
+> 3. **A platform whose execution logging you have turned off or redacted for this scenario** —
+>    verify it on a test run before trusting it, because "logs expire in 30 days" is retention,
+>    not absence.
+>
+> If your automation platform emits the raw response from a node you cannot collapse, and you
+> cannot disable that node's logging, do not run this job there. This is the job
+> `workflows-monitoring.md` §5 points at: the agent gets names and dates from here, never the
+> payloads.
 
 ### Workflow: Disk space alerting
 

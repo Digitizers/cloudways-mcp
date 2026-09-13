@@ -15,16 +15,24 @@ mine from 1.5.1.
   the conversation** — the Cloudways UI, or a direct call through a field filter — and only names
   and dates come back to the agent for triage. In the agent, `app_get` is for one certificate
   somebody named. `workflows-automation.md` already ran exactly this as a Sunday cron, so §5 now
-  points at it, and that cron drops everything but `label`, `app_fqdn` and the SSL fields at the
-  step that receives the payload rather than in the report. The onboarding note that named §5 as
+  points at it — and that cron makes the **request and the projection in one step**, because on
+  n8n or Make every node's output is persisted in the execution record: an HTTP node that emits
+  the whole `/app/{id}` payload has already retained every app's DB password, and a filter node
+  after it cannot take that back. The three shapes that actually work are named (a plain
+  `curl`+`jq` script, one n8n Code node that performs its own requests, or a platform whose
+  execution logging is off and verified off), along with when not to run the job at all. The onboarding note that named §5 as
   the one legitimate exception is gone: there is no exception any more.
 - **The Access Token leaves both the Desktop config and the command line** (T09, High). The
   bridge config passed `--header X-Access-Token:<token>`, so the token sat in
   `claude_desktop_config.json` as a literal **and** in the process's argument list, where any
   other user on the machine can read it from `ps`. It now lives in
-  `~/.cloudways-mcp-bridge/headers.txt` at mode 600, written with `umask 077` and `read -rs` so
+  `~/.config/cloudways-mcp/headers.txt` at mode 600, written with `umask 077` and `read -rs` so
   it never reaches the terminal or the shell history, and the config carries `--header-file`
-  pointing at it. `mcp-remote` treats an unreadable header file as **fatal**, so a wrong path
+  pointing at it. The path is **outside** `~/.cloudways-mcp-bridge` deliberately: that directory
+  is deleted and recreated by every re-install, so a token kept inside it would disappear on the
+  next lockfile bump. Windows gets its own recipe (`Read-Host -AsSecureString` plus an `icacls`
+  ACL that is the NTFS equivalent of `chmod 600`) and its own `args`, both documented from
+  Microsoft's semantics rather than exercised. `mcp-remote` treats an unreadable header file as **fatal**, so a wrong path
   fails at startup instead of connecting unauthenticated. Verified against `mcp-remote@0.14.0`
   installed from the shipped lockfile: it logs `Loaded 2 header(s)` and the header **names**,
   never the value.

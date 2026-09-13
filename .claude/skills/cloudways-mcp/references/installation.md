@@ -122,16 +122,43 @@ argument list, which every other user on the machine can read from `ps`. `mcp-re
 `--header-file` avoids both — one `Name: value` per line, `#` starts a comment, whitespace
 after the colon is trimmed:
 
+**The file goes OUTSIDE the bridge directory** — `~/.cloudways-mcp-bridge` is deleted and
+recreated by every re-install above, which would take the token with it and leave Claude Desktop
+failing at startup until you typed it again:
+
 ```bash
-umask 077                                  # 600 before anything is written to it
-printf 'X-Mcp-Host: claude-desktop\n' > ~/.cloudways-mcp-bridge/headers.txt
-printf 'X-Access-Token: '               >> ~/.cloudways-mcp-bridge/headers.txt
-read -rs TOKEN && printf '%s\n' "$TOKEN" >> ~/.cloudways-mcp-bridge/headers.txt && unset TOKEN
+umask 077                                   # 600 before anything is written to it
+mkdir -p ~/.config/cloudways-mcp
+printf 'X-Mcp-Host: claude-desktop\n' > ~/.config/cloudways-mcp/headers.txt
+printf 'X-Access-Token: '               >> ~/.config/cloudways-mcp/headers.txt
+read -rs TOKEN && printf '%s\n' "$TOKEN" >> ~/.config/cloudways-mcp/headers.txt && unset TOKEN
 ```
 
 `read -rs` keeps the value off the terminal and out of shell history — paste at the silent
-prompt and press Return. Check it afterwards with `ls -l` (expect `-rw-------`) and
-`cut -d: -f1 ~/.cloudways-mcp-bridge/headers.txt` (prints the header **names** only).
+prompt and press Return. Check it afterwards with `ls -l ~/.config/cloudways-mcp/headers.txt`
+(expect `-rw-------`) and `cut -d: -f1 ~/.config/cloudways-mcp/headers.txt` (prints the header
+**names** only).
+
+```powershell
+# Windows equivalent. Read-Host -AsSecureString keeps the value off the console;
+# it is still written to disk in cleartext, which is what the ACL is for.
+$dir = "$HOME\.config\cloudways-mcp"
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
+$file = Join-Path $dir 'headers.txt'
+$secure = Read-Host -AsSecureString 'Cloudways Access Token'
+$plain  = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(
+            [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+Set-Content -LiteralPath $file -Encoding ascii -Value @(
+  'X-Mcp-Host: claude-desktop'
+  "X-Access-Token: $plain"
+)
+$plain = $null
+# Break inheritance and grant only the current user - the NTFS equivalent of chmod 600.
+icacls $file /inheritance:r /grant:r "$($env:USERNAME):(R,W)" | Out-Null
+```
+
+(Written from Microsoft's documented behaviour for `icacls` and `Read-Host`; like the rest of
+the Windows path here, it has not been exercised on a Windows machine.)
 
 Then point Claude Desktop at the installed executable and that file:
 
@@ -142,7 +169,24 @@ Then point Claude Desktop at the installed executable and that file:
       "command": "/Users/<you>/.cloudways-mcp-bridge/node_modules/.bin/mcp-remote",
       "args": [
         "https://mcp.cloudways.com/mcp/",
-        "--header-file", "/Users/<you>/.cloudways-mcp-bridge/headers.txt"
+        "--header-file", "/Users/<you>/.config/cloudways-mcp/headers.txt"
+      ]
+    }
+  }
+}
+```
+
+On Windows both paths change — the launcher is the `.cmd` shim, and the header file is under
+the profile directory:
+
+```json
+{
+  "mcpServers": {
+    "cloudways": {
+      "command": "C:\\Users\\<you>\\.cloudways-mcp-bridge\\node_modules\\.bin\\mcp-remote.cmd",
+      "args": [
+        "https://mcp.cloudways.com/mcp/",
+        "--header-file", "C:\\Users\\<you>\\.config\\cloudways-mcp\\headers.txt"
       ]
     }
   }
@@ -154,9 +198,8 @@ startup instead of connecting unauthenticated. Verified against `mcp-remote@0.14
 from the shipped lockfile: it logs `Loaded 2 header(s)` and `Using custom headers:
 X-Mcp-Host, X-Access-Token` — the names, never the value.
 
-On Windows the launcher is `C:\\Users\\<you>\\.cloudways-mcp-bridge\\node_modules\\.bin\\mcp-remote.cmd`
-— the extensionless shim beside it is POSIX-only. (That path is npm's documented layout; it
-has not been exercised on a Windows machine.)
+(The `.cmd` shim is what Windows needs — the extensionless file beside it is POSIX-only. That
+path is npm's documented layout and has not been exercised on a Windows machine.)
 
 > **There is deliberately no `npx` alternative here any more.** Earlier versions offered one as
 > a collapsed fallback. `npx mcp-remote@0.14.0` pins the named package and **nothing underneath
@@ -210,9 +253,11 @@ has not been exercised on a Windows machine.)
 > packages' source has been read. Bumping `mcp-remote` means regenerating the lockfile in the
 > same commit.
 
-> **The secret is now in `headers.txt`, and it is still a secret at rest.** Keep it at mode
-> 600, back it up nowhere, and give the token the **smallest role that works** (READ for
-> monitoring-only). `claude_desktop_config.json` no longer contains it — that file can be
+> **The secret is now in `~/.config/cloudways-mcp/headers.txt`, and it is still a secret at
+> rest.** Keep it at mode 600, back it up nowhere, and give the token the **smallest role that
+> works** (READ for monitoring-only). It lives outside `~/.cloudways-mcp-bridge` on purpose:
+> that directory is deleted and recreated on every re-install, so a token kept inside it would
+> vanish on the next lockfile bump and take the connection down with it. `claude_desktop_config.json` no longer contains it — that file can be
 > pasted into an issue or a screen share without leaking anything — but the header file can't.
 > The `${VAR}` expansion used in the Claude Code section above is Claude Code's own; Claude
 > Desktop performs none, which is why the file exists. (`mcp-remote` does expand `${VAR}` inside
