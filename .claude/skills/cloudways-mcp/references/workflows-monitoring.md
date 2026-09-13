@@ -39,6 +39,10 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 
 1. The target server's row from `server_list` — status, size, provider, region, app count.
    That is the "current state" a baseline needs; `server_get` adds master credentials to it.
+   Then the roster steps 5 and 7 need — `app_list` on that server, unless you already hold it
+   from this conversation: `server_list` gives a *count*, and `monitoring_app_summary` /
+   `analytics_app_traffic` take an app id beside the server id. One call, whose payload rule 7
+   describes; `server_get` used to supply this roster implicitly, beside the master credentials.
 2. `monitoring_server_graph` — CPU, RAM, disk I/O over the last 5 minutes
 3. `service_status` — verify all the services are running
 4. `monitoring_server_summary` — free space (run `server_disk_usage_fetch` first to initialize the data, then read with `monitoring_server_summary`)
@@ -61,10 +65,13 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
    app count), then `monitoring_app_summary` (`type: db`) per app for its size — that maps a
    size to a label without any credential payload. The breakdown from step 1 names **folders**
    (`/home/master/applications/<folder>/`), and the folder name is a field `app_get` returns
-   and nothing else does; when the sizes alone do not settle which app owns the one folder
-   that matters, call `app_get` for **that one app** — the rule-7 case of a specific field
-   nothing else returns, accepting the database credentials that come with it — or read the
-   folder off the application's page in the Cloudways UI. Not a loop over the server.
+   and nothing else does. Usually the sizes settle it: the largest folder belongs to the app
+   whose `monitoring_app_summary` size is the largest, and that is an attribution with no
+   credential payload. When they do not — two or three apps of similar size — the folder name
+   has to be read for **those candidates only**: from each one's page in the Cloudways UI
+   (nothing enters the transcript), or with `app_get` on each candidate, which is the rule-7
+   case of a specific field nothing else returns, accepting the database credentials that come
+   with each call. The candidate set is bounded by the size ranking, never the whole server.
 3. Check logs via manual SSH (Cloudways MCP does not expose direct file system access): the administrator will need to connect via SSH to `/var/log/`, `/home/master/applications/<app>/logs/`
 4. Check MySQL slow logs: `analytics_app_mysql` — if there are a lot of slow queries, the bin logs can balloon
 

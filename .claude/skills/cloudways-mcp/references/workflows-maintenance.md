@@ -280,18 +280,23 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    proxy reaches the origin over HTTP, the origin's new redirect sends it back to HTTPS, and
    the site loops. Do not read any of this off `openssl x509 -dates`, which prints dates for a
    broken certificate just as happily.
-2. **The HTTPS answer must not send anyone back to HTTP.** Step 1 validated the handshake and
-   nothing after it — a valid certificate in front of an application that answers `https://`
-   with `301 Location: http://…` still exits 0. Look at the first hop:
-   `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> -w '%{http_code} %{redirect_url}\n' https://<domain>/`.
-   Expect `200 ` (empty `redirect_url`) or a redirect **to an `https://` URL**. A
-   `redirect_url` beginning `http://` means the app itself is pushing HTTPS visitors back to
-   HTTP — on WordPress that is `WP_HOME` / `WP_SITEURL` still set to `http://`, the usual
-   cause — and enforcing now produces the loop the audit warned about: the server redirects
-   `http→https`, the app redirects `https→http`, and every browser bounces between them until
-   it gives up. **Fix the application first**, then re-run this step until it passes:
-   `wp option update home https://<domain> && wp option update siteurl https://<domain>` (or
-   the two constants in `wp-config.php`).
+2. **The HTTPS answer must not send anyone back to HTTP — at any hop.** Step 1 validated the
+   handshake and nothing after it: a valid certificate in front of an application that answers
+   `https://` with `301 Location: http://…` still exits 0, and so does one whose first hop is a
+   harmless `https://www.` canonical redirect while the **second** hop goes back to `http://`.
+   So follow the whole chain, the way a browser will, **before** the write:
+   `curl -q -sS -o /dev/null --max-time 15 -L --max-redirs 5 -w '%{http_code} %{url_effective} %{num_redirects}\n' https://<domain>/`.
+   Pass is `200`, an effective URL that still begins `https://`, and a small hop count. An
+   effective URL beginning `http://` — or `curl: (47) Maximum (5) redirects followed` — means
+   the app itself is pushing HTTPS visitors back to HTTP somewhere in its chain; on WordPress
+   that is `WP_HOME` / `WP_SITEURL` still set to `http://`, the usual cause on a site that has
+   never had HTTPS enforced. Enforcing now produces the loop the audit warned about: the server
+   redirects `http→https`, the app redirects `https→http`, and every browser bounces between
+   them until it gives up. **Fix the application first**, then re-run this step until it
+   passes: `wp option update home https://<domain> && wp option update siteurl https://<domain>`
+   (or the two constants in `wp-config.php`). Through public DNS on purpose — hops to other
+   hostnames cannot be pinned with `--resolve`, and this is the path visitors take; the origin
+   itself was already checked in step 1.
 3. If there's no SSL: install one first — `security_lets_encrypt_install` (W, see sections 2 and 3). Enforcing HTTPS without a valid cert will break the site.
 4. **CONFIRM:** `app_enforce_https_update` (W) — toggles the HTTP→HTTPS redirect (this is separate from installing the cert)
 5. Verify the **whole chain** the way a browser walks it, not the first hop:
