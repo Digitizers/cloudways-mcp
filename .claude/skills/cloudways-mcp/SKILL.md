@@ -1,6 +1,6 @@
 ---
 name: cloudways-mcp
-version: 1.5.2
+version: 1.5.3
 license: MIT
 description: |
   Operational guide for managing Cloudways servers and applications, across one or several Cloudways accounts, via the official Cloudways MCP server (Cloudways' hosted MCP / Remote MCP, per their support docs).
@@ -219,9 +219,14 @@ Example tagging in the response:
 
 ### Checking an app's details
 ```
-1. app_list                  → find the app
-2. app_get                   → details, FQDN, config
+1. app_list                  → find the app: id, label, type, version, domain
+2. app_settings_get          → its setting flags (XML-RPC, GEO-IP, password protection, …)
+3. monitoring_app_summary    → what it is doing right now
 ```
+
+(`app_get` is not in this list on purpose: everything above is credential-free, and `app_get`
+returns the application's **database credentials** beside the same fields. Reach for it only
+for a field none of these return, and accept what comes with it — safety rule 7.)
 
 (SSL / Let's Encrypt **is** an MCP tool as of v1.2 — `security_lets_encrypt_install` / `_renew` / `_auto_renewal` / `_revoke`, via the security toolset. Install/renew are W; revoke is W!.)
 

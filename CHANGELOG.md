@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.5.3 - 2026-09-13
+
+From the ClawHub audit of 1.5.2. AIG went from three Highs to **one Medium**, and `static-analysis`
+stayed clean. The Medium is fair and this release takes it whole.
+
+- **`app_get` and `server_get` leave every step that only needed metadata** (Medium — "credential-
+  bearing API calls exceed the metadata requirements of routine workflows"). Eight maintenance
+  and monitoring sequences opened with `app_get — confirm target` or `server_get — current
+  state`: a cache purge, a backup, a restore, a custom-cert install, a change baseline, a
+  multi-server comparison, a "why is this server not Running". None of them used the database
+  or master credentials those calls return beside the label; they were the habit of reaching for
+  the richest tool. Each now names the credential-free call that answers the actual question —
+  `app_list` for identity, `service_status` and `operation_status` for "why", the `server_list`
+  row for a baseline, `monitoring_app_summary` and `app_settings_get` for what an app is doing —
+  and `workflows-maintenance.md` states the rule once at the top: confirming a target is never
+  `app_get`. The three places that read **certificate state** through `app_get` read it from the
+  outside instead — `openssl s_client … | openssl x509 -noout -issuer -dates` — which is
+  credential-free and, unlike any API field, shows what a browser is actually served. The
+  "checking an app's details" pattern in SKILL.md, the one most likely to be copied, no longer
+  ends in `app_get` either. After this, the only in-agent `app_get` left in the skill is the one
+  the SSL section explicitly reserves for a single certificate the user named.
+
 ## 1.5.2 - 2026-09-13
 
 From the ClawHub audit of 1.5.1. `static-analysis` went `suspicious` → **clean** (the

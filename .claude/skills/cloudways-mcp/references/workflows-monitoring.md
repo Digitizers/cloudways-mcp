@@ -14,7 +14,9 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 
 1. `server_list` — list + status for each server (also confirms the account/connection is reachable; there is no separate account-info tool)
 2. `copilot_insights_list` — what's open right now
-3. For each server with a status other than Running: `server_get` to check why
+3. For each server with a status other than Running: `service_status` (what is down) and
+   `operation_status` (whether an operation is still in flight) — the two things "why" usually
+   is. `server_get` would add the server's master credentials to an answer that needs neither.
 
 **How to summarize:**
 - How many servers, how many apps, how many active / inactive
@@ -32,7 +34,8 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 
 **Call sequence:**
 
-1. `server_get` (the target server) — current state
+1. The target server's row from `server_list` — status, size, provider, region, app count.
+   That is the "current state" a baseline needs; `server_get` adds master credentials to it.
 2. `monitoring_server_graph` — CPU, RAM, disk I/O over the last 5 minutes
 3. `service_status` — verify all the services are running
 4. `monitoring_server_summary` — free space (run `server_disk_usage_fetch` first to initialize the data, then read with `monitoring_server_summary`)
@@ -52,9 +55,9 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 
 1. `server_disk_usage_fetch` (init) then `monitoring_server_summary` (read) — where is the space?
 2. If application folders are large: `app_list` for the roster (`server_list` returns only an
-   app count), then `app_get` + `app_settings_get` on the apps the disk numbers point at —
-   `app_get` returns database credentials in the same payload, so this stays a short list,
-   never a loop over the server
+   app count), then `monitoring_app_summary` + `app_settings_get` on the apps the disk numbers
+   point at — bandwidth, requests and flags say what an app is doing; `app_get` would add its
+   database credentials and nothing a disk investigation uses
 3. Check logs via manual SSH (Cloudways MCP does not expose direct file system access): the administrator will need to connect via SSH to `/var/log/`, `/home/master/applications/<app>/logs/`
 4. Check MySQL slow logs: `analytics_app_mysql` — if there are a lot of slow queries, the bin logs can balloon
 
@@ -165,7 +168,9 @@ below. **In the agent, `app_get` is for one certificate the user named**, never 
 **Sequence:**
 
 1. `server_list` — filter by label/project
-2. For two or three servers: `server_get` + `monitoring_server_graph` in parallel
+2. For two or three servers: `monitoring_server_graph` in parallel, plus `app_list` per
+   server for the application roster. Provider, region and size are already in the
+   `server_list` rows from step 1 — `server_get` repeats them beside master credentials.
 3. Compare: provider, region, size, RAM/CPU usage, applications
 
 **Tip:** Cloudways sometimes groups one client's apps on the same server. This can be a problem in production: a spike in one application affects the others. In an audit for a new client, this is the first thing to check.

@@ -26,13 +26,21 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 ---
 
+> **Confirming a target is never `app_get`.** Every sequence below starts by making sure the
+> right application is in hand. `app_list` on its server answers that — id, label, type, domain
+> — and it is the roster you usually already hold from the conversation. `app_get` answers it
+> too, and returns that application's **database credentials** in the same payload, which a
+> cache purge, a backup or a restore has no use for. Certificate state, the one thing `app_get`
+> used to be reached for here, is read from the outside instead: `openssl s_client -servername <domain> -connect <domain>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates` — it is credential-free
+> and, unlike any API field, it shows what a browser is actually served.
+
 ## 1. Cache clear — basic
 
 **When:** "The site isn't updating after a change" / "Admin screen shows an old version"
 
 **Sequence:**
 
-1. `app_get` — confirm the target app
+1. `app_list` on the server — confirm the target app by label/domain (not `app_get`; see above)
 2. `app_varnish_settings_get` — see if Varnish is active
 3. **CONFIRM:** `app_purge_cache` (W)
 4. If Varnish is active: **CONFIRM:** `varnish_app_manage` with action=purge (W)
@@ -53,11 +61,14 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. `app_get` — check the domain and read what you can about the app's current state
+1. Domain from `app_list`; current certificate (issuer, `notAfter`) from the outside: `openssl s_client -servername <domain> -connect <domain>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates`.
+   Nothing in this step needs the database credentials `app_get` would add.
 2. Check that the DNS still points to the server (critical for LE validation)
 3. **CONFIRM:** `security_lets_encrypt_renew` (W) — or `security_lets_encrypt_install` (W) if no cert was issued yet. For a wildcard domain: **CONFIRM** `security_create_dns` (W), publish the returned TXT record at the DNS host, then **CONFIRM** `security_verify_dns` (W).
 4. **CONFIRM:** `security_lets_encrypt_auto_renewal` (W) — turn auto-renewal on if it wasn't active.
-5. `app_get` — re-read and verify the app looks healthy; confirm the cert in the browser
+5. Verify from the outside — the same `openssl s_client` line, now showing the new `notAfter`
+   — and load the site in a browser. A re-read of `app_get` would confirm nothing the TLS
+   handshake does not, at the price of a second credential payload.
 
 **If renewal fails:**
 - Most common problem: DNS doesn't point correctly, or wildcard domains aren't configured
@@ -86,7 +97,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    ```
 
    Keep `privkey.pem` — a bare `openssl req -new` writes an encrypted key to whatever path the local OpenSSL config picks, and losing it makes the issued certificate unusable.
-2. `app_get` — confirm target
+2. `app_list` on the server — confirm target
 3. **Install the custom cert in the Cloudways UI** (paste cert + key) — manual by necessity; no MCP tool covers this step.
 4. Check SSL from the browser (SSL Labs grade A+ preferred)
 5. If Let's Encrypt was active — decide: keep as backup or revoke (`security_lets_encrypt_revoke`, W! — double-confirm)
@@ -101,7 +112,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. `app_get` — confirm target
+1. `app_list` on the server — confirm target
 2. `monitoring_app_summary` — before: snapshot of state
 3. **CONFIRM:** `app_backup` (W)
 4. Check that the backup is progressing (`app_backup_status_get` for in-progress state, or via the UI). Note: there is no general "list backups" tool — the available restore points are visible in the Cloudways UI.
@@ -120,7 +131,9 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 **Sequence — critical to follow in order:**
 
 1. **STOP** — don't do anything until you understand the scope of the problem.
-2. `app_get` — current state
+2. `app_list` for the app's identity and status, `monitoring_app_summary` for what it is doing
+   right now — the current state a restore decision needs, without the credentials `app_get`
+   would bring along
 3. Check the list of available backups (via the Cloudways UI — there is no MCP "list backups" tool; `app_backup_status_get` only reports in-progress backup status)
 4. **CONFIRM step 1:** "Is the backup from date X the point you want to roll back to?"
 5. **CONFIRM step 2:** Type the app name to confirm restore
@@ -193,7 +206,8 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. `app_get` — check that a valid SSL is installed
+1. Check that a valid certificate is actually served: `openssl s_client -servername <domain> -connect <domain>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates` — a handshake, not an API field,
+   is what "valid" means to the browsers about to be redirected here
 2. If there's no SSL: install one first — `security_lets_encrypt_install` (W, see sections 2 and 3). Enforcing HTTPS without a valid cert will break the site.
 3. **CONFIRM:** `app_enforce_https_update` (W) — toggles the HTTP→HTTPS redirect (this is separate from installing the cert)
 4. Check that the redirect works: `curl -I http://example.com` → 301 to HTTPS
