@@ -126,9 +126,10 @@ For each application in it:
 > sweep.** There is no `ssl_get`; certificate provider and expiry come back inside `app_get`,
 > which also returns that application's **database credentials**. For an audit across a whole
 > fleet that is a bad trade, so read provider + expiry from the Cloudways Platform UI or the
-> direct API here. `workflows-monitoring.md` §5 (SSL expiry monitoring) does use `app_get` — with the
-> conditions attached there — because a certificate sweep is the one job that cannot be done
-> any other way.
+> direct API here. **The same answer applies to the weekly review**: `workflows-monitoring.md`
+> §5 no longer walks the fleet with `app_get` at all — it collects the dates outside the
+> conversation and brings back only names and dates. In the agent, `app_get` is for one
+> certificate somebody named.
 
 > **Domains: the primary comes from the roster, the aliases do not.** `app_list` documents a
 > `domain` field, so the primary domain arrives with the roster you already fetched. There is no

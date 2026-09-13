@@ -96,15 +96,41 @@ curl -sH "Authorization: Bearer $TOKEN" \
 
 ```
 ┌─ Cron (Sunday 09:00)
-├─ HTTP: GET /api/v2/server  (Authorization: Bearer <access-token>)  → all servers
-├─ Loop servers → Loop apps:
-│   ├─ HTTP: GET /app/{id}           → including SSL info
-│   ├─ Function: parse SSL expiry date
-│   ├─ IF expiry < 30 days:
-│   │   └─ Add to "needs attention" list
+├─ ONE step — request AND projection together:
+│   ├─ GET /api/v2/server                        → servers
+│   ├─ for each app: GET /app/{id}               → certificate fields + DB credentials
+│   └─ return ONLY { label, app_fqdn, ssl_* }    ← nothing else leaves this step
+├─ IF expiry < 30 days → "needs attention"
 ├─ Aggregate
 └─ Send report
 ```
+
+> **The projection has to happen inside the step that makes the request.** `GET /app/{id}`
+> returns that application's database credentials beside the certificate fields, and on n8n or
+> Make **every node's output is persisted in the execution record** — so an HTTP node that emits
+> the whole payload has already retained every app's DB password, and a filter node after it
+> cannot take that back. A later "select these fields" step protects the *report*, not the
+> platform's own log; this is the same mistake as telling an agent to keep secrets out of its
+> summary.
+>
+> Three shapes that actually work, in order of preference:
+>
+> 1. **A plain script** — cron + `curl` + `jq`, doing its own requests and printing only the
+>    allowlisted fields. The projection happens in the same process; nothing is persisted
+>    anywhere. Note that this means a **script**, not `claude -p`: the daily-summary job below
+>    delivers its report with `curl`, but its body is an agent, and an agent asked for expiry
+>    dates has only the credential-bearing `app_get` to get them with.
+> 2. **One n8n Code node** that performs the requests itself (`this.helpers.httpRequest`) and
+>    returns only the allowlisted fields. One node, one output, and that output is the filtered
+>    one.
+> 3. **A platform whose execution logging you have turned off or redacted for this scenario** —
+>    verify it on a test run before trusting it, because "logs expire in 30 days" is retention,
+>    not absence.
+>
+> If your automation platform emits the raw response from a node you cannot collapse, and you
+> cannot disable that node's logging, do not run this job there. This is the job
+> `workflows-monitoring.md` §5 points at: the agent gets names and dates from here, never the
+> payloads.
 
 ### Workflow: Disk space alerting
 
@@ -197,15 +223,22 @@ OUT=$(mktemp "${TMPDIR:-/tmp}/cw-summary.md.XXXXXX")
 trap 'rm -f "$OUT"' EXIT
 
 # Here Claude calls the MCP tools itself and generates a summary
+# Certificate expiry is deliberately NOT asked for here. The only tool that returns it is
+# app_get, which also returns that application's database credentials - so an agent asked for
+# expiry dates across the fleet has no way to answer except the sweep this skill refuses
+# (workflows-monitoring.md section 5). SSL runs as its own direct-API job above, which projects
+# the response before anything reads it. Ask an agent only for what a credential-free tool
+# answers.
 claude -p "
 Generate today's Cloudways health summary.
 Check all servers (server_list), get alerts (copilot_insights_list), and identify:
 1. Any server not in Running status
 2. Any disk > 80%
-3. Any SSL expiring within 30 days
-4. Top 3 apps by traffic in the past 24h
+3. Top 3 apps by traffic in the past 24h
 
-Do NOT include credentials, IP addresses or tokens in the summary.
+Call no credential-returning tool: not server_get, not app_get, not app_credentials.
+Telling you to leave secrets out of the summary would not help - by then they are in this
+transcript, and the transcript outlives the summary.
 
 Output in Hebrew, markdown format, written to $OUT
 "

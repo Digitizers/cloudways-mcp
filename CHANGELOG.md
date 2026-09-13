@@ -1,5 +1,74 @@
 # Changelog
 
+## 1.5.2 - 2026-09-13
+
+From the ClawHub audit of 1.5.1. `static-analysis` went `suspicious` → **clean** (the
+`exposed_secret_literal` false positive is gone with the line it pointed at) and VirusTotal is
+clean. AIG returned three Highs, all three real, all three fixed here — and two of them are
+mine from 1.5.1.
+
+- **The weekly SSL sweep no longer runs through the agent** (T05, High). `workflows-monitoring.md`
+  §5 walked the fleet with `app_get` to read certificate expiry dates — a tool that returns that
+  application's **database credentials** in the same payload. 1.5.1 authorized that loop under
+  conditions ("on a READ-role token, do not paste the responses anywhere"); that was the wrong
+  call, and conditions on a fetch do not unfetch anything. The dates are now collected **outside
+  the conversation** — the Cloudways UI, or a direct call through a field filter — and only names
+  and dates come back to the agent for triage — which also means the agent calls **no roster
+  tool** in that section: it was handed the labels, and `app_list`/`server_list` come from the
+  same `/server` payload safety rule 7 is about, so fetching one would give away the section's
+  own guarantee for nothing. In the agent, `app_get` is for one certificate
+  somebody named. `workflows-automation.md` already ran exactly this as a Sunday cron, so §5 now
+  points at it — and that cron makes the **request and the projection in one step**, because on
+  n8n or Make every node's output is persisted in the execution record: an HTTP node that emits
+  the whole `/app/{id}` payload has already retained every app's DB password, and a filter node
+  after it cannot take that back. The three shapes that actually work are named (a plain
+  `curl`+`jq` script, one n8n Code node that performs its own requests, or a platform whose
+  execution logging is off and verified off), along with when not to run the job at all. The
+  headless daily summary in the same file **stopped asking for certificate expiry**: the only
+  tool that answers it is `app_get`, so an agent given that line had no way to comply except
+  the sweep this release removes — and its prompt no longer says “don’t include credentials in
+  the summary”, which was the same too-late instruction in miniature. It now names the three
+  tools not to call, and says why leaving them out of the summary would not have helped. The onboarding note that named §5 as
+  the one legitimate exception is gone: there is no exception any more.
+- **The Access Token leaves both the Desktop config and the command line** (T09, High). The
+  bridge config passed `--header X-Access-Token:<token>`, so the token sat in
+  `claude_desktop_config.json` as a literal **and** in the process's argument list, where any
+  other user on the machine can read it from `ps`. It now lives in
+  `~/.config/cloudways-mcp/headers.txt` at mode 600, written with `umask 077` and `read -rs` so
+  it never reaches the terminal or the shell history — and written as a **new** file moved into
+  place, because `umask` applies only at creation, so rotating a token by redirecting over an
+  existing `headers.txt` would have kept whatever mode that file already had. The config carries
+  `--header-file`
+  pointing at it. The path is **outside** `~/.cloudways-mcp-bridge` deliberately: that directory
+  is deleted and recreated by every re-install, so a token kept inside it would disappear on the
+  next lockfile bump. Windows gets its own recipe (`Read-Host -AsSecureString` plus an `icacls`
+  ACL that is the NTFS equivalent of `chmod 600`) and its own `args`, both documented from
+  Microsoft's semantics rather than exercised. `mcp-remote` treats an unreadable header file as **fatal**, so a wrong path
+  fails at startup instead of connecting unauthenticated. Verified against `mcp-remote@0.14.0`
+  installed from the shipped lockfile: it logs `Loaded 2 header(s)` and the header **names**,
+  never the value.
+- **The shipped lockfile no longer carries a known-vulnerable `qs`.** GitHub's advisory database
+  flagged two moderate issues against `qs < 6.16.0` in `bridge/package-lock.json` — the file this
+  release tells people to `npm ci`. `express@4.22.2` is the newest 4.x and requires `~6.15.1`,
+  with no release widening it, so `bridge/package.json` now carries
+  `"overrides": { "qs": "6.16.0" }`; `body-parser` in the same tree already required `~6.16.0`, so
+  the override merges two copies into the patched one. The regenerated lockfile differs by that
+  one version and nothing else (82 entries → 81, every package with an integrity hash), `npm
+  audit` reports **0 vulnerabilities**, and `npm ci` still yields a working `mcp-remote`.
+  A lockfile that is reproducible but knowingly vulnerable is not "vetted".
+- **The `npx` fallback is removed** (T08, High). It pinned `mcp-remote` and nothing underneath
+  it: ~80 transitive dependencies re-resolved whenever the npx cache is empty, executing in the
+  process that holds the Access Token. Anyone who can run `npx` can run the `npm ci` above it,
+  against a lockfile that ships with the skill — the fallback bought convenience that was never
+  worth its exposure. The troubleshooting row that sent people to check `npx` on PATH now sends
+  them to re-run the install.
+
+Not changed: the token is still a secret at rest, now in `headers.txt` rather than in the
+Desktop config — a file that can be pasted into an issue or a screen share no longer carries it,
+but the header file still must not be. ClawScan's `persistence_privilege` and `purpose_capability`
+concerns are the skill's nature — an operations skill for a hosting account reaches production
+servers, DNS and billing — and are answered by token role, not by documentation.
+
 ## 1.5.1 - 2026-09-13
 
 From the ClawHub audit of 1.5.0. Context first, because the headline moved the wrong way: the
