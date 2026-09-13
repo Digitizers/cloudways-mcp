@@ -105,8 +105,12 @@ Next action requires confirmation: app_purge_cache (W)
 **Sequence for each application:**
 
 1. `server_list`
-2. For each server: `server_get` → list of apps
-3. For each app: `app_get` → inspect the SSL/expiry detail returned for the app
+2. For each server: `app_list` → the application roster (no credentials in the payload)
+3. For each app: `app_get` → the SSL/expiry detail, which no credential-free tool returns.
+   **This is a fleet-wide loop over a tool that also returns database credentials**, so it
+   pulls every app's DB password into the conversation. Run it when an SSL sweep is what the
+   user asked for, on a READ-role token, and do not paste the responses anywhere; for a single
+   certificate, call it for that one app instead.
 4. Filter: SSL expiring within the next 30 days → flag for renewal
 5. For each flagged app: confirm whether Let's Encrypt auto-renewal is enabled. **There is no MCP read tool for auto-renewal status** — check it in the Cloudways Platform UI (Application → SSL Certificate) or via the direct API; `security_lets_encrypt_auto_renewal` is a W **toggle**, never call it just to inspect the setting. If auto-renewal is off — double flag and report it; the fix (enable auto-renewal / renew) is a write — hand it to `workflows-maintenance.md` §2 (`security_lets_encrypt_auto_renewal` / `security_lets_encrypt_renew`, both W with confirmation), don't execute it from this read-only playbook.
 

@@ -246,8 +246,9 @@ Auditor: [your name]
 ## Quick reference — Audit checklist (printable)
 
 - [ ] **Account:** server_list / project_list / copilot_insights_list / team_member_list  (plan/billing = UI only)
-- [ ] **Per server:** server_get / server_settings_get / service_status / monitoring_server_summary / monitoring_server_graph (optionally server_disk_usage_fetch first for fresh disk data — W, needs a token role that allows it)
-- [ ] **Per app:** app_get / app_settings_get / monitoring_app_summary / analytics_app_traffic / analytics_app_php / analytics_app_mysql / app_varnish_settings_get / app_vulnerabilities_list (WP)
+- [ ] **Per server:** server_settings_get / service_status / monitoring_server_summary / monitoring_server_graph (optionally server_disk_usage_fetch first for fresh disk data — W, needs a token role that allows it)
+- [ ] **Per app:** app_list for the roster, then app_settings_get / monitoring_app_summary / analytics_app_traffic / analytics_app_php / analytics_app_mysql / app_varnish_settings_get / app_vulnerabilities_list (WP)
+- [ ] **NOT in a sweep:** `server_get`, `app_get`, `app_credentials` — each returns master, database or SSH credentials in its payload, so a per-server or per-app loop pulls the whole account's secrets into the conversation. Call one for a specific missing field, or for a task the user asked for. See Stage 2.
 - [ ] **Security:** app_settings_get (XML-RPC etc.) / app_vulnerabilities_list / copilot_insights_list / security_get_whitelisted_ips + security_get_whitelisted_ips_mysql / security_suite_server_incidents_list (if suite active)  (SSH-key roster = UI / API only)
 - [ ] **Manual (UI):** Backup schedule + retention / SSL provider + expiry (no MCP read tool — UI or direct API) / SSH-key roster / Cloudflare integration (if any) / WP version (if WP) / Active plugins (if WP)
 - [ ] **Document:** Red flags / Recommendations / Quote / SLA

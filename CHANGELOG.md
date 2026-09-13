@@ -26,7 +26,12 @@ went from `suspicious` to `clean`. All four findings are real and all four are f
   and `app_list` — neither carries credentials — and takes its detail from
   `server_settings_get`, `service_status`, `app_settings_get`, the monitoring/analytics tools
   and `app_vulnerabilities_list`. All three credential-returning tools are named as
-  deliberately absent, with what each is for and when calling it is legitimate.
+  deliberately absent, with what each is for and when calling it is legitimate — **in every
+  place the sweep is written down**: the stage instructions, the printable audit checklist at
+  the end of the same file, the fleet-wide SSL sweep in `workflows-monitoring.md`, and the
+  weekend health check in SKILL.md. A rule stated once and contradicted by the copy-pasteable
+  checklist below it is not a rule. SKILL.md also carries it as a numbered safety rule, so it
+  applies to sweeps nobody has written down yet.
 - **The daily-summary example uses `mktemp`, not a fixed `/tmp` path** (Medium), with
   `umask 077` and a `trap` that removes the file even when `curl` fails. The template ends in
   the `X`s: BSD `mktemp` does not substitute them anywhere else, and does not fail either — it

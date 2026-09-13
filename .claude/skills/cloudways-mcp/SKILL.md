@@ -50,9 +50,11 @@ Managing Cloudways infrastructure through the Cloudways MCP server.
 
 6. **Credentials.** Each account authenticates with its own **Access Token** (case-sensitive `X-Access-Token` header; roles + legacy-key migration in the Authentication section below). Don't print tokens in responses. Don't mix credentials between accounts. If the user asks to see them, refer them to platform.cloudways.com → API section.
 
-7. **Read-only by default.** If the user just asks "show me / check / monitor" — always choose the appropriate read-only tool. Don't suggest a destructive operation unless the user explicitly asked for it.
+7. **Don't sweep the credential-returning tools.** `server_get`, `app_get` and `app_credentials` return master, database and SSH credentials inside their ordinary payloads. Running one of them over **every** server or **every** app pulls the account's secrets into the conversation, where they stay for the rest of it — and telling yourself to keep them out of the *report* comes too late to help. Use `server_list` / `app_list` for inventory; call the other three for a specific field nothing else returns, or for a task the user actually asked for.
 
-8. **`execute_tool` / toolset-proxy calls inherit their target tool's R/W/W! risk.** Most tools live in on-demand toolsets and are invoked through the `execute_tool` proxy (or surfaced via `get_toolset_tools`). Calling a write/destructive tool through the proxy is exactly as consequential as calling it directly — apply the **same** confirmation (and double-confirmation for W!) as you would for the named tool.
+8. **Read-only by default.** If the user just asks "show me / check / monitor" — always choose the appropriate read-only tool. Don't suggest a destructive operation unless the user explicitly asked for it.
+
+9. **`execute_tool` / toolset-proxy calls inherit their target tool's R/W/W! risk.** Most tools live in on-demand toolsets and are invoked through the `execute_tool` proxy (or surfaced via `get_toolset_tools`). Calling a write/destructive tool through the proxy is exactly as consequential as calling it directly — apply the **same** confirmation (and double-confirmation for W!) as you would for the named tool.
 
 ---
 
@@ -204,7 +206,7 @@ Example tagging in the response:
 
 ### Health check before a weekend (production client)
 ```
-1. server_get                   → CPU/RAM/disk
+1. server_list                  → the fleet (server_get would add master credentials)
 2. monitoring_server_graph      → metrics (CPU/mem/etc.)
 3. monitoring_app_summary       → for each application
 4. copilot_insights_list        → open insights/alerts
