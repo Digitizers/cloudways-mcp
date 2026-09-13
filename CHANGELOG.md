@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.5.0 - 2026-09-13
+
+From the ClawHub audit of 1.4.1. ClawScan rates the skill **benign**; this is the
+credential-handling issue its static-analysis pass surfaced (as a false-positive
+"exposed secret literal" on an angle-bracket placeholder — the placeholder is not a secret,
+but the line teaching users to type a token into a shell is a real problem).
+
+- **The token never goes on a command line.** The setup examples put the Access Token
+  literally into `claude mcp add --header "X-Access-Token: <token>"`, which exposes it three
+  ways: the shell history file, `ps` / `/proc/<pid>/cmdline` for every other user on the
+  machine while the command runs, and the resolved value `claude mcp add -s user` then
+  stores in `~/.claude.json` in plaintext until the connection is removed. Every example now
+  passes a **single-quoted placeholder** — `'X-Access-Token: ${CLOUDWAYS_ACCESS_TOKEN:-}'` —
+  which closes all three: the shell never expands it, and Claude Code expands it from its own
+  environment when it opens the connection. Verified rather than assumed: that expansion
+  applies to `headers` in local- and user-scoped `~/.claude.json` entries, not only in a
+  project `.mcp.json` (an unset reference reports `Missing environment variables` in
+  `claude mcp list`).
+- **Multi-account uses one variable NAME per account** through the same mechanism, so
+  neither token reaches a config file, and `.mcp.json.example` carries the same placeholders
+  rather than `CLIENT_A_ACCESS_TOKEN`-style literals — following the example can no longer
+  produce the plaintext file the guidance exists to prevent.
+- **New "Handling the token safely" section**: where the value should live (`read -rs` for
+  one shell, a mode-600 profile or a keychain lookup for a persistent setup, cloud env vars),
+  and revoke-and-reissue at platform.cloudways.com as the recovery for an exposed token,
+  with the smallest role that works. The check for a forgotten literal **parses**
+  `~/.claude.json` and prints connection names, never values — and counts literal material
+  inside `:-` defaults, since a token hides just as well in `${VAR:-cw_live}`.
+- **The Claude Desktop bridge config is called out as a credential at rest.** The `${VAR}`
+  expansion above is Claude Code's; that file is documented as holding the literal, to be
+  kept at mode 600 and given the smallest role that works.
+
+No tool, endpoint, auth-header, or safety-rule changes.
+
 ## 1.4.1 - 2026-08-25
 Re-aligned `references/installation.md` with the current support article (14654372):
 - **`X-Mcp-Host: windsurf` → `Devin`.** Windsurf was renamed Devin; the article's own config snippet sends the capitalised `Devin`, and its FAQ states header values are case-sensitive — so the old value was a silent-failure trap.

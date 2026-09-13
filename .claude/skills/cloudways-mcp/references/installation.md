@@ -58,11 +58,16 @@ to opt out locally, set `"enableAllProjectMcpServers": false` in `.claude/settin
 
 ```bash
 claude mcp add --transport http \
-  --header "X-Access-Token: <your-cloudways-access-token>" \
+  --header 'X-Access-Token: ${CLOUDWAYS_ACCESS_TOKEN:-}' \
   --header "X-Mcp-Host: claude-code" \
   -s user \
   cloudways https://mcp.cloudways.com/mcp/
 ```
+
+**Keep the single quotes, and do not put the token's value here.** See "Handling the
+token safely" below: quoted this way, the shell never expands it, so neither this
+command's arguments nor the stored config holds the secret — Claude Code expands it from
+its own environment when it opens the connection.
 
 `-s user` stores it at the user level so it persists across projects. Verify with `claude mcp list`; remove later with `claude mcp remove cloudways`.
 
@@ -89,9 +94,15 @@ Claude Desktop does not natively support remote HTTP MCP servers, so it uses the
 }
 ```
 
+> **This config file holds the literal token.** The `${VAR}` expansion used above is
+> Claude Code's; do not assume the Desktop bridge performs it — treat that file as holding
+> the real value, keep it at mode 600 (`chmod 600 ~/Library/Application\ Support/Claude/claude_desktop_config.json`),
+> and give it the **smallest role that works** (READ for monitoring-only), since it is a
+> credential at rest rather than one held in an environment.
+
 > **No spaces around the colon** in `--header` values for the bridge: use `X-Access-Token:abc123`, not `X-Access-Token: abc123`. After saving, **fully quit** Claude Desktop (Cmd-Q / tray → Quit — closing the window is not enough) and reopen.
 
-> Keep real credentials out of version control. For Claude Code, put the token in your user scope with the `claude mcp add` command above, or in the `CLOUDWAYS_ACCESS_TOKEN` env var (the committed `.mcp.json` reads it) — never edit a real token into `.mcp.json`, which is a **tracked** file. See `.mcp.json.example` in the repo root for the per-account shape. Header names are case-sensitive.
+> Keep real credentials out of version control. For Claude Code, put the token in the `CLOUDWAYS_ACCESS_TOKEN` env var (the committed `.mcp.json` reads it, and so does the user-scope form above) — never edit a real token into `.mcp.json`, which is a **tracked** file. See `.mcp.json.example` in the repo root for the per-account shape. Header names are case-sensitive.
 
 ### Other clients (Cursor, Devin, VS Code Copilot, Gemini CLI, Codex)
 
@@ -109,17 +120,97 @@ Same endpoint and headers everywhere; only the config-file shape and the `X-Mcp-
 
 ---
 
+## Handling the token safely
+
+An Access Token carries whatever role it was issued with — up to FULL ACCESS, which is
+everything the Cloudways account can do, including destructive server and app actions and
+billing. Keep the value in **one** place, the environment Claude Code starts with, and put a
+*placeholder* everywhere else.
+
+**Never pass the value to `claude mcp add`.** Written as `"X-Access-Token: $TOKEN"`, the
+shell expands it before launching anything, so the live token is in that process's argument
+list — readable through `ps` or `/proc/<pid>/cmdline` by any other user on the machine while
+the command runs — and `claude mcp add` then stores the **resolved value** in
+`~/.claude.json` in plaintext, where it stays until you remove the connection. Single-quoted
+as `'X-Access-Token: ${CLOUDWAYS_ACCESS_TOKEN:-}'`, neither the argument list nor the stored
+config carries the secret. Claude Code expands `${VAR}` in headers for local- and
+user-scoped entries in `~/.claude.json`, not only in a project `.mcp.json`; an unset
+reference produces a `Missing environment variables` warning in `claude mcp list`.
+
+**Where the value lives.** It must be in the environment Claude Code itself starts with:
+
+```bash
+printf 'Cloudways Access Token: '
+read -rs CLOUDWAYS_ACCESS_TOKEN; echo
+export CLOUDWAYS_ACCESS_TOKEN
+```
+
+`read -rs` does not echo the token and never writes it to `~/.zsh_history` /
+`~/.bash_history`, but it lasts only for that shell — start Claude Code **from it**. For a
+persistent setup, put the export in your shell profile at mode 600, or better, read it from
+a keychain rather than storing it inline:
+
+```bash
+export CLOUDWAYS_ACCESS_TOKEN="$(security find-generic-password -s cloudways-api -w)"   # macOS
+```
+
+In claude.ai cloud sessions the equivalent is the environment's own environment variables.
+
+**If a token may have been exposed** — pasted into a chat, committed, left in a history file
+or an old `~/.claude.json` entry — **revoke it at platform.cloudways.com → API** and issue a
+new one with the smallest role that works. To check whether an old connection left a literal
+behind, **parse** the config rather than grepping it (JSON may put a value on the line after
+its key), and report names rather than values:
+
+```bash
+node -e '
+const fs = require("fs"), p = require("os").homedir() + "/.claude.json";
+let c; try { c = JSON.parse(fs.readFileSync(p, "utf8")); }
+catch (e) { console.error("could not read " + p); process.exit(1); }
+const all = [...Object.entries(c.mcpServers || {}),
+             ...Object.values(c.projects || {}).flatMap(x => Object.entries(x.mcpServers || {}))];
+const literal = v => { const re = /\$\{[A-Za-z_][A-Za-z0-9_]*(?::-([^}]*))?\}/g;
+                       let n = v.replace(re, "").length;
+                       for (const m of v.matchAll(re)) n += (m[1] || "").length;
+                       return n; };
+const hits = all.filter(([, s]) => { const v = (s.headers || {})["X-Access-Token"];
+                                     return typeof v === "string" && literal(v) > 0; })
+                .map(([n]) => n);
+console.log(hits.length
+  ? "Literal token stored in: " + hits.join(", ") + " — revoke it and re-add with the placeholder form."
+  : "No literal token in ~/.claude.json.");
+'
+```
+
+It counts literal material inside `:-` defaults as well as outside the placeholders — a
+token hides just as well in `${CLOUDWAYS_ACCESS_TOKEN:-cw_live}`, which is still plaintext
+in the file and is still what gets sent whenever the variable is unset.
+
+---
+
 ## Multi-account configuration — multiple Cloudways accounts
 
 Each Cloudways account is a **separate** MCP connection with its own Access Token, so it appears under its own prefix (`mcp__cloudways-clientA__*`). Give each a descriptive, client-based name — that name becomes the tool prefix. Same endpoint for all; only the `X-Access-Token` differs.
 
+Give each account its **own variable name** and reference it as a placeholder, so no
+token reaches a command line or a config file:
+
 ```bash
-# one `claude mcp add` per account, with that account's token:
+# one `claude mcp add` per account, each reading its own variable:
 claude mcp add --transport http \
-  --header "X-Access-Token: <clientA-access-token>" \
+  --header 'X-Access-Token: ${CLOUDWAYS_TOKEN_CLIENTA:-}' \
   --header "X-Mcp-Host: claude-code" \
   -s user cloudways-clientA https://mcp.cloudways.com/mcp/
+
+claude mcp add --transport http \
+  --header 'X-Access-Token: ${CLOUDWAYS_TOKEN_CLIENTB:-}' \
+  --header "X-Mcp-Host: claude-code" \
+  -s user cloudways-clientB https://mcp.cloudways.com/mcp/
 ```
+
+Export `CLOUDWAYS_TOKEN_CLIENTA` / `CLOUDWAYS_TOKEN_CLIENTB` in the environment Claude
+Code starts with. The header sent is always `X-Access-Token`; only the source differs per
+connection, which is what keeps the accounts separated.
 
 (See `.mcp.json.example` for the JSON form across multiple accounts.)
 
