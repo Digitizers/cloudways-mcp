@@ -19,7 +19,7 @@ stayed clean. The Medium is fair and this release takes it whole.
   row for a baseline, `monitoring_app_summary` and `app_settings_get` for what an app is doing —
   and `workflows-maintenance.md` states the rule once at the top: confirming a target is never
   `app_get`. The three places that read **certificate state** through `app_get` read it from the
-  outside instead, as two commands with two jobs: `curl -sS -o /dev/null https://<domain>/`
+  outside instead, as two commands with two jobs: `curl -q -sS -o /dev/null https://<domain>/` (`-q` first, so a `~/.curlrc` saying `insecure` cannot weaken it — measured)
   is the **verdict** — exit 0 means chain, hostname and validity passed the OS trust store, exit
   60 means one did not — and `openssl s_client … | openssl x509 -noout -issuer -dates` supplies
   the dates for a report and decides nothing. Measured: the openssl line prints issuer and dates
@@ -32,7 +32,7 @@ stayed clean. The Medium is fair and this release takes it whole.
   Flexible mode is a redirect loop. Renewals are verified at the origin for the same reason. An
   app id with no server is stated to be unresolvable — `app_list` and `app_get` both take a
   `server_id`, and so does every app-scoped read — so the answer is to ask, never to walk every
-  roster. Whether a CDN or proxy sits in front is decided by DNS — A and AAAA both — against the server's own addresses, not by
+  roster. Whether a CDN or proxy sits in front is decided by DNS — A and AAAA both, address lines only, since `dig +short` prints a CNAME's canonical name on its own line — against the server's own addresses, not by
   comparing certificate issuers (edge and origin can both be Let's Encrypt). The one field
   `app_get` alone returns that a routine job can need — the application's folder name, for
   attributing a large directory in a disk investigation — keeps a targeted call for the one app

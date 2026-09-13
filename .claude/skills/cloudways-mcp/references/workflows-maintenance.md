@@ -43,18 +43,24 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > a cache purge, a backup or a restore has no use for.
 >
 > **Certificate state is read from the outside, and the verdict and the dates are two different
-> commands.** The verdict is `curl -sS -o /dev/null --max-time 15 https://<domain>/`: exit **0** means the chain, the hostname and the validity
+> commands.** The verdict is `curl -q -sS -o /dev/null --max-time 15 https://<domain>/`: exit **0** means the chain, the hostname and the validity
 > period all passed the OS trust store — what a browser checks — and exit **60** means one of
-> them did not.
+> them did not. `-q` is not optional and must come **first**: it stops curl reading `~/.curlrc`,
+> and a machine whose curlrc says `insecure` would otherwise pass an expired, self-signed or
+> wrong-host certificate with exit 0 — measured: against `expired.badssl.com` with such a file,
+> exit 0 without `-q`, exit 60 with it.
 >
 > **And there may be two certificates.** Through public DNS that command validates whatever
 > answers for the name — behind Cloudflare or any reverse proxy, that is the **edge**
 > certificate, not the one installed on the Cloudways application. The **origin** is checked
 > by pinning the name to the server's IP (from `server_list`):
-> `curl -sS -o /dev/null --max-time 15 --resolve <domain>:443:<server-ip> https://<domain>/` — `--resolve` keeps the hostname for SNI and verification and only changes where the
+> `curl -q -sS -o /dev/null --max-time 15 --resolve <domain>:443:<server-ip> https://<domain>/` — `--resolve` keeps the hostname for SNI and verification and only changes where the
 > connection goes. **Whether something is in front is a DNS question, not a certificate one**:
-> `dig +short <domain> A; dig +short <domain> AAAA` against the server's addresses from `server_list` — **every** routable answer, both
-> record types, must be the server. Any other address is a CDN or proxy, whatever certificate
+> `dig +short <domain> A | grep -E '^[0-9.]+$'; dig +short <domain> AAAA | grep ':'` against the server's addresses from `server_list` — **every** routable answer, both
+> record types, must be the server. The `grep`s keep only addresses: for a CNAME — an ordinary
+> `www` alias — `dig +short` prints the canonical name on its own line before the address
+> (`github.com.` then `20.217.135.5`, measured), and comparing that line against a server IP
+> would call every alias a proxy. Any other address is a CDN or proxy, whatever certificate
 > it shows; and a proxy reachable only over IPv6 (an A record at the origin, an AAAA at the
 > edge) is still a proxy for every IPv6 client, so an A-only check is not a check. Comparing
 > issuers proves nothing,
@@ -96,9 +102,9 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 **Sequence:**
 
 1. Domain from the roster you hold, server IP from `server_list`. The certificate being renewed
-   lives on the **origin**, so check that one: `curl -sS -o /dev/null --max-time 15 --resolve <domain>:443:<server-ip> https://<domain>/` for the verdict (exit 0 / 60), and
+   lives on the **origin**, so check that one: `curl -q -sS -o /dev/null --max-time 15 --resolve <domain>:443:<server-ip> https://<domain>/` for the verdict (exit 0 / 60), and
    `openssl s_client -servername <domain> -connect <server-ip>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates`
-   for the issuer and `notAfter` on record. If `dig +short <domain> A; dig +short <domain> AAAA` answers with anything that is not one
+   for the issuer and `notAfter` on record. If `dig +short <domain> A | grep -E '^[0-9.]+$'; dig +short <domain> AAAA | grep ':'` answers with anything that is not one
    of the server's own addresses, a proxy is in front — the renewal still happens here, at the origin, and
    the browser will keep showing you the proxy's certificate afterwards.
    Nothing in this step needs the database credentials `app_get` would add.
@@ -247,11 +253,11 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. Check that the **origin** serves a valid certificate: `curl -sS -o /dev/null --max-time 15 --resolve <domain>:443:<server-ip> https://<domain>/` must exit **0** — chain +
+1. Check that the **origin** serves a valid certificate: `curl -q -sS -o /dev/null --max-time 15 --resolve <domain>:443:<server-ip> https://<domain>/` must exit **0** — chain +
    hostname + dates against the OS trust store, at the Cloudways server itself. Exit 60
    (expired, self-signed, wrong host) means **stop**: enforcing HTTPS now redirects production
    traffic onto a certificate browsers reject. Then ask whether anything sits in front:
-   `dig +short <domain> A; dig +short <domain> AAAA` — every answer, A and AAAA both, must be one of the server's own addresses from
+   `dig +short <domain> A | grep -E '^[0-9.]+$'; dig +short <domain> AAAA | grep ':'` — every answer, A and AAAA both, must be one of the server's own addresses from
    `server_list`. Any other address is a CDN or reverse proxy — regardless of what certificate
    it presents, even if its issuer matches the origin's, and even if only the AAAA record
    points at it (IPv6 clients would take that path into the loop) — and its origin mode has to
