@@ -20,7 +20,9 @@ stayed clean. The Medium is fair and this release takes it whole.
   and `workflows-maintenance.md` states the rule once at the top as a ladder, narrowest exposure
   first: the roster you already hold (no call), then an external lookup or one `app_get` for an
   id you already know — narrower than `app_list`, which covers every app on the server — then
-  `app_list` for a name, then ask. What `app_get` is never for is habit. The three places that read **certificate state** through `app_get` read it from the
+  `app_list` for a name, then ask. What `app_get` is never for is habit. The same ladder governs a
+  known server: the `server_list` response already held, else the UI, else one `server_get` for
+  that server — never a fresh account-wide `server_list` to read one row. The three places that read **certificate state** through `app_get` read it from the
   outside instead, as two commands with two jobs: `curl -q -sS -o /dev/null https://<domain>/` (`-q` first, so a `~/.curlrc` saying `insecure` cannot weaken it — measured)
   is the **verdict** — exit 0 means chain, hostname and validity passed the OS trust store, exit
   60 means one did not — and `openssl s_client … | openssl x509 -noout -issuer -dates` supplies
@@ -39,7 +41,9 @@ stayed clean. The Medium is fair and this release takes it whole.
   passes every certificate check and loops the moment the server redirect goes on, so the
   WordPress fix moved from a note *after* the write to a gate *before* it, and verification now
   follows the whole chain (`-L --max-redirs 5`; `curl: (47)` is the loop) instead of one hop —
-  the preflight too, since a harmless `https://www.` first hop can hide an `http://` second one,
+  the preflight too, since a harmless `https://www.` first hop can hide an `http://` second one —
+  and both chain checks pass on curl's exit status and an `https://` effective URL, not on a `200`,
+  because a `401` behind Basic Auth or a `403` from a WAF is a perfectly good answer over HTTPS —
   and with `--proto-redir '=https'` so a chain that dips to HTTP and climbs back — invisible to
   `%{url_effective}` — is refused at the hop (`curl: (1) Protocol "http" disabled (in redirect)`,
   measured). Taking the redirect back off after a failed verification is named as the second

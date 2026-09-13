@@ -63,7 +63,9 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > **And there may be two certificates.** Through public DNS that command validates whatever
 > answers for the name — behind Cloudflare or any reverse proxy, that is the **edge**
 > certificate, not the one installed on the Cloudways application. The **origin** is checked
-> by pinning the name to the server's IP (from `server_list`):
+> by pinning the name to the server's IP (from the `server_list` row you already hold, the
+> server's page in the UI, or one `server_get` for that server — never a fresh `server_list`
+> to read one address):
 > `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` — `--resolve` keeps the hostname for SNI and verification and only changes where the
 > connection goes. `--noproxy '*'` is part of the command: with `HTTPS_PROXY` / `https_proxy` /
 > `ALL_PROXY` set in the environment, curl hands the request to that proxy, which resolves
@@ -71,7 +73,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > validating the edge certificate after all (measured: with a proxy variable set, the
 > `--resolve` form connects to the proxy address, not the server, until `--noproxy '*'` is
 > added). **Whether something is in front is a DNS question, not a certificate one**:
-> `dig +short <domain> A | grep -E '^[0-9.]+$'; dig +short <domain> AAAA | grep ':'` against the server's addresses from `server_list` — **every** routable answer, both
+> `dig +short <domain> A | grep -E '^[0-9.]+$'; dig +short <domain> AAAA | grep ':'` against the server's addresses (same source as the IP above) — **every** routable answer, both
 > record types, must be the server. The `grep`s keep only addresses: for a CNAME — an ordinary
 > `www` alias — `dig +short` prints the canonical name on its own line before the address
 > (`github.com.` then `20.217.135.5`, measured), and comparing that line against a server IP
@@ -116,7 +118,8 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. Domain from the roster you hold, server IP from `server_list`. The certificate being renewed
+1. Domain from the roster you hold, server IP from the `server_list` row you hold (or the UI, or
+   one `server_get` for that server — see the note at the top). The certificate being renewed
    lives on the **origin**, so check that one: `curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` for the verdict (exit 0 / 60), and
    `openssl s_client -servername <domain> -connect <server-ip>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates`
    for the issuer and `notAfter` on record. If `dig +short <domain> A | grep -E '^[0-9.]+$'; dig +short <domain> AAAA | grep ':'` answers with anything that is not one
@@ -297,8 +300,11 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    pass:
    `curl -q -sS -o /dev/null --max-time 15 -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' https://<domain>/`.
    (Quote `'=https'` — in zsh, macOS's default shell, a bare `=https` is expanded as a
-   command lookup and the line fails with `https not found`.) Pass is `200`, an `https://`
-   effective URL, and a small hop count. `curl: (1) Protocol "http" disabled (in redirect)`
+   command lookup and the line fails with `https not found`.) Pass is **curl exit 0**, an
+   `https://` effective URL, and a small hop count — **any** HTTP status. This check is about
+   transport and protocol, not about what the application answers: a `401` from Basic Auth on
+   the root, a `403` from a WAF, a `204`/`404` from an API root are all fine answers over HTTPS,
+   and `-sS` without `--fail` leaves curl's exit code to the transport, which is the point. `curl: (1) Protocol "http" disabled (in redirect)`
    (measured: exit 1, before curl ever connects to the HTTP target), an effective URL
    beginning `http://`, or `curl: (47) Maximum (5) redirects followed` — any of these means
    the app itself is pushing HTTPS visitors back to HTTP somewhere in its chain; on WordPress
@@ -316,7 +322,10 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    `curl -q -sS -o /dev/null --max-time 15 -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' http://<domain>/`.
    The start is `http://` on purpose — that is what the new redirect acts on — and
    `--proto-redir` governs only the hops after it, so every one of those must be HTTPS. Expect
-   `200 https://<domain>/ 1` (or a small count if the app adds a `www` or trailing-slash hop).
+   **curl exit 0**, an `https://<domain>/…` effective URL, and a hop count of at least 1 — the
+   `http→https` hop you just enabled — or a little more if the app adds a `www` or
+   trailing-slash hop. The status is whatever the application answers (`200`, a `401` behind
+   Basic Auth, a `403` from a WAF); it is not what this step is checking.
    `curl: (47) Maximum (5) redirects followed` **is the loop**, and `curl: (1) Protocol "http"
    disabled (in redirect)` is a downgrade somewhere past the first hop. Either way the fix is
    to take the server redirect back off and return to step 2 — and that is a **second

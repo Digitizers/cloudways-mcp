@@ -37,9 +37,16 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 
 **Call sequence:**
 
-1. The target server's row from `server_list` — status, size, provider, region, app **count**
-   (the app *roster* is step 2; `server_list` does not carry ids). That is the "current state"
-   a baseline needs; `server_get` adds master credentials to it.
+1. The target server's row — status, size, provider, region, IP, app **count** (the app
+   *roster* is step 2; the row does not carry app ids). That is the "current state" a baseline
+   needs. Where the row comes from follows the same ladder as an app target: the `server_list`
+   response you **already hold** from this conversation (the usual case — zero calls); else the
+   server's page in the Cloudways UI; else, if it must be the API from here, **one `server_get`
+   for that server** — it returns that server's master credentials, and nothing else's. Do
+   **not** call `server_list` to pick one row you know the id of: rule 7 describes its payload,
+   and it covers every server in the account, so it exposes strictly more than the `server_get`
+   it would be standing in for. `server_list` is for the fleet question, not the single-server
+   one.
 2. `app_list` on that server — **the roster steps 6 and 8 need**, unless you already hold it
    from this conversation. `server_list` gives a *count*, and `monitoring_app_summary` /
    `analytics_app_traffic` take an app id beside the server id; `server_get` used to supply
