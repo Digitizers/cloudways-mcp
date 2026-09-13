@@ -67,7 +67,13 @@ stayed clean. The Medium is fair and this release takes it whole.
   site with a small one, and the disk step no longer calls its path credential-free: the roster
   is what costs, it follows the same ladder, and the size calls add nothing on top of it. In the
   enforce-HTTPS sequence, a missing certificate routes to the
-  install step and back rather than to a dead stop; the stop is only on the write itself. And "confirm the target" means the roster you already hold or the id
+  install step and back rather than to a dead stop; the stop is only on the write itself. The
+  preflight runs once per **served hostname** — the write covers the whole application, and an
+  alias with no matching certificate or behind a Flexible proxy breaks the moment the redirect goes
+  on; aliases come from the UI or a filtered direct call, since `app_list` carries the primary
+  domain only and the alias tools are all writes. The resolution ladder says the same for a user
+  who names a site by a secondary domain: an alias lookup through `app_list` would pay the
+  roster's cost and find nothing. And "confirm the target" means the roster you already hold or the id
   you were given — `app_list` only when you have neither, as one call whose payload rule 7
   describes; the first draft of this release called that sequence credential-free, which is
   the claim 1.5.1 removed, and it is gone again. The

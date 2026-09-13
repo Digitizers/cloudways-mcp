@@ -41,9 +41,15 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 >    database credentials, and nothing else's. Do **not** reach for `app_list` to confirm one
 >    known id: rule 7 describes its payload, and it covers **every** application on the server,
 >    so it exposes strictly more than the `app_get` it would be standing in for.
-> 3. **You know the server and only a name or URL** — `app_list` on that server is the one API
->    route (a single call; take the one row you came for and paste none of it), or the same
->    external filtered roster as rung 2.
+> 3. **You know the server and only a name or URL.** If it is the application's **primary**
+>    domain (or its label), `app_list` on that server is the one API route — a single call;
+>    take the one row you came for and paste none of it — or the same external filtered roster
+>    as rung 2. If it is a **secondary** domain — an alias — `app_list` cannot resolve it: the
+>    payload carries the primary `domain` only, and aliases have no read tool at all (see
+>    `workflows-onboarding.md`, the domains note). An alias lookup through `app_list` would pay
+>    the roster's cost and find nothing. Resolve an alias in the UI (the application's Domain
+>    Management page) or through a filtered direct API call, which gives you the primary — and
+>    only then, if you still need the id, is there something for `app_list` to match.
 > 4. **You do not know the server** — stop and ask which server, or for the name/URL. There is
 >    no lookup from an app id to its server: `app_list` and `app_get` both take a `server_id`,
 >    and the only API route from a bare id is reading every server's roster, which is the sweep
@@ -279,8 +285,19 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
+0. **List every hostname the application serves, because the write covers all of them.**
+   `app_enforce_https_update` turns on the redirect for the application, not for one domain —
+   and steps 1 and 2 below are per **hostname**. The primary domain is in the roster you hold;
+   the aliases are not: `app_list` carries the primary `domain` only, and the alias tools
+   (`app_cname_update`, `app_aliases_update`) are writes with no read counterpart. Read them
+   from the application's Domain Management page in the Cloudways UI, or a filtered direct API
+   call. Then run steps 1 and 2 **once per hostname**. An alias with no matching origin
+   certificate, or one behind a Flexible-mode proxy while the primary is not, passes nothing
+   and breaks — certificate errors, or the loop — the moment the redirect goes on. The write in
+   step 4 waits until every hostname has passed both.
 1. Check that the **origin** serves a valid certificate — the handshake only; what the
-   application answers *after* the handshake is step 2's job, and both must pass before step 4:
+   application answers *after* the handshake is step 2's job, and both must pass, **for every
+   hostname from step 0**, before step 4:
    `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` must exit **0** — chain +
    hostname + dates against the OS trust store, at the Cloudways server itself. Exit 60 means
    there is no certificate browsers accept here **yet**, and which of two things that is
