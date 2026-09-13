@@ -37,10 +37,25 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > of it. `app_get` resolves a target too, and returns that application's **database
 > credentials** beside the label, which a cache purge, a backup or a restore has no use for.
 >
+> **An app id with no server is not resolvable at all.** `app_list` and `app_get` both take a
+> `server_id`; a bare app id names nothing without one, and the only way to find its server
+> from the API is to read every server's roster — a sweep. Do not. Ask the user which server,
+> or for the app's name or URL, and resolve from there.
+>
 > **Certificate state is read from the outside, and the verdict and the dates are two different
 > commands.** The verdict is `curl -sS -o /dev/null --max-time 15 https://<domain>/`: exit **0** means the chain, the hostname and the validity
 > period all passed the OS trust store — what a browser checks — and exit **60** means one of
-> them did not. The dates for a report come from `openssl s_client -servername <domain> -connect <domain>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates`, and that line is **informational
+> them did not.
+>
+> **And there may be two certificates.** Through public DNS that command validates whatever
+> answers for the name — behind Cloudflare or any reverse proxy, that is the **edge**
+> certificate, not the one installed on the Cloudways application. The **origin** is checked
+> by pinning the name to the server's IP (from `server_list`):
+> `curl -sS -o /dev/null --max-time 15 --resolve <domain>:443:<server-ip> https://<domain>/` — `--resolve` keeps the hostname for SNI and verification and only changes where the
+> connection goes. Let's Encrypt renewals happen at the origin, so a renewal is verified there;
+> and enforcing HTTPS at the origin behind a proxy in **Flexible** mode (proxy speaks HTTPS to
+> the browser, HTTP to the origin) makes the origin redirect every proxied request back to
+> HTTPS — a loop. Both checks are measured below where they matter. The dates for a report come from `openssl s_client -servername <domain> -connect <domain>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates`, and that line is **informational
 > only**: measured against `expired.badssl.com`, `self-signed.badssl.com` and
 > `wrong.host.badssl.com`, it prints issuer and dates and exits 0 for all three, while `curl`
 > exits 60 for each. Nothing below decides anything on the openssl line.
@@ -72,14 +87,18 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. Domain from the roster you hold. Current certificate from the outside — the verdict from
-   `curl -sS -o /dev/null --max-time 15 https://<domain>/` (exit 0 / 60), the issuer and `notAfter` for the record from `openssl s_client -servername <domain> -connect <domain>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates`. Nothing in
-   this step needs the database credentials `app_get` would add.
+1. Domain from the roster you hold, server IP from `server_list`. The certificate being renewed
+   lives on the **origin**, so check that one: `curl -sS -o /dev/null --max-time 15 --resolve <domain>:443:<server-ip> https://<domain>/` for the verdict (exit 0 / 60), and
+   `openssl s_client -servername <domain> -connect <server-ip>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates`
+   for the issuer and `notAfter` on record. If the edge check through public DNS shows a
+   different issuer, a proxy is in front — the renewal still happens here, at the origin.
+   Nothing in this step needs the database credentials `app_get` would add.
 2. Check that the DNS still points to the server (critical for LE validation)
 3. **CONFIRM:** `security_lets_encrypt_renew` (W) — or `security_lets_encrypt_install` (W) if no cert was issued yet. For a wildcard domain: **CONFIRM** `security_create_dns` (W), publish the returned TXT record at the DNS host, then **CONFIRM** `security_verify_dns` (W).
 4. **CONFIRM:** `security_lets_encrypt_auto_renewal` (W) — turn auto-renewal on if it wasn't active.
-5. Verify from the outside — `curl -sS -o /dev/null --max-time 15 https://<domain>/` must exit **0** now, and the openssl line should show
-   the new `notAfter` — then load the site in a browser. A re-read of `app_get` would confirm
+5. Verify at the origin — the `--resolve` form of the check must exit **0** now, and the
+   openssl line against `<server-ip>:443` should show the new `notAfter` — then load the site
+   in a browser (which, behind a proxy, shows you the edge certificate, not this one). A re-read of `app_get` would confirm
    nothing the verified handshake does not, at the price of a second credential payload.
 
 **If renewal fails:**
@@ -219,12 +238,15 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. Check that a valid certificate is actually served: `curl -sS -o /dev/null --max-time 15 https://<domain>/` must exit **0**. That is
-   chain + hostname + dates against the OS trust store — what "valid" means to the browsers
-   about to be redirected here. Exit 60 (expired, self-signed, wrong host) means **stop**:
-   enforcing HTTPS now redirects production traffic onto a certificate browsers reject. Do
-   not read the verdict off `openssl x509 -dates`, which prints dates for a broken certificate
-   just as happily.
+1. Check that the **origin** serves a valid certificate: `curl -sS -o /dev/null --max-time 15 --resolve <domain>:443:<server-ip> https://<domain>/` must exit **0** — chain +
+   hostname + dates against the OS trust store, at the Cloudways server itself. Exit 60
+   (expired, self-signed, wrong host) means **stop**: enforcing HTTPS now redirects production
+   traffic onto a certificate browsers reject. Then compare with the plain check through public
+   DNS: if the two answer with **different issuers**, a CDN or reverse proxy is in front, and
+   its origin mode has to be **Full (strict)** — or at least Full — before this write. In
+   Flexible mode the proxy reaches the origin over HTTP, the origin's new redirect sends it
+   back to HTTPS, and the site loops. Do not read any of this off `openssl x509 -dates`, which
+   prints dates for a broken certificate just as happily.
 2. If there's no SSL: install one first — `security_lets_encrypt_install` (W, see sections 2 and 3). Enforcing HTTPS without a valid cert will break the site.
 3. **CONFIRM:** `app_enforce_https_update` (W) — toggles the HTTP→HTTPS redirect (this is separate from installing the cert)
 4. Check that the redirect works: `curl -I http://example.com` → 301 to HTTPS

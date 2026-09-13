@@ -26,7 +26,12 @@ stayed clean. The Medium is fair and this release takes it whole.
   and exits 0 for `expired.badssl.com`, `self-signed.badssl.com` and `wrong.host.badssl.com`
   alike, while `curl` exits 60 for each. The "enforce HTTPS" step gates its write on the
   verdict, because redirecting production onto a certificate browsers reject is the failure the
-  step exists to prevent. And "confirm the target" means the roster you already hold or the id
+  step exists to prevent — and it is the **origin** it checks, `--resolve`d to the server's IP:
+  through public DNS the same command validates a CDN's edge certificate, which says nothing
+  about the certificate on the Cloudways app, and enforcing HTTPS at an origin behind a proxy in
+  Flexible mode is a redirect loop. Renewals are verified at the origin for the same reason. An
+  app id with no server is stated to be unresolvable — `app_list` and `app_get` both take a
+  `server_id` — so the answer is to ask, never to walk every roster. And "confirm the target" means the roster you already hold or the id
   you were given — `app_list` only when you have neither, as one call whose payload rule 7
   describes; the first draft of this release called that sequence credential-free, which is
   the claim 1.5.1 removed, and it is gone again. The
