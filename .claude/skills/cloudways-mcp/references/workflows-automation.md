@@ -262,8 +262,15 @@ For automations that generate a lot of data (audit results, alerts log, deployme
 
 **Sync:** n8n / Make scenario every hour: pull state from Cloudways → upsert to Airtable. The team gets a live view.
 
-> **Map an explicit field allowlist — never the whole API response.** The tables above are the
-> allowlist: `cw_id`, `label`, `provider`, `region`, `size`, `status`, `last_check`. Copying a
+> **Map an explicit field allowlist per table — never the whole API response.** One list per
+> destination table, and nothing outside it:
+>
+> - `cloudways_servers`: `cw_id`, `label`, `provider`, `region`, `size`, `status`, `last_check`,
+>   `client`, `monthly_cost_usd`
+> - `cloudways_alerts`: `date`, `server`, `app`, `severity`, `issue`, `status`,
+>   `resolution_notes`
+>
+> Every field the tables above define, and no credential field from any payload. Copying a
 > response wholesale carries master credentials, database passwords and SFTP access out of
 > Cloudways into a third-party store with its own sharing, export and retention — and
 > `server_get` / `app_get` return those fields whether or not the sync asked for them. Pick
