@@ -27,7 +27,7 @@ stayed clean. The Medium is fair and this release takes it whole.
   (`-q` first, so a `~/.curlrc` saying `insecure` cannot weaken it, and the `env -u` prefix so a CA
   override in the environment — which `-q` does not touch — cannot either; both measured, the second
   by pointing `CURL_CA_BUNDLE` at `self-signed.badssl.com`'s own certificate and watching exit 60
-  become exit 0; and `--cacert` pinned to a checksum-verified copy of Mozilla's public roots, because a
+  become exit 0; and `--cacert` pinned to a copy of Mozilla's public roots verified against a digest **recorded in the skill** (a same-origin `.sha256` proves only that the transfer was intact, and whatever can replace the bundle can replace it), because a
   corporate CA in the OS store is beyond `env -u`'s reach — an empty bundle exits 77, proof the file
   is the trust source)
   is the **verdict** — exit 0 means chain, hostname and validity passed the OS trust store, exit

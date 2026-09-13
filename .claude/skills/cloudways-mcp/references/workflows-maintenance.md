@@ -73,19 +73,34 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > the system trust store is not the public one: a corporate or user-installed CA sits in it
 > exactly where `env -u` cannot reach, and an origin certificate signed only by that CA exits 0
 > on this machine while every ordinary visitor rejects it. The verdict has to come from the
-> roots browsers ship with. One-time setup, beside `headers.txt`:
+> roots browsers ship with. One-time setup, beside `headers.txt` — and the digest it is checked
+> against is **this one, recorded here**, not one fetched beside the file:
+>
+> ```
+> sha256  f66dff1bdf8f96060b8177976f8b7d9254bc89bc4db933d769f7384d28480bc9
+>         Mozilla certificate data as of Thu Aug 13 03:12:01 2026 GMT, 188 900 bytes
+> ```
 >
 > ```bash
 > umask 077; mkdir -p ~/.config/cloudways-mcp && cd ~/.config/cloudways-mcp
-> curl -q -sS -o cacert.pem https://curl.se/ca/cacert.pem && curl -q -sS -o cacert.pem.sha256 https://curl.se/ca/cacert.pem.sha256
-> [ "$(cut -d' ' -f1 cacert.pem.sha256)" = "$(shasum -a 256 cacert.pem | cut -d' ' -f1)" ] && echo OK || { echo 'checksum MISMATCH - do not use'; rm -f cacert.pem; }
+> curl -q -sS -o cacert.pem https://curl.se/ca/cacert.pem
+> [ "$(shasum -a 256 cacert.pem | cut -d' ' -f1)" = f66dff1bdf8f96060b8177976f8b7d9254bc89bc4db933d769f7384d28480bc9 ] && echo OK || { echo 'digest MISMATCH against the value recorded in the skill - do not use'; rm -f cacert.pem; }
 > ```
 >
-> Measured on this curl build: with that bundle a good host exits 0 and `self-signed.badssl.com`
-> exits 60; with an **empty** bundle the good host exits 77 — proof that the file, not the OS
-> store, is what the verdict trusts. The fetch itself rides on the system store once; the
-> checksum catches a corrupted transfer, not a compromised curl.se, which is the usual limit of
-> a same-origin checksum. Refresh the bundle a few times a year (Mozilla revises it).
+> Why the digest lives here and not in `cacert.pem.sha256` next to the download: that file
+> comes from the same origin over the same trust path as the bundle, so whatever can replace
+> one can replace the other in the same breath — a TLS-inspecting proxy or a compromised
+> system CA, which is exactly the situation this bundle exists to defend against. A same-origin
+> checksum proves a transfer was not corrupted and nothing more. A digest recorded here moves
+> the trust from the download path to the commit that recorded it (the same arrangement as
+> `mcp-remote`'s tarball digest in `installation.md`): bumping the bundle means recording the
+> new digest in the same commit. On a machine whose network or trust store you do not trust at
+> all, obtain the bundle through an independent channel — a machine you do trust, or your OS
+> vendor's `ca-certificates` package — and compare against the recorded digest there. Measured
+> on this curl build: with that bundle a good host exits 0 and `self-signed.badssl.com` exits 60;
+> with an **empty** bundle the good host exits 77 — proof that the file, not the OS store, is
+> what the verdict trusts. Mozilla revises the bundle a few times a year; refresh it by
+> updating this record.
 >
 > **And there may be two certificates.** Through public DNS that command validates whatever
 > answers for the name — behind Cloudflare or any reverse proxy, that is the **edge**
