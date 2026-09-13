@@ -42,15 +42,15 @@ Confirm with the client:
 
 ## Stage 2 — Server mapping
 
-For each server in the list:
+Stage 1's `server_list` already carries each server's label, size, provider, region, IP and
+app count — with no credentials in the payload. For each server in that list:
 
 ```
-1. server_get                  → label, size, IP, app list (it ALSO returns master credentials — see below)
-2. server_settings_get         → PHP timeout, memory, upload limit, custom PHP
-3. service_status              → what's running (Apache/Nginx/MySQL/Memcached/Varnish/Redis)
-4. server_disk_usage_fetch     → optional: trigger a fresh disk-usage calculation (W — benign refresh, but may be blocked on a READ token; skip and use the cached data if so), then:
-5. monitoring_server_summary   → current disk + bandwidth usage (read; cached values if step 4 was skipped)
-6. monitoring_server_graph     → CPU/RAM trends last 24h
+1. server_settings_get         → PHP timeout, memory, upload limit, custom PHP
+2. service_status              → what's running (Apache/Nginx/MySQL/Memcached/Varnish/Redis)
+3. server_disk_usage_fetch     → optional: trigger a fresh disk-usage calculation (W — benign refresh, but may be blocked on a READ token; skip and use the cached data if so), then:
+4. monitoring_server_summary   → current disk + bandwidth usage (read; cached values if step 3 was skipped)
+5. monitoring_server_graph     → CPU/RAM trends last 24h
 ```
 
 **Red flags to watch for:**
@@ -66,31 +66,43 @@ For each server in the list:
 
 ## Stage 3 — Application mapping
 
-For each application (per the app list from the previous stage):
+`app_list` gives the roster per server, with no credentials in the payload. For each
+application in it:
 
 ```
-1. app_get                     → URL, FQDN, app folder (it ALSO returns DB credentials — see below)
-2. app_settings_get            → app-level overrides + security flags (XML-RPC, password protection, etc.)
-3. monitoring_app_summary      → bandwidth, requests (to get a sense of scale)
-4. analytics_app_traffic       → visitors at least last 7 days (drill in with analytics_app_traffic_details)
-5. analytics_app_php           → slow scripts? memory issues?
-6. analytics_app_mysql         → slow queries?
-7. app_varnish_settings_get    → cache configured?
-8. app_vulnerabilities_list    → (WordPress) known plugin/theme/core vulnerabilities
+1. app_settings_get            → app-level overrides + security flags (XML-RPC, password protection, etc.)
+2. monitoring_app_summary      → bandwidth, requests (to get a sense of scale)
+3. analytics_app_traffic       → visitors at least last 7 days (drill in with analytics_app_traffic_details)
+4. analytics_app_php           → slow scripts? memory issues?
+5. analytics_app_mysql         → slow queries?
+6. app_varnish_settings_get    → cache configured?
+7. app_vulnerabilities_list    → (WordPress) known plugin/theme/core vulnerabilities
 ```
 
-> **Do not collect credentials during discovery.** `app_credentials` (SFTP and additional
-> access) is **not** part of this pass — an inventory does not need it. `server_get` and
-> `app_get` return master and database credentials as part of their payload whether you want
-> them or not, so when you summarise: record what the audit is for (label, size, IP, domains,
-> versions, limits) and **leave the credential fields out of the deliverables table, the
-> report, and anything you paste into a ticket, chat or state store.** They are the most
-> valuable thing in the response and the least useful thing in an audit.
+> **Do not CALL the credential-returning tools during discovery.** Not "call them and leave
+> the secrets out of the report" — by then they are already in the transcript, and a
+> transcript is kept, scrolled back through, and sometimes pasted somewhere. The only way to
+> keep a credential out of a conversation is not to fetch it.
 >
-> Fetch `app_credentials` when a specific task needs it — an SFTP deploy the user asked for —
-> and not a moment earlier. Onboarding an unfamiliar fleet is exactly when a broad sweep feels
-> harmless and is not: one report can end up carrying every server's root and every app's
-> database password into a channel that outlives the engagement.
+> So this pass uses `server_list` and `app_list`, which do not carry credentials, and gets its
+> detail from `server_settings_get`, `service_status`, `app_settings_get`, the monitoring and
+> analytics tools and `app_vulnerabilities_list` — none of which return secrets.
+>
+> Three tools are deliberately NOT here:
+>
+> - **`app_credentials`** — SSH/SFTP access. An inventory never needs it. Call it when a task
+>   the user actually asked for needs it, such as an SFTP deploy.
+> - **`server_get`** — richer per-server configuration, and **master credentials** in the same
+>   payload. Reach for it only when you need something the list and settings tools do not
+>   carry (the SSH-key roster, for one — see the note in `tools-catalog.md`), knowing the
+>   secrets come with it.
+> - **`app_get`** — URL, FQDN and app folder, and **database credentials** in the same
+>   payload. Same rule: call it for a specific missing field, not for every app in a sweep.
+>
+> Onboarding an unfamiliar fleet is exactly when a broad sweep feels harmless and is not. One
+> pass over a 20-server account, done the old way, pulled every server's master password and
+> every application's database password into one conversation — and a report is not the only
+> thing that outlives an engagement.
 
 > **SSL status is not exposed by an MCP tool.** Check certificate provider + expiry in the Cloudways Platform UI or via the direct Cloudways API.
 

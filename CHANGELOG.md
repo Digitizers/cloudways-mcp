@@ -17,12 +17,16 @@ went from `suspicious` to `clean`. All four findings are real and all four are f
   (`sha512-QBYGz02kc2Ahh[...]kpaEJdzlB/png==`), so comparing against it checks only a prefix
   and a suffix. Same class as the `hostinger-api-mcp` pin, in the
   repo next door.
-- **Discovery no longer collects credentials** (High). The onboarding sweep called
-  `app_credentials` for every application and summarised the master/database credentials that
-  `server_get` and `app_get` return anyway. An inventory does not need any of it.
-  `app_credentials` is out of the pass entirely, the credential fields are explicitly excluded
-  from the deliverables table and anything pasted into a ticket or chat, and the text says
-  when to fetch them instead: when a specific task the user asked for needs them.
+- **Discovery no longer CALLS the credential-returning tools** (High). The onboarding sweep
+  ran `app_credentials` for every application, plus `server_get` and `app_get`, which return
+  master and database credentials in the same payload. Telling the agent to leave them out of
+  the report does not help: by then they are in the transcript, and a transcript is kept,
+  scrolled back through and sometimes pasted somewhere. The only way to keep a credential out
+  of a conversation is not to fetch it. The pass now builds its inventory from `server_list`
+  and `app_list` — neither carries credentials — and takes its detail from
+  `server_settings_get`, `service_status`, `app_settings_get`, the monitoring/analytics tools
+  and `app_vulnerabilities_list`. All three credential-returning tools are named as
+  deliberately absent, with what each is for and when calling it is legitimate.
 - **The daily-summary example uses `mktemp`, not a fixed `/tmp` path** (Medium), with
   `umask 077` and a `trap` that removes the file even when `curl` fails. The template ends in
   the `X`s: BSD `mktemp` does not substitute them anywhere else, and does not fail either — it
@@ -31,7 +35,10 @@ went from `suspicious` to `clean`. All four findings are real and all four are f
   a shared `/tmp` can be pre-created as a symlink by another user.
 - **…and builds its JSON with `jq -Rs`** rather than interpolating the file into a string. The
   audit called this output encoding; it is also a plain bug — the first quote, backslash or
-  newline in a generated report breaks the payload.
+  newline in a generated report breaks the payload. `jq` is declared as a dependency and
+  checked up front (it is not installed by default on macOS, and `set -e` would otherwise kill
+  the job at the encode step after all the work was done), with a `python3` one-liner given as
+  the equivalent for anyone without it.
 - **The Airtable state store gets an explicit field allowlist** (Medium). Syncing a response
   wholesale carries credentials into a third-party store with its own sharing and retention,
   where they outlive both rotation and the engagement. Same note applied to the Slack and

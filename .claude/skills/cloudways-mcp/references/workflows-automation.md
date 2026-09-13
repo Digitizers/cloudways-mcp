@@ -174,7 +174,13 @@ In automation via `claude -p` (headless mode), the MCP server keeps working as u
 ```bash
 #!/bin/bash
 # scripts/cw-daily-summary.sh
+#
+# Needs: claude (Claude Code, with the Cloudways MCP connection configured for
+# the user running the cron) and jq. jq is NOT installed by default on macOS -
+# `brew install jq` - and set -e means the job would otherwise die at the
+# encode step after doing all the work.
 set -euo pipefail
+command -v jq >/dev/null || { echo "this job needs jq (brew install jq / apt install jq)" >&2; exit 1; }
 
 # A private temp file, not a fixed path. /tmp is shared: a fixed name can be
 # pre-created by another user as a symlink, so the report either overwrites
@@ -208,6 +214,9 @@ Output in Hebrew, markdown format, written to $OUT
 jq -Rs '{text: .}' < "$OUT" \
   | curl -X POST -H 'Content-type: application/json' --data-binary @- "$SLACK_WEBHOOK_URL"
 ```
+
+> **No jq?** Any real JSON encoder will do — `python3 -c 'import json,sys; print(json.dumps({"text": sys.stdin.read()}))' < "$OUT"` is the same thing. What must not come back is
+> building the payload by interpolating the file into a string.
 
 > **What leaves the machine.** The summary goes to a channel with its own membership and
 > retention, so keep infrastructure detail out of it: status, counts and names are the point;
