@@ -16,8 +16,17 @@ stayed clean. The Medium is fair and this release takes it whole.
   row for a baseline, `monitoring_app_summary` and `app_settings_get` for what an app is doing —
   and `workflows-maintenance.md` states the rule once at the top: confirming a target is never
   `app_get`. The three places that read **certificate state** through `app_get` read it from the
-  outside instead — `openssl s_client … | openssl x509 -noout -issuer -dates` — which is
-  credential-free and, unlike any API field, shows what a browser is actually served. The
+  outside instead, as two commands with two jobs: `curl -sS -o /dev/null https://<domain>/`
+  is the **verdict** — exit 0 means chain, hostname and validity passed the OS trust store, exit
+  60 means one did not — and `openssl s_client … | openssl x509 -noout -issuer -dates` supplies
+  the dates for a report and decides nothing. Measured: the openssl line prints issuer and dates
+  and exits 0 for `expired.badssl.com`, `self-signed.badssl.com` and `wrong.host.badssl.com`
+  alike, while `curl` exits 60 for each. The "enforce HTTPS" step gates its write on the
+  verdict, because redirecting production onto a certificate browsers reject is the failure the
+  step exists to prevent. And "confirm the target" means the roster you already hold or the id
+  you were given — `app_list` only when you have neither, as one call whose payload rule 7
+  describes; the first draft of this release called that sequence credential-free, which is
+  the claim 1.5.1 removed, and it is gone again. The
   "checking an app's details" pattern in SKILL.md, the one most likely to be copied, no longer
   ends in `app_get` either. After this, the only in-agent `app_get` left in the skill is the one
   the SSL section explicitly reserves for a single certificate the user named.
