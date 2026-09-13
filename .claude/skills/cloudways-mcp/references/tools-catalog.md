@@ -420,7 +420,7 @@ In addition to the five `addon_*` tools above:
 
 ## Still not exposed (use UI or direct API)
 
-- **SSH-key listing** — keys are managed via `ssh_key_create`/`ssh_key_update`/`ssh_key_delete`, but there is no dedicated read/list tool. Key metadata **does** come back inside the `server_get` payload, so audit from there (or the Cloudways UI) rather than assuming the roster is unreadable.
+- **SSH-key listing** — keys are managed via `ssh_key_create`/`ssh_key_update`/`ssh_key_delete`, but there is no dedicated read/list tool. Key metadata **does** come back inside the `server_get` payload — along with that server's **master credentials**, which is why an audit should read the roster in the Cloudways UI (Server → Security) or via the direct API and record a count. Reach for `server_get` when you need the metadata for one specific server and accept what comes with it (safety rule 7).
 - **SafeUpdate (managed WordPress updates)** — the `safe_update` toolset is declared but empty in the current build (0 tools); scheduling, run-now, history, and auto-rollback are UI-only.
 - **Custom SSL install** — `security_remove_own_ssl` removes a custom cert, but there is no install counterpart; paste the cert in the UI or use the direct API.
 - **Bot Protection, Client Billing, CloudwaysCDN (legacy), reference-data "Lists API", OAuth token minting** — documented in Cloudways' tools article but **absent from the live MCP**; UI or direct API only.
