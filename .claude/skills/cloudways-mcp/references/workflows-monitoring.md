@@ -58,9 +58,13 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 
 1. `server_disk_usage_fetch` (init) then `monitoring_server_summary` (read) — where is the space?
 2. If application folders are large: `app_list` for the roster (`server_list` returns only an
-   app count), then `monitoring_app_summary` + `app_settings_get` on the apps the disk numbers
-   point at — bandwidth, requests and flags say what an app is doing; `app_get` would add its
-   database credentials and nothing a disk investigation uses
+   app count), then `monitoring_app_summary` (`type: db`) per app for its size — that maps a
+   size to a label without any credential payload. The breakdown from step 1 names **folders**
+   (`/home/master/applications/<folder>/`), and the folder name is a field `app_get` returns
+   and nothing else does; when the sizes alone do not settle which app owns the one folder
+   that matters, call `app_get` for **that one app** — the rule-7 case of a specific field
+   nothing else returns, accepting the database credentials that come with it — or read the
+   folder off the application's page in the Cloudways UI. Not a loop over the server.
 3. Check logs via manual SSH (Cloudways MCP does not expose direct file system access): the administrator will need to connect via SSH to `/var/log/`, `/home/master/applications/<app>/logs/`
 4. Check MySQL slow logs: `analytics_app_mysql` — if there are a lot of slow queries, the bin logs can balloon
 

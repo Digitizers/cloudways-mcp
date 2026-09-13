@@ -226,10 +226,12 @@ Example tagging in the response:
 
 (`app_get` is not in this list on purpose: it returns the application's **database
 credentials** beside fields the three calls above already give you. Step 1 is the roster you
-usually already hold from this conversation. For a **read**, an id the user gave you is enough
-to run steps 2-3 without it. For any **write** it is not: the confirmation block needs name +
-URL, and a mistyped id that belongs to another app is still a valid id — resolve it against the
-roster first. `app_list` is one call for the whole server, and rule 7 says what a list payload
+usually already hold from this conversation. Every app-scoped call takes a `server_id` beside
+the app id — `app_settings_get` and `monitoring_app_summary` included — so an app id on its own
+runs **nothing**, read or write; if you do not know the server, ask for it or for the app's
+name/URL. What differs between a read and a write is confirmation: a read on a known
+server/app pair can simply run, while a **write** needs name + URL from the roster first — a
+mistyped id that belongs to another app is still a valid id. `app_list` is one call for the whole server, and rule 7 says what a list payload
 may carry: reach for it when you hold no roster, take the one row you came for, and paste none
 of it. Reach for `app_get` only for a field none of these return, and accept what comes with
 it.)

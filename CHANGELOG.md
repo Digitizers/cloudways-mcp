@@ -31,7 +31,12 @@ stayed clean. The Medium is fair and this release takes it whole.
   about the certificate on the Cloudways app, and enforcing HTTPS at an origin behind a proxy in
   Flexible mode is a redirect loop. Renewals are verified at the origin for the same reason. An
   app id with no server is stated to be unresolvable — `app_list` and `app_get` both take a
-  `server_id` — so the answer is to ask, never to walk every roster. And "confirm the target" means the roster you already hold or the id
+  `server_id`, and so does every app-scoped read — so the answer is to ask, never to walk every
+  roster. Whether a CDN or proxy sits in front is decided by DNS against the server's IP, not by
+  comparing certificate issuers (edge and origin can both be Let's Encrypt). The one field
+  `app_get` alone returns that a routine job can need — the application's folder name, for
+  attributing a large directory in a disk investigation — keeps a targeted call for the one app
+  in question, named as the rule-7 case. And "confirm the target" means the roster you already hold or the id
   you were given — `app_list` only when you have neither, as one call whose payload rule 7
   describes; the first draft of this release called that sequence credential-free, which is
   the claim 1.5.1 removed, and it is gone again. The
