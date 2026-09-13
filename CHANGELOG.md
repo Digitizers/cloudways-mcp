@@ -56,7 +56,7 @@ stayed clean. The Medium is fair and this release takes it whole.
   production write it is, with its own **CONFIRM** — the confirmation that enabled it does not carry. An
   app id with no server is stated to be unresolvable — `app_list` and `app_get` both take a
   `server_id`, and so does every app-scoped read — so the answer is to ask, never to walk every
-  roster. Whether a CDN or proxy sits in front is decided by DNS — A and AAAA both, address lines only, filtered with `awk` rather than `grep` so a name with no AAAA record does not
+  roster. Whether a CDN or proxy sits in front is decided by DNS — A and AAAA both, address lines only, asked of a **public resolver** (`dig @1.1.1.1`) so split-horizon DNS on a VPN cannot hide a CDN behind a local answer, filtered with `awk` rather than `grep` so a name with no AAAA record does not
   exit 1 under `set -e`, since `dig +short` prints a CNAME's canonical name on its own line — against the server's own addresses, not by
   comparing certificate issuers (edge and origin can both be Let's Encrypt). The one field
   `app_get` alone returns that a routine job can need — the application's folder name, for

@@ -85,8 +85,16 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > validating the edge certificate after all (measured: with a proxy variable set, the
 > `--resolve` form connects to the proxy address, not the server, until `--noproxy '*'` is
 > added). **Whether something is in front is a DNS question, not a certificate one**:
-> `dig +short <domain> A | awk '/^[0-9.]+$/'; dig +short <domain> AAAA | awk '/:/'` against the server's addresses (same source as the IP above) — **every** routable answer, both
-> record types, must be the server. The `awk`s keep only addresses: for a CNAME — an ordinary
+> `dig @1.1.1.1 +short <domain> A | awk '/^[0-9.]+$/'; dig @1.1.1.1 +short <domain> AAAA | awk '/:/'` against the server's addresses (same source as the IP above) — **every** routable answer, both
+> record types, must be the server. `@1.1.1.1` (or any public resolver) is not decoration: on
+> a VPN or an office network with **split-horizon DNS**, the local resolver can answer with the
+> Cloudways origin while the public one answers with a Flexible-mode CDN — every check then
+> exercises the origin, "no proxy" is concluded, and the redirect loops for every visitor
+> outside that network. The gate has to believe what a visitor's resolver says. The same
+> applies to the redirect-chain checks, which cannot pin hops to other hostnames: on a network
+> whose resolver disagrees with the public one, run them from **outside** it, or with
+> `--resolve <hostname>:443:<public-ip>` from the public answers for the hostname under test.
+> The `awk`s keep only addresses: for a CNAME — an ordinary
 > `www` alias — `dig +short` prints the canonical name on its own line before the address
 > (`github.com.` then `20.217.135.5`, measured), and comparing that line against a server IP
 > would call every alias a proxy. `awk` rather than `grep` because a name with no AAAA record
@@ -137,7 +145,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    one `server_get` for that server — see the note at the top). The certificate being renewed
    lives on the **origin**, so check that one: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` for the verdict (exit 0 / 60), and
    `openssl s_client -servername <domain> -connect <server-ip>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates`
-   for the issuer and `notAfter` on record. If `dig +short <domain> A | awk '/^[0-9.]+$/'; dig +short <domain> AAAA | awk '/:/'` answers with anything that is not one
+   for the issuer and `notAfter` on record. If `dig @1.1.1.1 +short <domain> A | awk '/^[0-9.]+$/'; dig @1.1.1.1 +short <domain> AAAA | awk '/:/'` answers with anything that is not one
    of the server's own addresses, a proxy is in front — the renewal still happens here, at the origin, and
    the browser will keep showing you the proxy's certificate afterwards.
    Nothing in this step needs the database credentials `app_get` would add.
@@ -307,7 +315,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    (sections 2 and 3) and re-run. What exit 60 never permits is step 4 — enforcing HTTPS now
    would redirect production traffic onto a certificate browsers reject. Then ask whether
    anything sits in front:
-   `dig +short <hostname> A | awk '/^[0-9.]+$/'; dig +short <hostname> AAAA | awk '/:/'` — every answer, A and AAAA both, must be one of the server's own addresses from
+   `dig @1.1.1.1 +short <hostname> A | awk '/^[0-9.]+$/'; dig @1.1.1.1 +short <hostname> AAAA | awk '/:/'` — every answer, A and AAAA both, must be one of the server's own addresses from
    `server_list`. Any other address is a CDN or reverse proxy — regardless of what certificate
    it presents, even if its issuer matches the origin's, and even if only the AAAA record
    points at it (IPv6 clients would take that path into the loop) — and its origin mode has to
