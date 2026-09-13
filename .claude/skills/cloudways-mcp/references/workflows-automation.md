@@ -179,8 +179,13 @@ set -euo pipefail
 # A private temp file, not a fixed path. /tmp is shared: a fixed name can be
 # pre-created by another user as a symlink, so the report either overwrites
 # whatever it points at or is read back by whoever owns it.
+#
+# The X's must be at the END of the template. BSD mktemp (macOS) does not
+# substitute them anywhere else - and it does not fail either: it creates a file
+# called literally "cw-summary.XXXXXX.md", which is exactly the predictable name
+# this line exists to avoid, with a successful exit status hiding it.
 umask 077
-OUT=$(mktemp "${TMPDIR:-/tmp}/cw-summary.XXXXXX.md")
+OUT=$(mktemp "${TMPDIR:-/tmp}/cw-summary.md.XXXXXX")
 trap 'rm -f "$OUT"' EXIT
 
 # Here Claude calls the MCP tools itself and generates a summary

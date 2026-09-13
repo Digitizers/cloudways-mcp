@@ -24,7 +24,10 @@ went from `suspicious` to `clean`. All four findings are real and all four are f
   from the deliverables table and anything pasted into a ticket or chat, and the text says
   when to fetch them instead: when a specific task the user asked for needs them.
 - **The daily-summary example uses `mktemp`, not a fixed `/tmp` path** (Medium), with
-  `umask 077` and a `trap` that removes the file even when `curl` fails. A predictable name in
+  `umask 077` and a `trap` that removes the file even when `curl` fails. The template ends in
+  the `X`s: BSD `mktemp` does not substitute them anywhere else, and does not fail either — it
+  creates a file called literally `cw-summary.XXXXXX.md`, reinstating the predictable name
+  behind a successful exit. A predictable name in
   a shared `/tmp` can be pre-created as a symlink by another user.
 - **…and builds its JSON with `jq -Rs`** rather than interpolating the file into a string. The
   audit called this output encoding; it is also a plain bug — the first quote, backslash or
