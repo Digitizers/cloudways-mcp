@@ -131,7 +131,13 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > outside that network. The gate has to believe what a visitor's resolver says. The same
 > applies to the redirect-chain checks, which cannot pin hops to other hostnames: on a network
 > whose resolver disagrees with the public one, run them from **outside** it, or with
-> `--resolve <hostname>:443:<public-ip>` from the public answers for the hostname under test.
+> `--resolve <hostname>:443:<answer>` for **each** public answer in turn. Each, not one: a
+> request with no pin exercises **one** address — curl races the answers and keeps the first
+> connection to succeed (measured: three plain requests to a dual-stack hostname all connected
+> to the same IPv6 address; its IPv4 answer was never touched) — so a hostname with an A and
+> an AAAA record is two checks, and a family whose edge serves an expired certificate hides
+> behind the family that works. An IPv6 answer goes into `--resolve` as it is (measured:
+> accepted with and without brackets).
 > The `awk`s keep only addresses: for a CNAME — an ordinary
 > `www` alias — `dig +short` prints the canonical name on its own line before the address
 > (`github.com.` then `20.217.135.5`, measured), and comparing that line against a server IP
@@ -403,7 +409,16 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
      but if the hostname also has a direct answer (the mixed case above), that allowance is
      gone: the origin certificate *is* handed to the direct family's browsers, and the direct
      branch's browser-trust check applies to it as well. The certificate visitors **will** be handed
-     is the edge's, so that is what must pass the trust store: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' -w '%{http_code}\n' https://<hostname>/` must exit **0** and print a status that is **not 5xx** — 525/526 is the edge admitting it cannot complete TLS to the origin, which is the origin-policy failure the paragraph above is about, arriving as an HTTP status.
+     is the edge's, so that is what must pass the trust store — at **every** answer, pinned one
+     at a time, since a request with no pin tests one address only (curl keeps the first
+     connection to succeed; measured, three plain requests to a dual-stack hostname all landed
+     on the same IPv6 address and never touched the IPv4 answer, so an edge family with an
+     expired certificate hides behind a healthy one). With `$A` from this hostname's gate:
+     `printf '%s\n' "$A" | while read -r ip; do env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' --resolve "<hostname>:443:$ip" -w "$ip %{http_code}\n" https://<hostname>/ || echo "$ip FAILED (curl exit $?)"; done`
+     — every line must carry a status that is **not 5xx** and no line may say `FAILED`
+     (a failed handshake prints `<ip> 000` and then `<ip> FAILED (curl exit 60)`, measured).
+     An answer that is the server gets the direct branch's check again here, same command,
+     same verdict. 525/526 is the edge admitting it cannot complete TLS to the origin, which is the origin-policy failure the paragraph above is about, arriving as an HTTP status.
    Do not read any of this off `openssl x509 -dates`, which prints dates for a broken
    certificate just as happily.
 2. **The HTTPS answer must not send anyone back to HTTP — at any hop.** Step 1 validated the
@@ -414,14 +429,17 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    **any** hop to HTTP, not just an HTTP ending, because `%{url_effective}` reports only the
    final URL and a chain that dips to `http://` and climbs back to `https://` would otherwise
    pass:
-   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' https://<hostname>/`.
+   `printf '%s\n' "$A" | while read -r ip; do env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' --resolve "<hostname>:443:$ip" -L --max-redirs 5 --proto-redir '=https' -w "$ip %{http_code} %{url_effective} %{num_redirects}\n" https://<hostname>/ || echo "$ip FAILED (curl exit $?)"; done`
+   — one run per public answer (`$A` from this hostname's gate in step 1), for the reason
+   step 1 gives: a request with no pin follows the chain at **one** address, and the
+   application behind the other family may answer differently.
    (Quote `'=https'` — in zsh, macOS's default shell, a bare `=https` is expanded as a
    command lookup and the line fails with `https not found`. `--noproxy '*'` is here for the
    same reason as on the origin check: with `HTTPS_PROXY` set, an intercepting proxy's block
    or login page would pass this check — any status, small hop count — without the
    application's redirects ever being seen. It stops curl using a configured proxy and nothing
    else: DNS still resolves publicly, so the check still reaches the site's CDN as a visitor
-   would.) Pass is **curl exit 0**, an
+   would.) Pass is, on **every** line: no `FAILED`, an
    `https://` effective URL, a small hop count — and a terminal status that is **not 5xx**. A
    `401` from Basic Auth on the root, a `403` from a WAF, a `204`/`404` from an API root are
    all fine answers over HTTPS: this check is about the path, not the application's opinion of
@@ -432,7 +450,8 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    without `--fail` leaves curl's exit code to the transport, so these arrive as `exit 0` with
    the status in the `-w` output (measured: 525, 526 and 502 all exit 0) — read the status.
    Redirecting a working HTTP path onto any of them is the outage this step exists to prevent. `curl: (1) Protocol "http" disabled (in redirect)`
-   (measured: exit 1, before curl ever connects to the HTTP target) or an effective URL
+   (measured: exit 1, before curl ever connects to the HTTP target — the line reads
+   `<ip> FAILED (curl exit 1)`) or an effective URL
    beginning `http://` means the app itself is pushing HTTPS visitors back to HTTP somewhere
    in its chain; on WordPress that is `WP_HOME` / `WP_SITEURL` still set to `http://`, the
    usual cause on a site that has never had HTTPS enforced. Enforcing now produces the loop
@@ -461,18 +480,23 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
      unchanged), then:
      `wp option update home "$(wp option get home | sed 's#^http://#https://#')" && wp option update siteurl "$(wp option get siteurl | sed 's#^http://#https://#')"`
      (or edit the two constants in `wp-config.php` the same way). This confirmation is for this
-     write; step 4 has its own. Through public DNS on purpose — hops to other
-   hostnames cannot be pinned with `--resolve`, and this is the path visitors take; the origin
-   itself was already checked in step 1.
+     write; step 4 has its own. The pin covers `<hostname>` only, on purpose: a hop to another
+   hostname (`www.`) resolves publicly, and that is right — that hostname is in step 0's list
+   and gets its own gate and its own per-answer pass; the origin itself was already checked in
+   step 1.
 3. If there's no SSL: install one first — `security_lets_encrypt_install` (W, see sections 2 and 3). Enforcing HTTPS without a valid cert will break the site.
 4. **CONFIRM:** `app_enforce_https_update` (W) — toggles the HTTP→HTTPS redirect (this is separate from installing the cert)
 5. Verify the **whole chain** the way a browser walks it, not the first hop — **for every
    hostname from step 0**, since an alias can loop for host-specific CDN or origin reasons
    while the primary passes:
-   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' http://<hostname>/`.
+   `printf '%s\n' "$A" | while read -r ip; do env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' --resolve "<hostname>:80:$ip" --resolve "<hostname>:443:$ip" -L --max-redirs 5 --proto-redir '=https' -w "$ip %{http_code} %{url_effective} %{num_redirects}\n" http://<hostname>/ || echo "$ip FAILED (curl exit $?)"; done`
+   — per public answer, `$A` from this hostname's gate (re-run the gate line if the shell has
+   moved on), and **both** ports pinned: `--resolve` is per host:port, so pinning `:443` alone
+   leaves the `http://` hop — the one this write changed — free to land on whichever address
+   curl reaches first (measured).
    The start is `http://` on purpose — that is what the new redirect acts on — and
-   `--proto-redir` governs only the hops after it, so every one of those must be HTTPS. Expect
-   **curl exit 0**, an `https://` effective URL, and a hop count of at least 1 — the
+   `--proto-redir` governs only the hops after it, so every one of those must be HTTPS. Expect, on
+   **every** line: no `FAILED`, an `https://` effective URL, and a hop count of at least 1 — the
    `http→https` hop you just enabled — or a little more if the app adds a `www` or
    trailing-slash hop. The status may be whatever the application answers (`200`, a `401` behind
    Basic Auth, a `403` from a WAF) — but **not 5xx**: a 525/526 here means the proxy cannot
@@ -485,8 +509,9 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    `target` and `expected impact` now describing the rollback. The confirmation given in step 4
    authorised enabling the redirect; safety rule 2 does not let it carry to disabling it, and a
    transient failure that looks like a loop must not roll production back to HTTP on nobody's
-   say-so. Through public DNS on purpose: this is the path visitors take, proxy included. The
-   application is healthy when every hostname from step 0 has passed this step, not when one has.
+   say-so. Per answer on purpose: each visitor takes one address, proxy included, and each address
+   has to redirect correctly on its own. The application is healthy when every answer of every
+   hostname from step 0 has passed this step, not when one has.
 
 > **WordPress, after:** with `home`/`siteurl` already on `https://` (step 2), what can remain is
 > mixed content from hard-coded `http://` URLs inside posts and options — a search-replace job

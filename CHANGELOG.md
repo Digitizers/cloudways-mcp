@@ -104,6 +104,20 @@ stayed clean. The Medium is fair and this release takes it whole.
   which covers every app on the server); one per candidate, bounded by the size ranking, when a
   disk investigation cannot attribute a folder from sizes alone; and one for a single
   certificate the user named. None of them is a sweep, and none of them is a habit.
+- **Every public answer is checked, not the first one curl reaches.** The edge handshake, the
+  redirect-chain preflight and the post-write verification in "enforce HTTPS" each ran one curl
+  request against the hostname, and one request exercises **one** address: curl races the A and
+  AAAA answers and keeps the first connection to succeed (measured on a dual-stack hostname —
+  three plain requests all connected to the same IPv6 address and never touched IPv4). A proxied
+  hostname whose IPv6 edge serves an expired certificate therefore passed on its IPv4 edge, and
+  the write sent that family's visitors onto the broken path. All three checks now loop over the
+  DNS gate's `$A` with `--resolve <hostname>:443:<answer>` per answer (IPv6 accepted as is, with
+  or without brackets — measured), print `<ip> <status> …` per line and `<ip> FAILED (curl exit N)`
+  on failure, and pass only when every line passes. The post-write check, which starts from
+  `http://`, pins `:80` as well as `:443` — `--resolve` is per host:port, and pinning `:443`
+  alone left the `http://` hop, the one the write changed, on whichever address curl reached
+  first (measured). The pin covers the hostname under test only: a `www.` hop resolves publicly
+  and is checked in its own turn, since every served hostname is in step 0's list.
 
 ## 1.5.2 - 2026-09-13
 
