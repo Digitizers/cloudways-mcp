@@ -197,8 +197,33 @@ Then point Claude Desktop at the installed executable and that file:
 }
 ```
 
+`/Users/<you>` above is a placeholder — the JSON needs **absolute** paths, and the commands
+above wrote the files under `$HOME`. Print the two real values rather than typing them:
+
+```bash
+printf '%s\n' "$HOME/.cloudways-mcp-bridge/node_modules/.bin/mcp-remote" \
+               "$HOME/.config/cloudways-mcp/headers.txt"
+```
+
 On Windows both paths change — the launcher is the `.cmd` shim, and the header file is under
-the profile directory:
+the profile directory — and `$HOME` is **not** reliably `C:\Users\<you>`: a relocated, network
+or non-C-drive profile puts both files somewhere else, and a config with a hard-coded C-drive
+path then fails to find either. Let PowerShell build the block from the same `$HOME` the setup
+used, which also escapes the backslashes for you:
+
+```powershell
+@{
+  command = "$HOME\.cloudways-mcp-bridge\node_modules\.bin\mcp-remote.cmd"
+  args    = @(
+    'https://mcp.cloudways.com/mcp/',
+    '--header-file',
+    "$HOME\.config\cloudways-mcp\headers.txt"
+  )
+} | ConvertTo-Json
+```
+
+Paste the result as the `"cloudways"` entry under `"mcpServers"`. It looks like this, with your
+own profile path in place of `C:\\Users\\<you>`:
 
 ```json
 {
