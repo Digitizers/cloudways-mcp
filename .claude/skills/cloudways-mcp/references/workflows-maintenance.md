@@ -85,7 +85,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > validating the edge certificate after all (measured: with a proxy variable set, the
 > `--resolve` form connects to the proxy address, not the server, until `--noproxy '*'` is
 > added). **Whether something is in front is a DNS question, not a certificate one**:
-> `dig @1.1.1.1 +short <domain> A | awk '/^[0-9.]+$/'; dig @1.1.1.1 +short <domain> AAAA | awk '/:/'` against the server's addresses (same source as the IP above) — **every** routable answer, both
+> `A=$(dig @1.1.1.1 +short <domain> A | awk '/^[0-9.]+$/'; dig @1.1.1.1 +short <domain> AAAA | awk '/:/'); [ -n "$A" ] && printf '%s\n' "$A" || { echo 'NO ANSWER: gate not run' >&2; false; }` against the server's addresses (same source as the IP above) — **every** routable answer, both
 > record types, must be the server. `@1.1.1.1` (or any public resolver) is not decoration: on
 > a VPN or an office network with **split-horizon DNS**, the local resolver can answer with the
 > Cloudways origin while the public one answers with a Flexible-mode CDN — every check then
@@ -100,7 +100,13 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > would call every alias a proxy. `awk` rather than `grep` because a name with no AAAA record
 > is normal, and `grep` with nothing to select exits 1 — under `set -e`, or a runner that
 > surfaces non-zero commands, that would fail the check on a perfectly valid setup; `awk`
-> prints the same lines and exits 0 with nothing to print (measured on an IPv4-only name). Any other address is a CDN or proxy, whatever certificate
+> prints the same lines and exits 0 with nothing to print (measured on an IPv4-only name).
+> Which is why the guard around it exists: an empty **family** is fine, an empty **answer** is
+> not. With the public resolver blocked, filtered or erroring, `dig` exits 9 but the pipeline
+> prints nothing and exits 0 (measured), and "every answer matches the origin" is then true of
+> no answers — the proxy-mode check would be skipped on the very networks where it matters.
+> The `[ -n "$A" ]` requires at least one address across A and AAAA; no output is an
+> unanswered gate, which is a failed gate, never a passed one. Any other address is a CDN or proxy, whatever certificate
 > it shows; and a proxy reachable only over IPv6 (an A record at the origin, an AAAA at the
 > edge) is still a proxy for every IPv6 client, so an A-only check is not a check. Comparing
 > issuers proves nothing,
@@ -145,7 +151,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    one `server_get` for that server — see the note at the top). The certificate being renewed
    lives on the **origin**, so check that one: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` for the verdict (exit 0 / 60), and
    `openssl s_client -servername <domain> -connect <server-ip>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates`
-   for the issuer and `notAfter` on record. If `dig @1.1.1.1 +short <domain> A | awk '/^[0-9.]+$/'; dig @1.1.1.1 +short <domain> AAAA | awk '/:/'` answers with anything that is not one
+   for the issuer and `notAfter` on record. If `A=$(dig @1.1.1.1 +short <domain> A | awk '/^[0-9.]+$/'; dig @1.1.1.1 +short <domain> AAAA | awk '/:/'); [ -n "$A" ] && printf '%s\n' "$A" || { echo 'NO ANSWER: gate not run' >&2; false; }` answers with anything that is not one
    of the server's own addresses, a proxy is in front — the renewal still happens here, at the origin, and
    the browser will keep showing you the proxy's certificate afterwards.
    Nothing in this step needs the database credentials `app_get` would add.
@@ -315,7 +321,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    (sections 2 and 3) and re-run. What exit 60 never permits is step 4 — enforcing HTTPS now
    would redirect production traffic onto a certificate browsers reject. Then ask whether
    anything sits in front:
-   `dig @1.1.1.1 +short <hostname> A | awk '/^[0-9.]+$/'; dig @1.1.1.1 +short <hostname> AAAA | awk '/:/'` — every answer, A and AAAA both, must be one of the server's own addresses from
+   `A=$(dig @1.1.1.1 +short <hostname> A | awk '/^[0-9.]+$/'; dig @1.1.1.1 +short <hostname> AAAA | awk '/:/'); [ -n "$A" ] && printf '%s\n' "$A" || { echo 'NO ANSWER: gate not run' >&2; false; }` — every answer, A and AAAA both, must be one of the server's own addresses from
    `server_list`. Any other address is a CDN or reverse proxy — regardless of what certificate
    it presents, even if its issuer matches the origin's, and even if only the AAAA record
    points at it (IPv6 clients would take that path into the loop) — and its origin mode has to
