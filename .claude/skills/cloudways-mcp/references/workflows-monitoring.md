@@ -42,8 +42,11 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
    needs. Where the row comes from follows the same ladder as an app target: the `server_list`
    response you **already hold** from this conversation (the usual case — zero calls); else the
    server's page in the Cloudways UI; else, if it must be the API from here, **one `server_get`
-   for that server** — it returns that server's master credentials, and nothing else's. Do
-   **not** call `server_list` to pick one row you know the id of: rule 7 describes its payload,
+   for that server** — and know its full scope before choosing it: it returns that server's
+   **master credentials** *and* every hosted application's row, which rule 7 says may carry
+   each application's database credentials. Narrower than an account-wide `server_list`,
+   wider than "one credential" — which is why, for a baseline, the UI page is the better rung.
+   Do **not** call `server_list` to pick one row you know the id of: rule 7 describes its payload,
    and it covers every server in the account, so it exposes strictly more than the `server_get`
    it would be standing in for. `server_list` is for the fleet question, not the single-server
    one.

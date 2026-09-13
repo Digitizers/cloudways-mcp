@@ -83,9 +83,17 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 >
 > ```bash
 > umask 077; mkdir -p ~/.config/cloudways-mcp && cd ~/.config/cloudways-mcp
-> curl -q -sS -o cacert.pem https://curl.se/ca/cacert.pem
-> [ "$(shasum -a 256 cacert.pem | cut -d' ' -f1)" = f66dff1bdf8f96060b8177976f8b7d9254bc89bc4db933d769f7384d28480bc9 ] && echo OK || { echo 'digest MISMATCH against the value recorded in the skill - do not use'; rm -f cacert.pem; }
+> curl -q -sS -o cacert.pem.new https://curl.se/ca/cacert-2026-08-13.pem
+> [ "$(shasum -a 256 cacert.pem.new | cut -d' ' -f1)" = f66dff1bdf8f96060b8177976f8b7d9254bc89bc4db933d769f7384d28480bc9 ] && mv -f cacert.pem.new cacert.pem && echo OK || { echo 'digest MISMATCH against the value recorded in the skill - not installed'; rm -f cacert.pem.new; }
 > ```
+>
+> The URL is the **dated** artifact, not `cacert.pem`: curl.se serves every Mozilla revision at
+> `cacert-YYYY-MM-DD.pem` and moves the undated name to the newest, so an undated fetch would
+> stop matching the recorded digest the day Mozilla revises — every new setup failing, for no
+> reason anyone changed. And the download lands in a temporary name and is moved into place
+> only after it verifies, so a mismatch leaves a working installation's existing bundle exactly
+> where it was. Bumping is one commit that changes the date in the URL and the digest beside
+> it, together.
 >
 > Why the digest lives here and not in `cacert.pem.sha256` next to the download: that file
 > comes from the same origin over the same trust path as the bundle, so whatever can replace
@@ -99,8 +107,8 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > vendor's `ca-certificates` package — and compare against the recorded digest there. Measured
 > on this curl build: with that bundle a good host exits 0 and `self-signed.badssl.com` exits 60;
 > with an **empty** bundle the good host exits 77 — proof that the file, not the OS store, is
-> what the verdict trusts. Mozilla revises the bundle a few times a year; refresh it by
-> updating this record.
+> what the verdict trusts. Mozilla revises the bundle a few times a year; a newer one is
+> adopted by updating this record, never by fetching the undated name.
 >
 > **And there may be two certificates.** Through public DNS that command validates whatever
 > answers for the name — behind Cloudflare or any reverse proxy, that is the **edge**

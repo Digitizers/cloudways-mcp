@@ -22,12 +22,13 @@ stayed clean. The Medium is fair and this release takes it whole.
   id you already know — narrower than `app_list`, which covers every app on the server — then
   `app_list` for a name, then ask. What `app_get` is never for is habit. The same ladder governs a
   known server: the `server_list` response already held, else the UI, else one `server_get` for
-  that server — never a fresh account-wide `server_list` to read one row. The three places that read **certificate state** through `app_get` read it from the
+  that server, with its full scope stated (master credentials *and* every hosted application's
+  row, per rule 7) — never a fresh account-wide `server_list` to read one row. The three places that read **certificate state** through `app_get` read it from the
   outside instead, as two commands with two jobs: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert ~/.config/cloudways-mcp/cacert.pem -sS -o /dev/null --noproxy '*' https://<domain>/`
   (`-q` first, so a `~/.curlrc` saying `insecure` cannot weaken it, and the `env -u` prefix so a CA
   override in the environment — which `-q` does not touch — cannot either; both measured, the second
   by pointing `CURL_CA_BUNDLE` at `self-signed.badssl.com`'s own certificate and watching exit 60
-  become exit 0; and `--cacert` pinned to a copy of Mozilla's public roots verified against a digest **recorded in the skill** (a same-origin `.sha256` proves only that the transfer was intact, and whatever can replace the bundle can replace it), because a
+  become exit 0; and `--cacert` pinned to a copy of Mozilla's public roots fetched from curl.se's **dated** URL for that revision (the undated name moves with every Mozilla update and would stop matching), downloaded to a temporary name and moved into place only after it verifies against a digest **recorded in the skill** (a same-origin `.sha256` proves only that the transfer was intact, and whatever can replace the bundle can replace it), because a
   corporate CA in the OS store is beyond `env -u`'s reach — an empty bundle exits 77, proof the file
   is the trust source)
   is the **verdict** — exit 0 means chain, hostname and validity passed the OS trust store, exit
