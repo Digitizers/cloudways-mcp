@@ -36,6 +36,15 @@ mine from 1.5.1.
   fails at startup instead of connecting unauthenticated. Verified against `mcp-remote@0.14.0`
   installed from the shipped lockfile: it logs `Loaded 2 header(s)` and the header **names**,
   never the value.
+- **The shipped lockfile no longer carries a known-vulnerable `qs`.** GitHub's advisory database
+  flagged two moderate issues against `qs < 6.16.0` in `bridge/package-lock.json` — the file this
+  release tells people to `npm ci`. `express@4.22.2` is the newest 4.x and requires `~6.15.1`,
+  with no release widening it, so `bridge/package.json` now carries
+  `"overrides": { "qs": "6.16.0" }`; `body-parser` in the same tree already required `~6.16.0`, so
+  the override merges two copies into the patched one. The regenerated lockfile differs by that
+  one version and nothing else (82 entries → 81, every package with an integrity hash), `npm
+  audit` reports **0 vulnerabilities**, and `npm ci` still yields a working `mcp-remote`.
+  A lockfile that is reproducible but knowingly vulnerable is not "vetted".
 - **The `npx` fallback is removed** (T08, High). It pinned `mcp-remote` and nothing underneath
   it: ~80 transitive dependencies re-resolved whenever the npx cache is empty, executing in the
   process that holds the Access Token. Anyone who can run `npx` can run the `npm ci` above it,

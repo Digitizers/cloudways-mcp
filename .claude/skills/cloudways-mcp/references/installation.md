@@ -79,9 +79,9 @@ Claude Desktop does not natively support remote HTTP MCP servers, so it uses the
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
 **First, install the bridge from the lockfile shipped with this skill.** `bridge/` (beside
-this `references/` directory) carries a `package.json` and a `package-lock.json` covering **83
-packages, 82 with integrity hashes**. `npm ci` installs exactly what that lockfile names and
-resolves nothing of its own:
+this `references/` directory) carries a `package.json` and a `package-lock.json` covering **82
+entries — 81 packages, every one with an integrity hash**, plus the root. `npm ci` installs
+exactly what that lockfile names and resolves nothing of its own:
 
 ```bash
 # && throughout: a failed delete or copy must not reach npm ci, which would
@@ -242,6 +242,16 @@ path is npm's documented layout and has not been exercised on a Windows machine.
 > their ranges would run with your Access Token even though the digest still matches. That is
 > what the shipped lockfile and `npm ci` exist to prevent, and why no `npx` recipe remains.
 >
+> **One dependency is pinned past its parent's range.** `express@4.22.2` — the newest 4.x, and
+> what `mcp-remote` asks for — requires `qs@~6.15.1`, and every `qs` below 6.16.0 carries two
+> advisories (an array-limit bypass and a DoS through an attacker-controlled `isBuffer`). There
+> is no express release that widens the range, so `bridge/package.json` carries
+> `"overrides": { "qs": "6.16.0" }`. This is not a guess about compatibility: `body-parser`, in
+> this same tree and from the same maintainers, already requires `~6.16.0`, so the override
+> collapses two copies of `qs` into the patched one. Regenerating the lockfile moved that single
+> version and nothing else (82 entries → 81, `npm audit`: **0 vulnerabilities**), and `npm ci`
+> from it still produces a working `node_modules/.bin/mcp-remote`.
+>
 > **`npm ci` against the shipped lockfile has to be the first command that touches the
 > registry.** Generating your own lockfile with `npm install` resolves the graph at that moment
 > and then freezes whatever it found — so a first install during a compromise locks the bad
@@ -249,7 +259,7 @@ path is npm's documented layout and has not been exercised on a Windows machine.
 > `bridge/package-lock.json` is that the resolution happened once, here, at a known date.
 >
 > To be exact about what that buys, because "vetted" does a lot of work: the graph is **pinned
-> and reproducible**, with integrity hashes for every package. It is not a claim that 83
+> and reproducible**, with integrity hashes for every package. It is not a claim that 81
 > packages' source has been read. Bumping `mcp-remote` means regenerating the lockfile in the
 > same commit.
 
