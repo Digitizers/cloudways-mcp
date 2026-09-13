@@ -50,11 +50,15 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
    and it covers every server in the account, so it exposes strictly more than the `server_get`
    it would be standing in for. `server_list` is for the fleet question, not the single-server
    one.
-2. `app_list` on that server — **the roster steps 6 and 8 need**, unless you already hold it
-   from this conversation. `server_list` gives a *count*, and `monitoring_app_summary` /
-   `analytics_app_traffic` take an app id beside the server id; `server_get` used to supply
-   this roster implicitly, beside the master credentials. One call, whose payload rule 7
-   describes.
+2. The roster — **only if the change is server-wide.** If the significant change is scoped
+   to one application whose `(server_id, app_id)` you already know, steps 6 and 8 take that id
+   and nothing else: **make no roster call**, since `app_list` would import every application's
+   row (credentials included, per rule 7) for no benefit. For a server-wide baseline —
+   a PHP upgrade, a migration, a DNS change affecting every site — you need every app id:
+   the roster you already hold from this conversation, else one `app_list` on that server
+   (`server_list` gives a *count*; `monitoring_app_summary` / `analytics_app_traffic` take an
+   app id beside the server id; `server_get` used to supply this roster implicitly, beside
+   the master credentials). One call, whose payload rule 7 describes.
 3. `monitoring_server_graph` — CPU, RAM, disk I/O over the last 5 minutes
 4. `service_status` — verify all the services are running
 5. `monitoring_server_summary` — free space (run `server_disk_usage_fetch` first to initialize the data, then read with `monitoring_server_summary`)

@@ -83,7 +83,11 @@ stayed clean. The Medium is fair and this release takes it whole.
   for reads the current values and changes only the scheme — writing `https://<hostname>` from the
   step's placeholder would have promoted an alias to canonical — and is its own confirmed write with a
   backup first, ahead of the redirect's own confirmation; and the post-write verification runs per
-  hostname like the preflight. The DNS/proxy gate now comes before the certificate check and
+  hostname like the preflight. `curl: (47)` is diagnosed apart from an HTTP downgrade: with
+  `--proto-redir '=https'` an HTTP hop is never followed, so 47 is an HTTPS-only loop or an over-long
+  chain, and the WordPress scheme repair is reserved for the protocol-disabled error or an observed
+  `http://` `Location`. The change baseline makes no roster call for an app-scoped change whose
+  target is already known — `app_list` for one known id imports every application's row for nothing. The DNS/proxy gate now comes before the certificate check and
   decides which certificate matters: a site visitors reach directly must pass the OS trust store
   at the origin, while a site behind a proxy in Full / Full (strict) is judged by the proxy's own
   origin policy (a Cloudflare Origin CA certificate is correct there, and the local check would

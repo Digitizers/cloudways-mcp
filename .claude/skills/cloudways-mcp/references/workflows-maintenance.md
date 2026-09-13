@@ -432,13 +432,22 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    without `--fail` leaves curl's exit code to the transport, so these arrive as `exit 0` with
    the status in the `-w` output (measured: 525, 526 and 502 all exit 0) — read the status.
    Redirecting a working HTTP path onto any of them is the outage this step exists to prevent. `curl: (1) Protocol "http" disabled (in redirect)`
-   (measured: exit 1, before curl ever connects to the HTTP target), an effective URL
-   beginning `http://`, or `curl: (47) Maximum (5) redirects followed` — any of these means
-   the app itself is pushing HTTPS visitors back to HTTP somewhere in its chain; on WordPress
-   that is `WP_HOME` / `WP_SITEURL` still set to `http://`, the usual cause on a site that has
-   never had HTTPS enforced. Enforcing now produces the loop the audit warned about: the server
-   redirects `http→https`, the app redirects `https→http`, and every browser bounces between
-   them until it gives up. **Fix the application first**, then re-run this step until it
+   (measured: exit 1, before curl ever connects to the HTTP target) or an effective URL
+   beginning `http://` means the app itself is pushing HTTPS visitors back to HTTP somewhere
+   in its chain; on WordPress that is `WP_HOME` / `WP_SITEURL` still set to `http://`, the
+   usual cause on a site that has never had HTTPS enforced. Enforcing now produces the loop
+   the audit warned about: the server redirects `http→https`, the app redirects `https→http`,
+   and every browser bounces between them until it gives up.
+   `curl: (47) Maximum (5) redirects followed` is a **different** failure and must not be sent
+   to the same repair: with `--proto-redir '=https'` an HTTP hop is never followed, so `47` can
+   only be an **HTTPS-only** loop or a finite chain longer than five hops — `www`/apex
+   ping-pong, an authentication redirect that never settles, a plugin's canonical rule
+   fighting a server rule. Changing `home`/`siteurl` for that changes the scheme of a site
+   whose problem is not the scheme. Diagnose it hop by hop instead — `--max-redirs 0 -w
+   '%{http_code} %{redirect_url}\n'` on the start URL, then on the URL it named, and so on
+   until the pair that bounces is in front of you — and fix that rule where it lives. Either
+   way, step 4 waits until this step passes.
+   **For the downgrade case, fix the application first**, then re-run this step until it
    passes — and that repair is a write of its own, on the site's database, with its own
    confirmation:
    - Read before writing: `wp option get home; wp option get siteurl`. The hostname in those
