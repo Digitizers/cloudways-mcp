@@ -23,7 +23,12 @@ went from `suspicious` to `clean`. All four findings are real and all four are f
   the report does not help: by then they are in the transcript, and a transcript is kept,
   scrolled back through and sometimes pasted somewhere. The only way to keep a credential out
   of a conversation is not to fetch it. The pass now builds its inventory from `server_list`
-  and `app_list` — neither carries credentials — and takes its detail from
+  and `app_list`, which answer the inventory question in one call per account or per server
+  instead of one per app — **not** because their payloads are known to be clean: the live
+  server describes `app_list` itself as returning “ID, label, application type, version,
+  domain, and credentials”, and both list tools are built from the same `GET /server` payload
+  that makes `server_get` a credential tool. Safety rule 7 now says so rather than calling them
+  credential-free, because “inventory” is not a synonym for “safe to paste” — and takes its detail from
   `server_settings_get`, `service_status`, `app_settings_get`, the monitoring/analytics tools
   and `app_vulnerabilities_list`. All three credential-returning tools are named as
   deliberately absent, with what each is for and when calling it is legitimate — **in every
@@ -37,7 +42,13 @@ went from `suspicious` to `clean`. All four findings are real and all four are f
   credentials. And the SSL claim is reconciled across files: there is no dedicated read
   tool, the detail rides inside `app_get` next to that app's database credentials, so the
   audit reads it from the UI while the certificate sweep — the one job that cannot be done
-  another way — uses `app_get` under stated conditions.
+  another way — uses `app_get` under stated conditions. Removing `server_get` from the read
+  paths also removed the app roster and the domain fields two sequences had been taking from
+  it without saying so, so both are named again at their source: `app_list` for the roster
+  (`server_list` returns an app *count*, not IDs) and for the primary `domain`, and the UI or
+  direct API for additional domains/CNAMEs — every alias tool (`app_cname_update`,
+  `app_cname_delete`, `app_aliases_update`) is a **write**, and a value is never read by
+  calling a W tool.
 - **The daily-summary example uses `mktemp`, not a fixed `/tmp` path** (Medium), with
   `umask 077` and a `trap` that removes the file even when `curl` fails. The template ends in
   the `X`s: BSD `mktemp` does not substitute them anywhere else, and does not fail either — it

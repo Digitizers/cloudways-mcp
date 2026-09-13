@@ -43,7 +43,8 @@ Confirm with the client:
 ## Stage 2 — Server mapping
 
 Stage 1's `server_list` already carries each server's label, size, provider, region, IP and
-app count — with no credentials in the payload. For each server in that list:
+app count, in one call for the whole account — see safety rule 7 on what a list payload may
+still contain. For each server in that list:
 
 ```
 1. server_settings_get         → PHP timeout, memory, upload limit, custom PHP
@@ -66,8 +67,9 @@ app count — with no credentials in the payload. For each server in that list:
 
 ## Stage 3 — Application mapping
 
-`app_list` gives the roster per server, with no credentials in the payload. For each
-application in it:
+`app_list` gives the roster per server in one call — the application IDs every step below needs,
+which `server_list`'s app *count* cannot supply. Read rule 7 before pasting any of it anywhere.
+For each application in it:
 
 ```
 1. app_settings_get            → app-level overrides + security flags (XML-RPC, password protection, etc.)
@@ -118,13 +120,20 @@ application in it:
 > conditions attached there — because a certificate sweep is the one job that cannot be done
 > any other way.
 
+> **Domains: the primary comes from the roster, the aliases do not.** `app_list` documents a
+> `domain` field, so the primary domain arrives with the roster you already fetched. There is no
+> read tool for the secondary ones: `app_cname_update`, `app_cname_delete` and
+> `app_aliases_update` are all **writes**, and nothing in the catalog lists the aliases back. So
+> read additional domains/CNAMEs from the Cloudways Platform UI or the direct API, exactly as
+> with SSL — and never call a W tool to inspect a value.
+
 **Deliverables table for each app:**
 
 | Field | Value | red flag? |
 |------|-----|-----------|
 | App name | | |
-| Primary domain | | |
-| Additional domains/CNAMEs | | |
+| Primary domain | app_list (`domain`) | |
+| Additional domains/CNAMEs | UI / API | |
 | SSL provider + expiry | UI / API | check auto-renew? |
 | App type (WP/Magento/PHP/Laravel) | | |
 | PHP version | | < 8.1 = upgrade needed |
@@ -262,5 +271,5 @@ Auditor: [your name]
 - [ ] **Per app:** app_list for the roster, then app_settings_get / monitoring_app_summary / analytics_app_traffic / analytics_app_php / analytics_app_mysql / app_varnish_settings_get / app_vulnerabilities_list (WP)
 - [ ] **NOT in a sweep:** `server_get`, `app_get`, `app_credentials` — each returns master, database or SSH credentials in its payload, so a per-server or per-app loop pulls the whole account's secrets into the conversation. Call one for a specific missing field, or for a task the user asked for. See Stage 2.
 - [ ] **Security:** app_settings_get (XML-RPC etc.) / app_vulnerabilities_list / copilot_insights_list / security_get_whitelisted_ips + security_get_whitelisted_ips_mysql / security_suite_server_incidents_list (if suite active)  (SSH-key roster: no list tool; it rides inside `server_get` beside master credentials — UI / direct API for an audit, and record a count)
-- [ ] **Manual (UI):** Backup schedule + retention / SSL provider + expiry (no dedicated read tool; the detail rides inside `app_get`, which also returns DB credentials — UI or direct API for an audit) / SSH-key roster / Cloudflare integration (if any) / WP version (if WP) / Active plugins (if WP)
+- [ ] **Manual (UI):** Backup schedule + retention / SSL provider + expiry (no dedicated read tool; the detail rides inside `app_get`, which also returns DB credentials — UI or direct API for an audit) / Additional domains + CNAMEs (the alias tools are all W; the primary domain comes from `app_list`) / SSH-key roster / Cloudflare integration (if any) / WP version (if WP) / Active plugins (if WP)
 - [ ] **Document:** Red flags / Recommendations / Quote / SLA

@@ -108,7 +108,7 @@ Next action requires confirmation: app_purge_cache (W)
 **Sequence for each application:**
 
 1. `server_list`
-2. For each server: `app_list` → the application roster (no credentials in the payload)
+2. For each server: `app_list` → the application roster (one call per server; rule 7 on the payload)
 3. For each app: `app_get` → the SSL/expiry detail, which no credential-free tool returns.
    **This is a fleet-wide loop over a tool that also returns database credentials**, so it
    pulls every app's DB password into the conversation. Run it when an SSL sweep is what the
