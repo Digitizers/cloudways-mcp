@@ -164,8 +164,11 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > different machines with a Flexible-mode HTTP hop between them. And the origin check is for a
 > site visitors reach **directly**: behind a proxy in Full or Full (strict) mode the origin may
 > hold a certificate only the proxy trusts (Cloudflare Origin CA is the ordinary case), the
-> local trust store calls it invalid, and the certificate that has to pass is the edge's — see
-> §9 step 1 for the branching. Let's Encrypt renewals happen
+> local trust store calls it invalid, and the certificate that has to pass is the edge's — for
+> the visitors who reach the edge. Proxying is a property of each DNS **answer**, not of the
+> hostname: an origin A record beside a proxied AAAA record means IPv4 visitors get the origin's
+> certificate and IPv6 visitors get the edge's, and both have to pass — see §9 step 1 for the
+> branching. Let's Encrypt renewals happen
 > at the origin, so a renewal is verified there; and enforcing HTTPS at the origin behind a
 > proxy in **Flexible** mode (proxy speaks HTTPS to the browser, HTTP to the origin) makes the
 > origin redirect every proxied request back to HTTPS — a loop. Both checks are measured below
@@ -368,12 +371,17 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    every hostname from step 0** (`<hostname>` below is each of them in turn), before step 4.
    The DNS gate comes **first**, because it decides which certificate matters:
    `R4=$(dig @1.1.1.1 +noall +comments +answer <hostname> A) && R6=$(dig @1.1.1.1 +noall +comments +answer <hostname> AAAA) && printf '%s\n%s\n' "$R4" "$R6" | grep -c 'status: NOERROR' | grep -qx 2 && A=$(printf '%s\n%s\n' "$R4" "$R6" | awk '$4=="A"||$4=="AAAA"{print $5}') && [ -n "$A" ] && printf '%s\n' "$A" || { echo 'DNS gate FAILED: lookup error, non-NOERROR rcode, or no address' >&2; false; }`
-   — every answer, A and AAAA both, must be one of the server's own addresses (from the
-   `server_list` row you hold). Any other address is a CDN or reverse proxy, regardless of
-   what certificate it presents, even if its issuer matches the origin's, and even if only the
-   AAAA record points at it (IPv6 clients would take that path).
-   - **No proxy — visitors reach the origin directly.** Then the origin's certificate is the
-     one browsers will be handed, and it must pass the OS trust store: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <hostname>:443:<server-ip> https://<hostname>/` must exit
+   — compare **every** answer, A and AAAA both, against the server's own addresses (from the
+   `server_list` row you hold), and classify **per answer**, not per hostname: an answer that
+   is the server means clients on that family reach the origin directly; an answer that is
+   anything else means clients on that family go through a CDN or reverse proxy, regardless of
+   what certificate it presents and even if its issuer matches the origin's. A hostname whose
+   A record is the origin and whose AAAA record is a proxy is **both**, and both branches
+   below apply to it — every IPv4 client reaches the origin, every IPv6 client reaches the
+   edge, and each path has to be right on its own.
+   - **Any answer is the server — some or all visitors reach the origin directly.** Then the
+     origin's certificate is one that browsers will be handed, and it must pass the pinned
+     public roots: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <hostname>:443:<server-ip> https://<hostname>/` must exit
      **0** — chain + hostname + dates, at the Cloudways server itself. Exit 60 means there is
      no certificate browsers accept here **yet**, and which of two things that is decides where
      you go: if none was ever issued (a fresh app answers with Cloudways' self-signed default),
@@ -381,7 +389,8 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
      failing (expired, wrong host), fix or reissue it first (sections 2 and 3) and re-run. What
      exit 60 never permits is step 4 — enforcing HTTPS now would redirect production traffic
      onto a certificate browsers reject.
-   - **A proxy is in front.** Its origin mode has to be **Full (strict)**, or at least Full,
+   - **Any answer is not the server — some or all visitors go through a proxy.** Its origin
+     mode has to be **Full (strict)**, or at least Full,
      confirmed in that proxy's own settings before this write; in Flexible mode the proxy
      reaches the origin over HTTP, the origin's new redirect sends it back to HTTPS, and the
      site loops. The origin's certificate is then judged by **the proxy's origin policy, not by
@@ -389,8 +398,11 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
      origin-CA certificate included; in Full (strict) it must be publicly trusted **or** issued
      by that proxy's own origin CA — a Cloudflare Origin CA certificate is the normal, correct
      case here, and the origin command above would call it invalid (exit 60) while the proxy
-     trusts it and visitors never see it. Do not run the origin check against a proxied site
-     and read exit 60 as "replace the certificate". The certificate visitors **will** be handed
+     trusts it and visitors on that path never see it. Do not run the origin check against a
+     site whose **every** answer is a proxy and read exit 60 as "replace the certificate" —
+     but if the hostname also has a direct answer (the mixed case above), that allowance is
+     gone: the origin certificate *is* handed to the direct family's browsers, and the direct
+     branch's browser-trust check applies to it as well. The certificate visitors **will** be handed
      is the edge's, so that is what must pass the trust store: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' -w '%{http_code}\n' https://<hostname>/` must exit **0** and print a status that is **not 5xx** — 525/526 is the edge admitting it cannot complete TLS to the origin, which is the origin-policy failure the paragraph above is about, arriving as an HTTP status.
    Do not read any of this off `openssl x509 -dates`, which prints dates for a broken
    certificate just as happily.

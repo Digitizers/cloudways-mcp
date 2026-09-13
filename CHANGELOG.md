@@ -87,7 +87,10 @@ stayed clean. The Medium is fair and this release takes it whole.
   decides which certificate matters: a site visitors reach directly must pass the OS trust store
   at the origin, while a site behind a proxy in Full / Full (strict) is judged by the proxy's own
   origin policy (a Cloudflare Origin CA certificate is correct there, and the local check would
-  have called it invalid) with the edge certificate as the one that must pass. And "confirm the target" means the roster you already hold or the id
+  have called it invalid) with the edge certificate as the one that must pass — and proxying is judged per DNS answer, not
+  per hostname: an origin A record beside a proxied AAAA record puts the hostname on both
+  branches, because the direct family's browsers are handed the origin certificate no matter what
+  the proxy trusts. And "confirm the target" means the roster you already hold or the id
   you were given — `app_list` only when you have neither, as one call whose payload rule 7
   describes; the first draft of this release called that sequence credential-free, which is
   the claim 1.5.1 removed, and it is gone again. The
