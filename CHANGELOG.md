@@ -31,7 +31,13 @@ went from `suspicious` to `clean`. All four findings are real and all four are f
   the end of the same file, the fleet-wide SSL sweep in `workflows-monitoring.md`, and the
   weekend health check in SKILL.md. A rule stated once and contradicted by the copy-pasteable
   checklist below it is not a rule. SKILL.md also carries it as a numbered safety rule, so it
-  applies to sweeps nobody has written down yet.
+  applies to sweeps nobody has written down yet. The restart preflight in
+  `workflows-maintenance.md` now takes its "which apps go offline" roster from `app_list`
+  rather than `server_get`, which returned the same list plus the server's master
+  credentials. And the SSL claim is reconciled across files: there is no dedicated read
+  tool, the detail rides inside `app_get` next to that app's database credentials, so the
+  audit reads it from the UI while the certificate sweep — the one job that cannot be done
+  another way — uses `app_get` under stated conditions.
 - **The daily-summary example uses `mktemp`, not a fixed `/tmp` path** (Medium), with
   `umask 077` and a `trap` that removes the file even when `curl` fails. The template ends in
   the `X`s: BSD `mktemp` does not substitute them anywhere else, and does not fail either — it

@@ -104,7 +104,13 @@ application in it:
 > every application's database password into one conversation — and a report is not the only
 > thing that outlives an engagement.
 
-> **SSL status is not exposed by an MCP tool.** Check certificate provider + expiry in the Cloudways Platform UI or via the direct Cloudways API.
+> **No dedicated SSL read tool — and the one payload that carries the detail is not worth a
+> sweep.** There is no `ssl_get`; certificate provider and expiry come back inside `app_get`,
+> which also returns that application's **database credentials**. For an audit across a whole
+> fleet that is a bad trade, so read provider + expiry from the Cloudways Platform UI or the
+> direct API here. `workflows-monitoring.md` §5 (SSL expiry monitoring) does use `app_get` — with the
+> conditions attached there — because a certificate sweep is the one job that cannot be done
+> any other way.
 
 **Deliverables table for each app:**
 
@@ -250,5 +256,5 @@ Auditor: [your name]
 - [ ] **Per app:** app_list for the roster, then app_settings_get / monitoring_app_summary / analytics_app_traffic / analytics_app_php / analytics_app_mysql / app_varnish_settings_get / app_vulnerabilities_list (WP)
 - [ ] **NOT in a sweep:** `server_get`, `app_get`, `app_credentials` — each returns master, database or SSH credentials in its payload, so a per-server or per-app loop pulls the whole account's secrets into the conversation. Call one for a specific missing field, or for a task the user asked for. See Stage 2.
 - [ ] **Security:** app_settings_get (XML-RPC etc.) / app_vulnerabilities_list / copilot_insights_list / security_get_whitelisted_ips + security_get_whitelisted_ips_mysql / security_suite_server_incidents_list (if suite active)  (SSH-key roster = UI / API only)
-- [ ] **Manual (UI):** Backup schedule + retention / SSL provider + expiry (no MCP read tool — UI or direct API) / SSH-key roster / Cloudflare integration (if any) / WP version (if WP) / Active plugins (if WP)
+- [ ] **Manual (UI):** Backup schedule + retention / SSL provider + expiry (no dedicated read tool; the detail rides inside `app_get`, which also returns DB credentials — UI or direct API for an audit) / SSH-key roster / Cloudflare integration (if any) / WP version (if WP) / Active plugins (if WP)
 - [ ] **Document:** Red flags / Recommendations / Quote / SLA
