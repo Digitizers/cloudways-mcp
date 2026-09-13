@@ -27,13 +27,15 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 ---
 
 > **Confirming a target is never `app_get`.** Every sequence below starts by making sure the
-> right application is in hand. That is the roster you usually already hold from this
-> conversation, or the app id the user gave you — neither costs a call. Only when you have
-> neither: `app_list` on the server, **one** call whose payload rule 7 describes (it is built
-> from the same `/server` response as the credential tools, and covers every app on that
-> server) — take the one row you came for and paste none of it. `app_get` confirms a target
-> too, and returns that application's **database credentials** beside the label, which a cache
-> purge, a backup or a restore has no use for.
+> right application is in hand — and **an id alone is not that**. The confirmation block above
+> requires name + URL, and a mistyped id that happens to belong to another application is still
+> a valid id, so a write confirmed against nothing but a number can land on the wrong site
+> (`app_restore` is the one that cannot be undone). Resolve the id against the roster you
+> already hold from this conversation; if you hold none, `app_list` on the server — **one** call
+> whose payload rule 7 describes (built from the same `/server` response as the credential
+> tools, covering every app on that server) — and take the one row you came for, pasting none
+> of it. `app_get` resolves a target too, and returns that application's **database
+> credentials** beside the label, which a cache purge, a backup or a restore has no use for.
 >
 > **Certificate state is read from the outside, and the verdict and the dates are two different
 > commands.** The verdict is `curl -sS -o /dev/null --max-time 15 https://<domain>/`: exit **0** means the chain, the hostname and the validity
@@ -49,7 +51,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. Confirm the target app from the roster you hold or the id you were given; `app_list` only if you have neither (never `app_get` — see above)
+1. Confirm the target — name + URL, resolved from the roster you hold, or from one `app_list` if you hold none; an id alone is not a confirmation (never `app_get` — see above)
 2. `app_varnish_settings_get` — see if Varnish is active
 3. **CONFIRM:** `app_purge_cache` (W)
 4. If Varnish is active: **CONFIRM:** `varnish_app_manage` with action=purge (W)
@@ -107,7 +109,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    ```
 
    Keep `privkey.pem` — a bare `openssl req -new` writes an encrypted key to whatever path the local OpenSSL config picks, and losing it makes the issued certificate unusable.
-2. Confirm the target from the roster you hold or the id you were given (see the note at the top)
+2. Confirm the target — name + URL, resolved from the roster you hold or one `app_list` (see the note at the top)
 3. **Install the custom cert in the Cloudways UI** (paste cert + key) — manual by necessity; no MCP tool covers this step.
 4. Check SSL from the browser (SSL Labs grade A+ preferred)
 5. If Let's Encrypt was active — decide: keep as backup or revoke (`security_lets_encrypt_revoke`, W! — double-confirm)
@@ -122,7 +124,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 **Sequence:**
 
-1. Confirm the target from the roster you hold or the id you were given (see the note at the top)
+1. Confirm the target — name + URL, resolved from the roster you hold or one `app_list` (see the note at the top)
 2. `monitoring_app_summary` — before: snapshot of state
 3. **CONFIRM:** `app_backup` (W)
 4. Check that the backup is progressing (`app_backup_status_get` for in-progress state, or via the UI). Note: there is no general "list backups" tool — the available restore points are visible in the Cloudways UI.
@@ -141,9 +143,10 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 **Sequence — critical to follow in order:**
 
 1. **STOP** — don't do anything until you understand the scope of the problem.
-2. The app's identity from the roster you hold, `monitoring_app_summary` for what it is doing
-   right now — the current state a restore decision needs, without the credentials `app_get`
-   would bring along
+2. The app's identity — name + URL — resolved from the roster you hold (one `app_list` if you
+   hold none; a bare id is not an identity, and step 5 below has to be checked against
+   something), then `monitoring_app_summary` for what it is doing right now — the current
+   state a restore decision needs, without the credentials `app_get` would bring along
 3. Check the list of available backups (via the Cloudways UI — there is no MCP "list backups" tool; `app_backup_status_get` only reports in-progress backup status)
 4. **CONFIRM step 1:** "Is the backup from date X the point you want to roll back to?"
 5. **CONFIRM step 2:** Type the app name to confirm restore

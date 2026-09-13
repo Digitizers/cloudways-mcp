@@ -226,11 +226,13 @@ Example tagging in the response:
 
 (`app_get` is not in this list on purpose: it returns the application's **database
 credentials** beside fields the three calls above already give you. Step 1 is the roster you
-usually already hold from this conversation — and if the user gave you the app id, steps 2-3
-need no roster call at all. `app_list` is one call for the whole server, and rule 7 says what a
-list payload may carry: reach for it when you have neither the roster nor the id, take the one
-row you came for, and paste none of it. Reach for `app_get` only for a field none of these
-return, and accept what comes with it.)
+usually already hold from this conversation. For a **read**, an id the user gave you is enough
+to run steps 2-3 without it. For any **write** it is not: the confirmation block needs name +
+URL, and a mistyped id that belongs to another app is still a valid id — resolve it against the
+roster first. `app_list` is one call for the whole server, and rule 7 says what a list payload
+may carry: reach for it when you hold no roster, take the one row you came for, and paste none
+of it. Reach for `app_get` only for a field none of these return, and accept what comes with
+it.)
 
 (SSL / Let's Encrypt **is** an MCP tool as of v1.2 — `security_lets_encrypt_install` / `_renew` / `_auto_renewal` / `_revoke`, via the security toolset. Install/renew are W; revoke is W!.)
 

@@ -14,9 +14,12 @@ Monitoring scenarios only. Almost everything here is read-only and needs no conf
 
 1. `server_list` — list + status for each server (also confirms the account/connection is reachable; there is no separate account-info tool)
 2. `copilot_insights_list` — what's open right now
-3. For each server with a status other than Running: `service_status` (what is down) and
-   `operation_status` (whether an operation is still in flight) — the two things "why" usually
-   is. `server_get` would add the server's master credentials to an answer that needs neither.
+3. For each server with a status other than Running: `service_status` (what is down) and the
+   insights from step 2 that name that server — the two things "why" usually is. If you hold an
+   operation id from an earlier write in this conversation (a restart, a scale, a backup),
+   `operation_status` on **that id** says whether it is still in flight; it takes an operation
+   id, not a server id, so there is nothing to ask it for a server that simply stopped.
+   `server_get` would add the server's master credentials to an answer that needs none of this.
 
 **How to summarize:**
 - How many servers, how many apps, how many active / inactive

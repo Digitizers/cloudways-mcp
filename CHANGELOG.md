@@ -12,7 +12,10 @@ stayed clean. The Medium is fair and this release takes it whole.
   multi-server comparison, a "why is this server not Running". None of them used the database
   or master credentials those calls return beside the label; they were the habit of reaching for
   the richest tool. Each now names the credential-free call that answers the actual question —
-  `app_list` for identity, `service_status` and `operation_status` for "why", the `server_list`
+  the held roster for identity (an id alone is not a confirmed target — the confirmation block
+  needs name + URL, and a mistyped id that belongs to another app is still valid), `service_status`
+  and that server's insights for "why" (`operation_status` only for an operation id you already
+  hold — it takes no server id), the `server_list`
   row for a baseline, `monitoring_app_summary` and `app_settings_get` for what an app is doing —
   and `workflows-maintenance.md` states the rule once at the top: confirming a target is never
   `app_get`. The three places that read **certificate state** through `app_get` read it from the
