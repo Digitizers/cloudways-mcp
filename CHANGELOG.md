@@ -23,11 +23,13 @@ stayed clean. The Medium is fair and this release takes it whole.
   `app_list` for a name, then ask. What `app_get` is never for is habit. The same ladder governs a
   known server: the `server_list` response already held, else the UI, else one `server_get` for
   that server — never a fresh account-wide `server_list` to read one row. The three places that read **certificate state** through `app_get` read it from the
-  outside instead, as two commands with two jobs: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --noproxy '*' https://<domain>/`
+  outside instead, as two commands with two jobs: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert ~/.config/cloudways-mcp/cacert.pem -sS -o /dev/null --noproxy '*' https://<domain>/`
   (`-q` first, so a `~/.curlrc` saying `insecure` cannot weaken it, and the `env -u` prefix so a CA
   override in the environment — which `-q` does not touch — cannot either; both measured, the second
   by pointing `CURL_CA_BUNDLE` at `self-signed.badssl.com`'s own certificate and watching exit 60
-  become exit 0)
+  become exit 0; and `--cacert` pinned to a checksum-verified copy of Mozilla's public roots, because a
+  corporate CA in the OS store is beyond `env -u`'s reach — an empty bundle exits 77, proof the file
+  is the trust source)
   is the **verdict** — exit 0 means chain, hostname and validity passed the OS trust store, exit
   60 means one did not — and `openssl s_client … | openssl x509 -noout -issuer -dates` supplies
   the dates for a report and decides nothing. Measured: the openssl line prints issuer and dates
@@ -47,7 +49,9 @@ stayed clean. The Medium is fair and this release takes it whole.
   follows the whole chain (`-L --max-redirs 5`; `curl: (47)` is the loop) instead of one hop —
   the preflight too, since a harmless `https://www.` first hop can hide an `http://` second one —
   and both chain checks pass on curl's exit status and an `https://` effective URL, not on a `200`,
-  because a `401` behind Basic Auth or a `403` from a WAF is a perfectly good answer over HTTPS,
+  because a `401` behind Basic Auth or a `403` from a WAF is a perfectly good answer over HTTPS — but
+  never on a 5xx, since Cloudflare's 525/526 are the edge reporting a failed TLS handshake to the
+  origin and arrive as `exit 0` (measured),
   and with `--noproxy '*'` like the origin checks, so an intercepting proxy's own page cannot pass
   them —
   and with `--proto-redir '=https'` so a chain that dips to HTTP and climbs back — invisible to
@@ -56,7 +60,8 @@ stayed clean. The Medium is fair and this release takes it whole.
   production write it is, with its own **CONFIRM** — the confirmation that enabled it does not carry. An
   app id with no server is stated to be unresolvable — `app_list` and `app_get` both take a
   `server_id`, and so does every app-scoped read — so the answer is to ask, never to walk every
-  roster. Whether a CDN or proxy sits in front is decided by DNS — A and AAAA both, address lines only, asked of a **public resolver** (`dig @1.1.1.1`) so split-horizon DNS on a VPN cannot hide a CDN behind a local answer, filtered with `awk` rather than `grep` — and guarded so that an empty answer (resolver blocked or erroring: `dig` exits 9, the pipeline exits 0 and prints nothing, measured) fails the gate instead of vacuously passing it, and each family's lookup is checked on its own exit status so one failed family cannot hide behind the other's good answer (measured), so a name with no AAAA record does not
+  roster. Whether a CDN or proxy sits in front is decided by DNS — A and AAAA both, address lines only, asked of a **public resolver** (`dig @1.1.1.1`) so split-horizon DNS on a VPN cannot hide a CDN behind a local answer, filtered with `awk` rather than `grep` — and guarded so that an empty answer (resolver blocked or erroring: `dig` exits 9, the pipeline exits 0 and prints nothing, measured) fails the gate instead of vacuously passing it, and each family's lookup is checked on its own exit status so one failed family cannot hide behind the other's good answer, and on its RCODE, since `dig
+  +short` is silent and exits 0 on a `SERVFAIL` (measured against `dnssec-failed.org`), so a name with no AAAA record does not
   exit 1 under `set -e`, since `dig +short` prints a CNAME's canonical name on its own line — against the server's own addresses, not by
   comparing certificate issuers (edge and origin can both be Let's Encrypt). The one field
   `app_get` alone returns that a routine job can need — the application's folder name, for

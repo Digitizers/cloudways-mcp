@@ -59,7 +59,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > for a label a held roster already gives you, was the finding this section exists to close.
 >
 > **Certificate state is read from the outside, and the verdict and the dates are two different
-> commands.** The verdict is `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' https://<domain>/`: exit **0** means the chain, the hostname and the validity
+> commands.** The verdict is `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' https://<domain>/`: exit **0** means the chain, the hostname and the validity
 > period all passed the OS trust store — what a browser checks — and exit **60** means one of
 > them did not. Two guards on that command are not optional. `-q`, which must come **first**,
 > stops curl reading `~/.curlrc`: a machine whose curlrc says `insecure` would otherwise pass
@@ -68,9 +68,24 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR` prefix clears curl's environment
 > equivalents of `--cacert`/`--capath`, which `-q` does not touch: measured against
 > `self-signed.badssl.com` with `CURL_CA_BUNDLE` pointed at its own certificate, exit 0 — the
-> gate passes a certificate no browser trusts — and exit 60 again under `env -u`. The verdict
-> has to come from the **system** trust store, because that is what the browsers being
-> redirected here will use.
+> gate passes a certificate no browser trusts — and exit 60 again under `env -u`. And the
+> third guard is the `--cacert` pointing at a **pinned copy of Mozilla's public roots**, because
+> the system trust store is not the public one: a corporate or user-installed CA sits in it
+> exactly where `env -u` cannot reach, and an origin certificate signed only by that CA exits 0
+> on this machine while every ordinary visitor rejects it. The verdict has to come from the
+> roots browsers ship with. One-time setup, beside `headers.txt`:
+>
+> ```bash
+> umask 077; mkdir -p ~/.config/cloudways-mcp && cd ~/.config/cloudways-mcp
+> curl -q -sS -o cacert.pem https://curl.se/ca/cacert.pem && curl -q -sS -o cacert.pem.sha256 https://curl.se/ca/cacert.pem.sha256
+> [ "$(cut -d' ' -f1 cacert.pem.sha256)" = "$(shasum -a 256 cacert.pem | cut -d' ' -f1)" ] && echo OK || { echo 'checksum MISMATCH - do not use'; rm -f cacert.pem; }
+> ```
+>
+> Measured on this curl build: with that bundle a good host exits 0 and `self-signed.badssl.com`
+> exits 60; with an **empty** bundle the good host exits 77 — proof that the file, not the OS
+> store, is what the verdict trusts. The fetch itself rides on the system store once; the
+> checksum catches a corrupted transfer, not a compromised curl.se, which is the usual limit of
+> a same-origin checksum. Refresh the bundle a few times a year (Mozilla revises it).
 >
 > **And there may be two certificates.** Through public DNS that command validates whatever
 > answers for the name — behind Cloudflare or any reverse proxy, that is the **edge**
@@ -78,14 +93,14 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > by pinning the name to the server's IP (from the `server_list` row you already hold, the
 > server's page in the UI, or one `server_get` for that server — never a fresh `server_list`
 > to read one address):
-> `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` — `--resolve` keeps the hostname for SNI and verification and only changes where the
+> `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` — `--resolve` keeps the hostname for SNI and verification and only changes where the
 > connection goes. `--noproxy '*'` is part of the command: with `HTTPS_PROXY` / `https_proxy` /
 > `ALL_PROXY` set in the environment, curl hands the request to that proxy, which resolves
 > `<domain>` through its own DNS and reaches the CDN edge — so the "origin" check would be
 > validating the edge certificate after all (measured: with a proxy variable set, the
 > `--resolve` form connects to the proxy address, not the server, until `--noproxy '*'` is
 > added). **Whether something is in front is a DNS question, not a certificate one**:
-> `A4=$(dig @1.1.1.1 +short <domain> A) && A6=$(dig @1.1.1.1 +short <domain> AAAA) && A=$(printf '%s\n%s\n' "$A4" "$A6" | awk '/^[0-9.]+$/ || /:/') && [ -n "$A" ] && printf '%s\n' "$A" || { echo 'DNS gate FAILED: a lookup errored, or no address came back' >&2; false; }` against the server's addresses (same source as the IP above) — **every** routable answer, both
+> `R4=$(dig @1.1.1.1 +noall +comments +answer <domain> A) && R6=$(dig @1.1.1.1 +noall +comments +answer <domain> AAAA) && printf '%s\n%s\n' "$R4" "$R6" | grep -c 'status: NOERROR' | grep -qx 2 && A=$(printf '%s\n%s\n' "$R4" "$R6" | awk '$4=="A"||$4=="AAAA"{print $5}') && [ -n "$A" ] && printf '%s\n' "$A" || { echo 'DNS gate FAILED: lookup error, non-NOERROR rcode, or no address' >&2; false; }` against the server's addresses (same source as the IP above) — **every** routable answer, both
 > record types, must be the server. `@1.1.1.1` (or any public resolver) is not decoration: on
 > a VPN or an office network with **split-horizon DNS**, the local resolver can answer with the
 > Cloudways origin while the public one answers with a Flexible-mode CDN — every check then
@@ -109,9 +124,15 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 > failed lookup for one family, hidden behind the other family's good answer, would otherwise
 > pass an aggregate check while being the very family that resolves publicly to a proxy
 > (measured: A good, AAAA against an unreachable resolver — an aggregate non-empty guard passed,
-> the per-lookup guard failed). Three cases, stated: a successful no-data answer for either
-> family passes (`dig` exits 0 on NXDOMAIN and on an empty AAAA); an errored lookup for either
-> family fails; and no addresses at all fails. No output, and no successful pair of lookups, is
+> the per-lookup guard failed). And the exit status is not enough either: `dig +short` prints
+> nothing and exits **0** on a `SERVFAIL` (measured against `dnssec-failed.org` at 1.1.1.1), so
+> a family whose lookup the resolver *refused* looked exactly like a family with no records.
+> Each family's **RCODE** is therefore read from `+comments` and must be `NOERROR` — only then
+> is an empty family a real no-data answer — and the addresses are taken from the answer
+> section by record type. Three cases, stated: `NOERROR` with no records for either family
+> passes; anything other than `NOERROR` for either family fails (a `SERVFAIL`, and an
+> `NXDOMAIN` — a hostname the app supposedly serves that does not resolve is not a served
+> hostname); and no addresses at all fails. No output, and no successful pair of lookups, is
 > an unanswered gate — which is a failed gate, never a passed one. Any other address is a CDN or proxy, whatever certificate
 > it shows; and a proxy reachable only over IPv6 (an A record at the origin, an AAAA at the
 > edge) is still a proxy for every IPv6 client, so an A-only check is not a check. Comparing
@@ -159,9 +180,9 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 1. Domain from the roster you hold, server IP from the `server_list` row you hold (or the UI, or
    one `server_get` for that server — see the note at the top). The certificate being renewed
-   lives on the **origin**, so check that one: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` for the verdict (exit 0 / 60), and
+   lives on the **origin**, so check that one: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <domain>:443:<server-ip> https://<domain>/` for the verdict (exit 0 / 60), and
    `openssl s_client -servername <domain> -connect <server-ip>:443 </dev/null 2>/dev/null | openssl x509 -noout -issuer -dates`
-   for the issuer and `notAfter` on record. If `A4=$(dig @1.1.1.1 +short <domain> A) && A6=$(dig @1.1.1.1 +short <domain> AAAA) && A=$(printf '%s\n%s\n' "$A4" "$A6" | awk '/^[0-9.]+$/ || /:/') && [ -n "$A" ] && printf '%s\n' "$A" || { echo 'DNS gate FAILED: a lookup errored, or no address came back' >&2; false; }` answers with anything that is not one
+   for the issuer and `notAfter` on record. If `R4=$(dig @1.1.1.1 +noall +comments +answer <domain> A) && R6=$(dig @1.1.1.1 +noall +comments +answer <domain> AAAA) && printf '%s\n%s\n' "$R4" "$R6" | grep -c 'status: NOERROR' | grep -qx 2 && A=$(printf '%s\n%s\n' "$R4" "$R6" | awk '$4=="A"||$4=="AAAA"{print $5}') && [ -n "$A" ] && printf '%s\n' "$A" || { echo 'DNS gate FAILED: lookup error, non-NOERROR rcode, or no address' >&2; false; }` answers with anything that is not one
    of the server's own addresses, a proxy is in front — the renewal still happens here, at the origin, and
    the browser will keep showing you the proxy's certificate afterwards.
    Nothing in this step needs the database credentials `app_get` would add.
@@ -323,13 +344,13 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    only — what the application answers *after* it is step 2's job — and both must pass, **for
    every hostname from step 0** (`<hostname>` below is each of them in turn), before step 4.
    The DNS gate comes **first**, because it decides which certificate matters:
-   `A4=$(dig @1.1.1.1 +short <hostname> A) && A6=$(dig @1.1.1.1 +short <hostname> AAAA) && A=$(printf '%s\n%s\n' "$A4" "$A6" | awk '/^[0-9.]+$/ || /:/') && [ -n "$A" ] && printf '%s\n' "$A" || { echo 'DNS gate FAILED: a lookup errored, or no address came back' >&2; false; }`
+   `R4=$(dig @1.1.1.1 +noall +comments +answer <hostname> A) && R6=$(dig @1.1.1.1 +noall +comments +answer <hostname> AAAA) && printf '%s\n%s\n' "$R4" "$R6" | grep -c 'status: NOERROR' | grep -qx 2 && A=$(printf '%s\n%s\n' "$R4" "$R6" | awk '$4=="A"||$4=="AAAA"{print $5}') && [ -n "$A" ] && printf '%s\n' "$A" || { echo 'DNS gate FAILED: lookup error, non-NOERROR rcode, or no address' >&2; false; }`
    — every answer, A and AAAA both, must be one of the server's own addresses (from the
    `server_list` row you hold). Any other address is a CDN or reverse proxy, regardless of
    what certificate it presents, even if its issuer matches the origin's, and even if only the
    AAAA record points at it (IPv6 clients would take that path).
    - **No proxy — visitors reach the origin directly.** Then the origin's certificate is the
-     one browsers will be handed, and it must pass the OS trust store: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <hostname>:443:<server-ip> https://<hostname>/` must exit
+     one browsers will be handed, and it must pass the OS trust store: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' --resolve <hostname>:443:<server-ip> https://<hostname>/` must exit
      **0** — chain + hostname + dates, at the Cloudways server itself. Exit 60 means there is
      no certificate browsers accept here **yet**, and which of two things that is decides where
      you go: if none was ever issued (a fresh app answers with Cloudways' self-signed default),
@@ -347,7 +368,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
      case here, and the origin command above would call it invalid (exit 60) while the proxy
      trusts it and visitors never see it. Do not run the origin check against a proxied site
      and read exit 60 as "replace the certificate". The certificate visitors **will** be handed
-     is the edge's, so that is what must pass the trust store: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' https://<hostname>/` must exit **0**.
+     is the edge's, so that is what must pass the trust store: `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' -w '%{http_code}\n' https://<hostname>/` must exit **0** and print a status that is **not 5xx** — 525/526 is the edge admitting it cannot complete TLS to the origin, which is the origin-policy failure the paragraph above is about, arriving as an HTTP status.
    Do not read any of this off `openssl x509 -dates`, which prints dates for a broken
    certificate just as happily.
 2. **The HTTPS answer must not send anyone back to HTTP — at any hop.** Step 1 validated the
@@ -358,7 +379,7 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    **any** hop to HTTP, not just an HTTP ending, because `%{url_effective}` reports only the
    final URL and a chain that dips to `http://` and climbs back to `https://` would otherwise
    pass:
-   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' https://<hostname>/`.
+   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' https://<hostname>/`.
    (Quote `'=https'` — in zsh, macOS's default shell, a bare `=https` is expanded as a
    command lookup and the line fails with `https not found`. `--noproxy '*'` is here for the
    same reason as on the origin check: with `HTTPS_PROXY` set, an intercepting proxy's block
@@ -366,10 +387,16 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
    application's redirects ever being seen. It stops curl using a configured proxy and nothing
    else: DNS still resolves publicly, so the check still reaches the site's CDN as a visitor
    would.) Pass is **curl exit 0**, an
-   `https://` effective URL, and a small hop count — **any** HTTP status. This check is about
-   transport and protocol, not about what the application answers: a `401` from Basic Auth on
-   the root, a `403` from a WAF, a `204`/`404` from an API root are all fine answers over HTTPS,
-   and `-sS` without `--fail` leaves curl's exit code to the transport, which is the point. `curl: (1) Protocol "http" disabled (in redirect)`
+   `https://` effective URL, a small hop count — and a terminal status that is **not 5xx**. A
+   `401` from Basic Auth on the root, a `403` from a WAF, a `204`/`404` from an API root are
+   all fine answers over HTTPS: this check is about the path, not the application's opinion of
+   the request. But a **5xx** over HTTPS is a broken HTTPS path, and behind a proxy the
+   specific codes matter: Cloudflare's **525** (SSL handshake to the origin failed) and **526**
+   (origin certificate invalid) — and the 52x family generally — are the *edge* reporting that
+   it could not reach the origin over TLS, behind a perfectly valid edge certificate. `-sS`
+   without `--fail` leaves curl's exit code to the transport, so these arrive as `exit 0` with
+   the status in the `-w` output (measured: 525, 526 and 502 all exit 0) — read the status.
+   Redirecting a working HTTP path onto any of them is the outage this step exists to prevent. `curl: (1) Protocol "http" disabled (in redirect)`
    (measured: exit 1, before curl ever connects to the HTTP target), an effective URL
    beginning `http://`, or `curl: (47) Maximum (5) redirects followed` — any of these means
    the app itself is pushing HTTPS visitors back to HTTP somewhere in its chain; on WordPress
@@ -398,13 +425,15 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 5. Verify the **whole chain** the way a browser walks it, not the first hop — **for every
    hostname from step 0**, since an alias can loop for host-specific CDN or origin reasons
    while the primary passes:
-   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' http://<hostname>/`.
+   `env -u CURL_CA_BUNDLE -u SSL_CERT_FILE -u SSL_CERT_DIR curl -q --cacert "$HOME/.config/cloudways-mcp/cacert.pem" -sS -o /dev/null --max-time 15 --noproxy '*' -L --max-redirs 5 --proto-redir '=https' -w '%{http_code} %{url_effective} %{num_redirects}\n' http://<hostname>/`.
    The start is `http://` on purpose — that is what the new redirect acts on — and
    `--proto-redir` governs only the hops after it, so every one of those must be HTTPS. Expect
    **curl exit 0**, an `https://` effective URL, and a hop count of at least 1 — the
    `http→https` hop you just enabled — or a little more if the app adds a `www` or
-   trailing-slash hop. The status is whatever the application answers (`200`, a `401` behind
-   Basic Auth, a `403` from a WAF); it is not what this step is checking.
+   trailing-slash hop. The status may be whatever the application answers (`200`, a `401` behind
+   Basic Auth, a `403` from a WAF) — but **not 5xx**: a 525/526 here means the proxy cannot
+   reach the origin over TLS and every visitor is now redirected onto that failure; treat it
+   exactly like the loop below.
    `curl: (47) Maximum (5) redirects followed` **is the loop**, and `curl: (1) Protocol "http"
    disabled (in redirect)` is a downgrade somewhere past the first hop. Either way the fix is
    to take the server redirect back off and return to step 2 — and that is a **second
