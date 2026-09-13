@@ -11,7 +11,10 @@ stayed clean. The Medium is fair and this release takes it whole.
   state`: a cache purge, a backup, a restore, a custom-cert install, a change baseline, a
   multi-server comparison, a "why is this server not Running". None of them used the database
   or master credentials those calls return beside the label; they were the habit of reaching for
-  the richest tool. Each now names the credential-free call that answers the actual question —
+  the richest tool. Each now names the **narrowest** call that answers the actual question —
+  narrowest, not credential-free: rules 7–8 say `server_list` and `app_list` are built from the
+  same credential-bearing payloads, and the ladder below still ends in one `app_get` — so this
+  release reduces the exposure to what the question needs and does not eliminate it —
   the held roster for identity (an id alone is not a confirmed target — the confirmation block
   needs name + URL, and a mistyped id that belongs to another app is still valid), `service_status`
   and that server's insights for "why" (`operation_status` only for an operation id you already
