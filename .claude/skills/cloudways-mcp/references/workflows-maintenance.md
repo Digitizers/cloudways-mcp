@@ -26,22 +26,21 @@ For especially dangerous operations (W!): add a **second step**: "Type the serve
 
 ---
 
-> **Confirming a target is never `app_get`.** Every sequence below starts by making sure the
-> right application is in hand — and **an id alone is not that**. The confirmation block above
-> requires name + URL, and a mistyped id that happens to belong to another application is still
-> a valid id, so a write confirmed against nothing but a number can land on the wrong site
-> (`app_restore` is the one that cannot be undone). Resolve the id against the roster you
-> already hold from this conversation; if you hold none, `app_list` on the server — which
-> presumes you know the server; see the next paragraph if you do not — **one** call
-> whose payload rule 7 describes (built from the same `/server` response as the credential
-> tools, covering every app on that server) — and take the one row you came for, pasting none
-> of it. `app_get` resolves a target too, and returns that application's **database
-> credentials** beside the label, which a cache purge, a backup or a restore has no use for.
->
-> **An app id with no server is not resolvable at all.** `app_list` and `app_get` both take a
-> `server_id`; a bare app id names nothing without one, and the only way to find its server
-> from the API is to read every server's roster — a sweep. Do not. Ask the user which server,
-> or for the app's name or URL, and resolve from there.
+> **Confirming a target is never `app_get`, and it needs two things you may not have.** Every
+> sequence below starts by making sure the right application is in hand. Resolving one takes
+> (1) a **server you know** and (2) a **roster of it** — the one you already hold from this
+> conversation, or one `app_list` on that server, a single call whose payload rule 7 describes
+> (built from the same `/server` response as the credential tools, covering every app on that
+> server; take the one row you came for and paste none of it). **If you lack (1), stop and
+> ask** — which server, or the app's name or URL. There is no lookup from an app id to its
+> server: `app_list` and `app_get` both take a `server_id`, and the only API route from a bare
+> id to a server is reading every server's roster, which is the sweep this skill refuses. And
+> **an id alone is never a confirmation even when the server is known**: the confirmation
+> block above requires name + URL, and a mistyped id that happens to belong to another
+> application is still a valid id, so a write confirmed against nothing but a number can land
+> on the wrong site (`app_restore` is the one that cannot be undone). `app_get` resolves a
+> target too, and returns that application's **database credentials** beside the label, which
+> a cache purge, a backup or a restore has no use for.
 >
 > **Certificate state is read from the outside, and the verdict and the dates are two different
 > commands.** The verdict is `curl -sS -o /dev/null --max-time 15 https://<domain>/`: exit **0** means the chain, the hostname and the validity
