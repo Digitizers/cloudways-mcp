@@ -143,18 +143,28 @@ prompt and press Return. Check it afterwards with `ls -l ~/.config/cloudways-mcp
 # Windows equivalent. Read-Host -AsSecureString keeps the value off the console;
 # it is still written to disk in cleartext, which is what the ACL is for.
 $dir = "$HOME\.config\cloudways-mcp"
-New-Item -ItemType Directory -Force -Path $dir | Out-Null
+New-Item -ItemType Directory -Force -Path $dir -ErrorAction Stop | Out-Null
 $file = Join-Path $dir 'headers.txt'
 $secure = Read-Host -AsSecureString 'Cloudways Access Token'
 $plain  = [Runtime.InteropServices.Marshal]::PtrToStringBSTR(
             [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
-Set-Content -LiteralPath $file -Encoding ascii -Value @(
+Set-Content -LiteralPath $file -Encoding ascii -ErrorAction Stop -Value @(
   'X-Mcp-Host: claude-desktop'
   "X-Access-Token: $plain"
 )
 $plain = $null
+
 # Break inheritance and grant only the current user - the NTFS equivalent of chmod 600.
-icacls $file /inheritance:r /grant:r "$($env:USERNAME):(R,W)" | Out-Null
+# icacls is a NATIVE command: PowerShell does not raise on its exit status, and piping it to
+# Out-Null hides what it said - so a failure here (an unresolvable name, a filesystem that
+# cannot hold the ACL) would leave the cleartext token sitting under inherited permissions
+# while the recipe appeared to finish. Check it, and delete the file rather than keep it.
+$me = [Security.Principal.WindowsIdentity]::GetCurrent().Name   # DOMAIN\user, always resolvable
+icacls $file /inheritance:r /grant:r "${me}:(R,W)" > $null
+if ($LASTEXITCODE -ne 0) {
+  Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+  throw "icacls failed (exit $LASTEXITCODE); removed $file rather than leave the token readable - delete it by hand if it is still there, and fix the ACL before retrying"
+}
 ```
 
 (Written from Microsoft's documented behaviour for `icacls` and `Read-Host`; like the rest of

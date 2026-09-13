@@ -13,7 +13,10 @@ mine from 1.5.1.
   conditions ("on a READ-role token, do not paste the responses anywhere"); that was the wrong
   call, and conditions on a fetch do not unfetch anything. The dates are now collected **outside
   the conversation** — the Cloudways UI, or a direct call through a field filter — and only names
-  and dates come back to the agent for triage. In the agent, `app_get` is for one certificate
+  and dates come back to the agent for triage — which also means the agent calls **no roster
+  tool** in that section: it was handed the labels, and `app_list`/`server_list` come from the
+  same `/server` payload safety rule 7 is about, so fetching one would give away the section's
+  own guarantee for nothing. In the agent, `app_get` is for one certificate
   somebody named. `workflows-automation.md` already ran exactly this as a Sunday cron, so §5 now
   points at it — and that cron makes the **request and the projection in one step**, because on
   n8n or Make every node's output is persisted in the execution record: an HTTP node that emits
