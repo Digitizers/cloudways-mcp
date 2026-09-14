@@ -47,34 +47,57 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          # Capture stderr instead of discarding it: a network/auth failure must not
-          # be misread as "no release" (and vice versa).
-          if ! out=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,assets 2>"$RUNNER_TEMP/gherr"); then
-            out=$(cat "$RUNNER_TEMP/gherr")
-            echo "$out"
-            case "$out" in
-              *"release not found"*|*"Not Found"*|*"HTTP 404"*)
-                echo "::error::SKILL.md is at $VERSION but there is no v$VERSION release, so ClawHub is still serving the previous version. Cut one with: gh workflow run release.yml"
-                ;;
-              *)
-                echo "::error::could not query releases (this is NOT a verdict on whether v$VERSION exists): $out"
-                ;;
-            esac
-            exit 1
-          fi
-
-          # A draft is not a publication: no release event fired, nothing reached
-          # ClawHub — and gh release view DOES find drafts when authenticated.
-          if [ "$(jq -r '.isDraft' <<<"$out")" = "true" ]; then
-            echo "::error::v$VERSION exists only as a DRAFT release — nothing was published to ClawHub. Publish it via release.yml (or delete the leftover draft and re-run: gh workflow run release.yml)"
-            exit 1
-          fi
-
-          # The marker is uploaded by publish-clawhub.yml after a successful real
-          # publish, and by nothing else. No marker = the publish never completed
-          # (still queued, canceled, or failed) even though the release is up.
-          if [ "$(jq -r '[.assets[].name] | index("clawhub-published.txt") != null' <<<"$out")" != "true" ]; then
-            echo "::error::the v$VERSION release exists but carries no clawhub-published.txt marker — its ClawHub publish never completed. Check the publish-clawhub.yml runs for v$VERSION; once ClawHub really serves $VERSION, re-attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber), or delete the release and re-run release.yml."
+          # On a push to main this step starts the moment the merge lands, and
+          # both things it looks for arrive AFTER it: the release seconds to
+          # minutes later, and the marker only once publish-clawhub.yml has
+          # finished its publish. Judging on the first look turned the ordinary
+          # release flow into a red check on main's head (release-drift.yml had
+          # the same race; measured there: hostinger-mcp v1.2.1 was cut 19 s
+          # after the merge, wordpress-api-pro v3.9.5 52 min after). So wait -
+          # up to 20 x 30 s - for the release AND the marker. Still absent after
+          # ten minutes is the drift this step is for, reported as before.
+          # 21 looks, 20 sleeps: the first look is immediate and the last one
+          # lands at the full ten minutes, the same shape release-drift.yml
+          # has - a final sleep with no look after it would end the window
+          # at 9:30 and miss a marker that arrived in the last half minute.
+          attempt=0
+          while :; do
+            verdict=""
+            # Capture stderr instead of discarding it: a network/auth failure must not
+            # be misread as "no release" (and vice versa).
+            if ! out=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,assets 2>"$RUNNER_TEMP/gherr"); then
+              err=$(cat "$RUNNER_TEMP/gherr")
+              case "$err" in
+                *"release not found"*|*"Not Found"*|*"HTTP 404"*)
+                  state="no release"
+                  verdict="::error::SKILL.md is at $VERSION but there is no v$VERSION release, so ClawHub is still serving the previous version. Cut one with: gh workflow run release.yml"
+                  ;;
+                *)
+                  echo "$err"
+                  echo "::error::could not query releases (this is NOT a verdict on whether v$VERSION exists): $err"
+                  exit 1
+                  ;;
+              esac
+            # A draft is not a publication: no release event fired, nothing reached
+            # ClawHub — and gh release view DOES find drafts when authenticated.
+            elif [ "$(jq -r '.isDraft' <<<"$out")" = "true" ]; then
+              state="draft"
+              verdict="::error::v$VERSION exists only as a DRAFT release — nothing was published to ClawHub. Publish it via release.yml (or delete the leftover draft and re-run: gh workflow run release.yml)"
+            # The marker is uploaded by publish-clawhub.yml after a successful real
+            # publish, and by nothing else. No marker = the publish never completed
+            # (still queued, canceled, or failed) even though the release is up.
+            elif [ "$(jq -r '[.assets[].name] | index("clawhub-published.txt") != null' <<<"$out")" != "true" ]; then
+              state="release without marker"
+              verdict="::error::the v$VERSION release exists but carries no clawhub-published.txt marker — its ClawHub publish never completed. Check the publish-clawhub.yml runs for v$VERSION; once ClawHub really serves $VERSION, re-attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber), or delete the release and re-run release.yml."
+            fi
+            [ -n "$verdict" ] || break
+            [ "$attempt" -lt 20 ] || break
+            attempt=$((attempt + 1))
+            echo "$state for v$VERSION - waiting 30 s (retry $attempt/20)"
+            sleep 30
+          done
+          if [ -n "$verdict" ]; then
+            echo "$verdict"
             exit 1
           fi
           echo "release v$VERSION is published and ClawHub confirmed it (marker present)"
