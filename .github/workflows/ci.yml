@@ -56,8 +56,12 @@ jobs:
           # after the merge, wordpress-api-pro v3.9.5 52 min after). So wait -
           # up to 20 x 30 s - for the release AND the marker. Still absent after
           # ten minutes is the drift this step is for, reported as before.
-          verdict=""
-          for attempt in $(seq 1 20); do
+          # 21 looks, 20 sleeps: the first look is immediate and the last one
+          # lands at the full ten minutes, the same shape release-drift.yml
+          # has - a final sleep with no look after it would end the window
+          # at 9:30 and miss a marker that arrived in the last half minute.
+          attempt=0
+          while :; do
             verdict=""
             # Capture stderr instead of discarding it: a network/auth failure must not
             # be misread as "no release" (and vice versa).
@@ -87,10 +91,10 @@ jobs:
               verdict="::error::the v$VERSION release exists but carries no clawhub-published.txt marker — its ClawHub publish never completed. Check the publish-clawhub.yml runs for v$VERSION; once ClawHub really serves $VERSION, re-attach the marker (gh release upload v$VERSION clawhub-published.txt --clobber), or delete the release and re-run release.yml."
             fi
             [ -n "$verdict" ] || break
-            if [ "$attempt" -lt 20 ]; then
-              echo "$state for v$VERSION (attempt $attempt/20) - waiting 30 s"
-              sleep 30
-            fi
+            [ "$attempt" -lt 20 ] || break
+            attempt=$((attempt + 1))
+            echo "$state for v$VERSION - waiting 30 s (retry $attempt/20)"
+            sleep 30
           done
           if [ -n "$verdict" ]; then
             echo "$verdict"
