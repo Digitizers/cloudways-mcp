@@ -5,6 +5,12 @@ on:
     branches: [ main ]
   pull_request:
 
+# CI only reads the checkout; without this the GITHUB_TOKEN gets the repo
+# default (CodeQL actions/missing-workflow-permissions). Jobs that need more
+# set their own block.
+permissions:
+  contents: read
+
 jobs:
   version-sync:
     name: Version sync (declarations always; release+marker on main only)
