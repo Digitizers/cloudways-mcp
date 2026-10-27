@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.4 - 2026-10-27
+
+Security update of the `mcp-remote` bridge's pinned dependency graph
+(`bridge/package-lock.json`, installed with `npm ci` for Claude Desktop). No change to the skill text.
+
+- `proxy-addr` 2.0.7 → 2.0.8 (GHSA-jqcg-44mw-7w3h, critical).
+- `body-parser` → 1.20.9 (GHSA-27r3-jxmh-p828, high: denial of service via trailing bytes after a compressed body).
+- `undici` → 7.30.1 (three highs: EventSource memory, SRI bypass, excessive content-encodings).
+- Updated with `npm update <pkg> --package-lock-only`, so nothing else in the graph moved. `npm audit`: 0.
+- CI: the `GITHUB_TOKEN` is read-only by default (CodeQL `actions/missing-workflow-permissions`).
+
 ## 1.5.3 - 2026-09-13
 
 From the ClawHub audit of 1.5.2. AIG went from three Highs to **one Medium**, and `static-analysis`
