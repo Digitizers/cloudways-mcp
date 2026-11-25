@@ -25,6 +25,8 @@ These are the free skills behind [**Aura**](https://my-aura.app) — one AI web-
 
 **→ Orchestrate all of it across your client fleet with [Aura](https://my-aura.app)** — governed agent ops with approvals and a full audit trail on top of these skills.
 
+**→ Prefer to have it done for you?** [Digitizer](https://www.digitizer.studio/aura-siteagent-ops-layer/), the team behind these tools, sets it up and runs it for your sites.
+
 ## Solo, or with Aura
 
 This skill works standalone — point it at your own Cloudways account and run it from Claude Code. That's the **solo path**: you drive one account, and the write-confirmation guardrail on every state change keeps you safe.
